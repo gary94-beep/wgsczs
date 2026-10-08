@@ -105,12 +105,7 @@ function init() {
     }
 
     // 白名单：仅保留登录前必须免 token 的接口
-    var authWhiteList = [
-        'wgsc_fetchPermission',
-        'wgsc_getMobileByToken',
-        'wgsc_test',
-        'wgsc_importCapacity'
-    ];
+    var authWhiteList = ['wgsc_fetchPermission', 'wgsc_getMobileByToken', 'wgsc_test', 'wgsc_importCapacity'];
 
     // 鉴权拦截器：非白名单接口必须带有效 token
     if (authWhiteList.indexOf(Params.funCode) === -1) {
@@ -126,7 +121,6 @@ function init() {
                 JsResult.result = createRes('00008', 'token过期或token不能为空');
                 return;
             }
-            // 强制使用服务端从 Redis 解析出的手机号，防止前端篡改
             var authPhone = normalizeMobile(findValue(redisValue, ['userphone', 'phone', 'mobile', 'userPhone', 'mobileno']));
             if (!/^1\d{10}$/.test(authPhone)) {
                 authPhone = getMobileFromToken(authToken);
@@ -146,16 +140,8 @@ function init() {
        网格生产助手业务方法区
        ================================== */
 
-    /**
-     * 登录前权限查询
-     * 入参：Params.phone（11位手机号）
-     * 出参：{ name, phone, role } 或 null（无权限）
-     * 说明：白名单接口，无需 token，用于发送验证码前校验
-     */
     function wgsc_fetchPermission() {
-        // 强制转字符串并去除首尾空白
         var phone = String(Params.phone || '').trim();
-        // 参数校验
         if (!phone) {
             JsResult.result = createRes('1', '手机号不能为空');
             return;
@@ -164,15 +150,12 @@ function init() {
             JsResult.result = createRes('1', '手机号格式错误，收到: ' + phone);
             return;
         }
-        // 查询权限表
         var sql = "SELECT name, phone, role FROM app_open_api_c007_xysct_permission_1 WHERE phone = #{phone}";
         var res = JSON.parse(CustomizeUtil.abilitySql(sql, { phone: phone }));
-        // 未找到记录
         if (!res.data || !res.data.results || res.data.results.length === 0) {
             JsResult.result = createRes('0', '该手机号暂无使用权限', null);
             return;
         }
-        // 找到记录
         var permission = res.data.results[0];
         JsResult.result = createRes('0', '成功', {
             name: permission.name,
@@ -181,18 +164,12 @@ function init() {
         });
     }
 
-    /**
-     * 通过一键登录返回的 token 换取完整手机号
-     * 入参：Params.token
-     * 出参：{ mobile }
-     */
     function wgsc_getMobileByToken() {
         var loginToken = String(Params.token || '').trim();
         if (!loginToken) {
             JsResult.result = createRes('1', '一键登录token不能为空');
             return;
         }
-        // 直接复用外层：parseMaybeJson、findValue、normalizeMobile，删除内部重复定义
         var raw = CustomizeUtil.getMobile(loginToken);
         var mobile = normalizeMobile(findValue(raw, ['mobile', 'phone', 'userphone', 'userPhone', 'mobileno']));
         if (!/^1\d{10}$/.test(mobile)) {
@@ -204,9 +181,6 @@ function init() {
         });
     }
 
-    /**
-     * 测试接口，白名单方法
-     */
     function wgsc_test() {
     }
 
@@ -218,54 +192,30 @@ function init() {
      * 出参：{ total, success, failed, errors }
      *
      * 说明：
-     *   - 非白名单接口，需登录
-     *   - 全量覆盖：先 TRUNCATE，再批量 INSERT
+     *   - 全量覆盖：先 DELETE FROM，再逐条 INSERT
      *   - 不保留历史，只留最新一次快照
-     *   - 单次上限 20000 条，分批写入
+     *   - 单次上限 10000 条
      *   - 最小条数保护：有效数据少于 MIN_ROWS 时拒绝覆盖，防止误清表
      */
     function wgsc_importCapacity() {
-        // ========== 0. 可调参数 ==========
-        var MAX_ROWS = 20000;      // 单次最大条数
-        var BATCH_SIZE = 500;      // 每批 INSERT 条数
-        var MIN_ROWS = 10;         // 最小有效条数，低于此值拒绝 TRUNCATE
+        var MAX_ROWS = 10000;
+        var MIN_ROWS = 10;
 
-        // ========== 1. 目标表配置 ==========
         var tableConfig = {
             region: {
-                table: 'fact_region_capacity',
-                fields: [
-                    'branch_company', 'grid_name', 'prod_period_type',
-                    'product_name', 'capacity', 'stat_date', 'snapshot_time'
-                ],
-                required: [
-                    'branch_company', 'grid_name', 'prod_period_type',
-                    'product_name', 'stat_date'
-                ]
+                table: 'app_open_api_c003_wgsc_region_capacity_1',
+                fields: ['branch_company', 'grid_name', 'prod_period_type', 'product_name', 'capacity', 'stat_date', 'snapshot_time'],
+                required: ['branch_company', 'grid_name', 'prod_period_type', 'product_name', 'stat_date']
             },
             channel: {
-                table: 'fact_channel_capacity',
-                fields: [
-                    'branch_company', 'grid_name', 'channel_code', 'channel_name',
-                    'prod_period_type', 'product_name', 'capacity',
-                    'stat_date', 'snapshot_time'
-                ],
-                required: [
-                    'branch_company', 'grid_name', 'channel_name',
-                    'prod_period_type', 'product_name', 'stat_date'
-                ]
+                table: 'app_open_api_c001_wgsc_chn_capacity_1',
+                fields: ['branch_company', 'grid_name', 'channel_code', 'channel_name', 'prod_period_type', 'product_name', 'capacity', 'stat_date', 'snapshot_time'],
+                required: ['branch_company', 'grid_name', 'channel_name', 'prod_period_type', 'product_name', 'stat_date']
             },
             staff: {
-                table: 'fact_staff_capacity',
-                fields: [
-                    'branch_company', 'grid_name', 'channel_code', 'channel_name',
-                    'staff_no', 'prod_period_type', 'product_name', 'capacity',
-                    'stat_date', 'snapshot_time'
-                ],
-                required: [
-                    'branch_company', 'grid_name', 'channel_name',
-                    'staff_no', 'prod_period_type', 'product_name', 'stat_date'
-                ]
+                table: 'app_open_api_c003_wgsc_staff_capacity_1',
+                fields: ['branch_company', 'grid_name', 'channel_code', 'channel_name', 'staff_no', 'prod_period_type', 'product_name', 'capacity', 'stat_date', 'snapshot_time'],
+                required: ['branch_company', 'grid_name', 'channel_name', 'staff_no', 'prod_period_type', 'product_name', 'stat_date']
             }
         };
 
@@ -276,7 +226,6 @@ function init() {
             return;
         }
 
-        // ========== 2. 解析 rows ==========
         var rows = parseMaybeJson(Params.rows);
         if (Object.prototype.toString.call(rows) !== '[object Array]') {
             JsResult.result = createRes('1', 'rows 参数格式错误，应为数组');
@@ -291,23 +240,19 @@ function init() {
             return;
         }
 
-        // ========== 3. 工具函数 ==========
         function isEmpty(v) {
             if (v === undefined || v === null) return true;
             return String(v).replace(/^\s+|\s+$/g, '') === '';
         }
-
         function trimStr(v) {
             return String(v === undefined || v === null ? '' : v).replace(/^\s+|\s+$/g, '');
         }
-
         function normalizeDate(v) {
             var s = trimStr(v);
             if (!s) return '';
             var m = s.match(/^(\d{4}-\d{2}-\d{2})/);
             return m ? m[1] : s;
         }
-
         function normalizeDateTime(v) {
             var s = trimStr(v);
             if (!s) return '';
@@ -317,16 +262,20 @@ function init() {
             if (d) return d[1] + ' 00:00:00';
             return s;
         }
-
         function normalizeNumber(v) {
             if (isEmpty(v)) return '0';
             var n = Number(v);
             if (isNaN(n)) return null;
-            if (n < 0) return null;   // 产能不允许为负
+            if (n < 0) return null;
             return String(n);
         }
+        function formatNow() {
+            var d = new Date();
+            var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+                ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+        }
 
-        // ========== 4. 第一阶段：逐行校验 + 标准化 ==========
         var validRecords = [];
         var failed = 0;
         var errors = [];
@@ -386,7 +335,6 @@ function init() {
             return;
         }
 
-        // ========== 4.1 最小条数保护 ==========
         if (validRecords.length < MIN_ROWS) {
             JsResult.result = createRes('1',
                 '有效数据仅 ' + validRecords.length + ' 条，低于最小阈值 ' + MIN_ROWS + ' 条，拒绝覆盖，防止误清表',
@@ -394,75 +342,46 @@ function init() {
             return;
         }
 
-        // ========== 5. TRUNCATE 主表 ==========
-        // 说明：TRUNCATE 是 DDL，隐式提交，无法回滚。
-        // 如果 abilitySql 不支持 TRUNCATE，改用 DELETE FROM table。
+        // ========== 清空主表 ==========
         try {
-            CustomizeUtil.abilitySql('TRUNCATE TABLE ' + config.table, {});
+            CustomizeUtil.abilitySql('DELETE FROM ' + config.table, {});
         } catch (e) {
-            JsResult.result = createRes('1', 'TRUNCATE 失败：' + (e.message || e));
+            JsResult.result = createRes('1', 'DELETE 失败：' + (e.message || e));
             return;
         }
 
-        // ========== 6. 分批 INSERT ==========
+        // ========== 逐条 INSERT ==========
         var success = 0;
 
-        for (var bs = 0; bs < validRecords.length; bs += BATCH_SIZE) {
-            var batch = validRecords.slice(bs, bs + BATCH_SIZE);
-
+        for (var k = 0; k < validRecords.length; k++) {
+            var rec = validRecords[k].record;
             try {
                 var insertFields = config.fields.slice();
-                var valueGroups = [];
+                var placeholders = [];
                 var insertParams = {};
-                for (var ii = 0; ii < batch.length; ii++) {
-                    var iRec = batch[ii].record;
-                    var placeholders = [];
-                    for (var ifi = 0; ifi < insertFields.length; ifi++) {
-                        var iField = insertFields[ifi];
-                        if (iField === 'snapshot_time' && isEmpty(iRec[iField])) {
-                            placeholders.push('NOW()');
-                        } else {
-                            var iParam = 'i' + ii + '_' + iField;
-                            placeholders.push('#{' + iParam + '}');
-                            insertParams[iParam] = iRec[iField];
-                        }
+
+                for (var fi = 0; fi < insertFields.length; fi++) {
+                    var iField = insertFields[fi];
+                    if (iField === 'snapshot_time' && isEmpty(rec[iField])) {
+                        placeholders.push('#{snapshot_time}');
+                        insertParams.snapshot_time = formatNow();
+                    } else {
+                        placeholders.push('#{' + iField + '}');
+                        insertParams[iField] = rec[iField];
                     }
-                    valueGroups.push('(' + placeholders.join(', ') + ')');
                 }
+
                 var insertSql = 'INSERT INTO ' + config.table +
-                    ' (' + insertFields.join(', ') + ') VALUES ' + valueGroups.join(', ');
+                    ' (' + insertFields.join(', ') + ') VALUES (' + placeholders.join(', ') + ')';
                 CustomizeUtil.abilitySql(insertSql, insertParams);
-                success += batch.length;
-            } catch (e) {
-                // 整批失败则逐条重试，定位具体失败行
-                for (var ir = 0; ir < batch.length; ir++) {
-                    var irItem = batch[ir];
-                    try {
-                        var singleFields = config.fields.slice();
-                        var singlePlaceholders = [];
-                        var singleParams = {};
-                        for (var sfi = 0; sfi < singleFields.length; sfi++) {
-                            var sField = singleFields[sfi];
-                            if (sField === 'snapshot_time' && isEmpty(irItem.record[sField])) {
-                                singlePlaceholders.push('NOW()');
-                            } else {
-                                singlePlaceholders.push('#{' + sField + '}');
-                                singleParams[sField] = irItem.record[sField];
-                            }
-                        }
-                        var singleSql = 'INSERT INTO ' + config.table +
-                            ' (' + singleFields.join(', ') + ') VALUES (' + singlePlaceholders.join(', ') + ')';
-                        CustomizeUtil.abilitySql(singleSql, singleParams);
-                        success++;
-                    } catch (e2) {
-                        failed++;
-                        errors.push('第' + irItem.rowNo + '行插入失败：' + (e2.message || e2));
-                    }
-                }
+                success++;
+            } catch (e2) {
+                failed++;
+                errors.push('第' + validRecords[k].rowNo + '行插入失败：' + (e2.message || e2));
             }
         }
 
-        // ========== 7. 返回 ==========
+        // ========== 返回 ==========
         JsResult.result = createRes('0', '导入完成', {
             total: rows.length,
             success: success,
@@ -476,7 +395,10 @@ function init() {
         var runFunction = eval(Params.funCode);
         new runFunction();
     } catch (e) {
-        JsResult.result = createRes('00500', '执行报错: ' + (e.message || e) + ' / 方法: ' + Params.funCode);
+        JsResult.result = createRes('00500',
+            '执行报错: ' + (e.message || e) +
+            ' | 方法: ' + Params.funCode
+        );
         return;
     }
 }

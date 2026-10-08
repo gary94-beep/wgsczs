@@ -38,6 +38,10 @@
           <button type="button" @click="goOverview"><span class="menu-icon menu-icon-blue"><i class="menu-glyph menu-glyph-overview" aria-hidden="true"></i></span><span class="menu-copy"><strong>生产总览</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
           <button type="button" @click="openMonitor"><span class="menu-icon menu-icon-green"><i class="menu-glyph menu-glyph-alert" aria-hidden="true"></i></span><span class="menu-copy"><strong>低产预警监控</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
           <button type="button" @click="openCampus"><span class="menu-icon menu-icon-blue"><i class="menu-glyph menu-glyph-campus" aria-hidden="true"></i></span><span class="menu-copy"><strong>校园生产管理</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+
+          <button type="button" @click="testImportCapacity('region')"><span class="menu-icon menu-icon-blue">测</span><span class="menu-copy"><strong>测试导入区域产能</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+          <button type="button" @click="testImportCapacity('channel')"><span class="menu-icon menu-icon-green">测</span><span class="menu-copy"><strong>测试导入渠道产能</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+          <button type="button" @click="testImportCapacity('staff')"><span class="menu-icon menu-icon-blue">测</span><span class="menu-copy"><strong>测试导入工号产能</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
         </section>
       </template>
 
@@ -101,7 +105,14 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { isMock } from './api/client'
-import { fetchDashboard, fetchPermission, importTargets } from './api/production'
+import { fetchDashboard, fetchPermission, importCapacity, importTargets } from './api/production'
+
+// ==================== 测试开关 ====================
+/**
+ * 测试模式：true 时跳过登录直接进入首页（使用模拟用户，默认市公司）
+ * 上线前请改回 false
+ */
+const SKIP_LOGIN_FOR_TEST = true
 
 const page = ref('login')
 const stage = ref('workbench')
@@ -123,6 +134,73 @@ const threshold = ref(1)
 const tab = ref('people')
 const targetFileInput = ref(null)
 const toast = reactive({ show: false, type: 'success', message: '' })
+
+// ==================== 产能导入模拟数据 ====================
+/**
+ * 区域产能模拟数据
+ * 对应 wgsc_region_capacity
+ */
+const MOCK_REGION_ROWS = [
+  { branch_company: '广州分公司', grid_name: '天河网格', prod_period_type: 'day', product_name: '放号', capacity: 128, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', prod_period_type: 'day', product_name: '高套(129+)', capacity: 36, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', prod_period_type: 'day', product_name: '终端合约', capacity: 22, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', prod_period_type: 'day', product_name: '手宽新增', capacity: 18, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', prod_period_type: 'day', product_name: '千兆运营', capacity: 9, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '越秀网格', prod_period_type: 'day', product_name: '放号', capacity: 96, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '越秀网格', prod_period_type: 'day', product_name: '高套(129+)', capacity: 28, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '越秀网格', prod_period_type: 'day', product_name: '终端合约', capacity: 15, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '越秀网格', prod_period_type: 'day', product_name: '手宽新增', capacity: 12, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '越秀网格', prod_period_type: 'day', product_name: '千兆运营', capacity: 6, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '深圳分公司', grid_name: '南山网格', prod_period_type: 'day', product_name: '放号', capacity: 156, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '深圳分公司', grid_name: '南山网格', prod_period_type: 'day', product_name: '高套(129+)', capacity: 42, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '深圳分公司', grid_name: '南山网格', prod_period_type: 'day', product_name: '终端合约', capacity: 25, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '深圳分公司', grid_name: '南山网格', prod_period_type: 'day', product_name: '手宽新增', capacity: 20, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '深圳分公司', grid_name: '南山网格', prod_period_type: 'day', product_name: '千兆运营', capacity: 11, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' }
+]
+
+/**
+ * 渠道产能模拟数据
+ * 对应 wgsc_chn_capacity
+ */
+const MOCK_CHANNEL_ROWS = [
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_001', channel_name: '天河核心厅', prod_period_type: 'day', product_name: '放号', capacity: 68, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_001', channel_name: '天河核心厅', prod_period_type: 'day', product_name: '高套(129+)', capacity: 19, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_001', channel_name: '天河核心厅', prod_period_type: 'day', product_name: '终端合约', capacity: 11, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_001', channel_name: '天河核心厅', prod_period_type: 'day', product_name: '手宽新增', capacity: 8, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_001', channel_name: '天河核心厅', prod_period_type: 'day', product_name: '千兆运营', capacity: 4, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_002', channel_name: '天河合作厅A', prod_period_type: 'day', product_name: '放号', capacity: 42, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_002', channel_name: '天河合作厅A', prod_period_type: 'day', product_name: '高套(129+)', capacity: 12, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_002', channel_name: '天河合作厅A', prod_period_type: 'day', product_name: '终端合约', capacity: 7, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_002', channel_name: '天河合作厅A', prod_period_type: 'day', product_name: '手宽新增', capacity: 5, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_002', channel_name: '天河合作厅A', prod_period_type: 'day', product_name: '千兆运营', capacity: 2, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '深圳分公司', grid_name: '南山网格', channel_code: 'CH_SZ_NS_001', channel_name: '南山旗舰厅', prod_period_type: 'day', product_name: '放号', capacity: 88, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '深圳分公司', grid_name: '南山网格', channel_code: 'CH_SZ_NS_001', channel_name: '南山旗舰厅', prod_period_type: 'day', product_name: '高套(129+)', capacity: 24, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '深圳分公司', grid_name: '南山网格', channel_code: 'CH_SZ_NS_001', channel_name: '南山旗舰厅', prod_period_type: 'day', product_name: '终端合约', capacity: 14, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '深圳分公司', grid_name: '南山网格', channel_code: 'CH_SZ_NS_001', channel_name: '南山旗舰厅', prod_period_type: 'day', product_name: '手宽新增', capacity: 10, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '深圳分公司', grid_name: '南山网格', channel_code: 'CH_SZ_NS_001', channel_name: '南山旗舰厅', prod_period_type: 'day', product_name: '千兆运营', capacity: 5, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' }
+]
+
+/**
+ * 工号产能模拟数据
+ * 对应 wgsc_staff_capacity
+ */
+const MOCK_STAFF_ROWS = [
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_001', channel_name: '天河核心厅', staff_no: 'S001', prod_period_type: 'day', product_name: '放号', capacity: 12, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_001', channel_name: '天河核心厅', staff_no: 'S001', prod_period_type: 'day', product_name: '高套(129+)', capacity: 4, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_001', channel_name: '天河核心厅', staff_no: 'S001', prod_period_type: 'day', product_name: '终端合约', capacity: 2, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_001', channel_name: '天河核心厅', staff_no: 'S001', prod_period_type: 'day', product_name: '手宽新增', capacity: 1, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_001', channel_name: '天河核心厅', staff_no: 'S001', prod_period_type: 'day', product_name: '千兆运营', capacity: 1, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_001', channel_name: '天河核心厅', staff_no: 'S002', prod_period_type: 'day', product_name: '放号', capacity: 15, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_001', channel_name: '天河核心厅', staff_no: 'S002', prod_period_type: 'day', product_name: '高套(129+)', capacity: 5, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_001', channel_name: '天河核心厅', staff_no: 'S002', prod_period_type: 'day', product_name: '终端合约', capacity: 3, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_001', channel_name: '天河核心厅', staff_no: 'S002', prod_period_type: 'day', product_name: '手宽新增', capacity: 2, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '广州分公司', grid_name: '天河网格', channel_code: 'CH_GZ_TH_001', channel_name: '天河核心厅', staff_no: 'S002', prod_period_type: 'day', product_name: '千兆运营', capacity: 1, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '深圳分公司', grid_name: '南山网格', channel_code: 'CH_SZ_NS_001', channel_name: '南山旗舰厅', staff_no: 'S101', prod_period_type: 'day', product_name: '放号', capacity: 18, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '深圳分公司', grid_name: '南山网格', channel_code: 'CH_SZ_NS_001', channel_name: '南山旗舰厅', staff_no: 'S101', prod_period_type: 'day', product_name: '高套(129+)', capacity: 6, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '深圳分公司', grid_name: '南山网格', channel_code: 'CH_SZ_NS_001', channel_name: '南山旗舰厅', staff_no: 'S101', prod_period_type: 'day', product_name: '终端合约', capacity: 4, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '深圳分公司', grid_name: '南山网格', channel_code: 'CH_SZ_NS_001', channel_name: '南山旗舰厅', staff_no: 'S101', prod_period_type: 'day', product_name: '手宽新增', capacity: 3, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' },
+  { branch_company: '深圳分公司', grid_name: '南山网格', channel_code: 'CH_SZ_NS_001', channel_name: '南山旗舰厅', staff_no: 'S101', prod_period_type: 'day', product_name: '千兆运营', capacity: 2, stat_date: '2026-09-24', snapshot_time: '2026-09-24 08:00:00' }
+]
 
 const scopeName = computed(() => user.role === 'city' ? dashboard.organization.cityName : user.role === 'grid' ? user.gridName : user.branchName)
 const roleLabel = computed(() => ({ city: '市公司', branch: '分公司', grid: '网格长' })[user.role] || '')
@@ -198,7 +276,30 @@ function onMonitorProductChange() { threshold.value = 1; selectedChannel.value =
 function adjustThreshold(direction) { threshold.value = Math.round((cleanThreshold.value + direction * thresholdStep.value) * 10) / 10; if (threshold.value < 0) threshold.value = 0 }
 function applyFilters() { document.querySelector('.alert-summary')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
 
-onMounted(() => { const params = new URLSearchParams(location.search); token.value = params.get('token') || ''; loginPhone.value = params.get('phone') || params.get('mobile') || '' })
+onMounted(() => {
+  // 测试模式：跳过登录，直接进首页（默认给市公司权限）
+  if (SKIP_LOGIN_FOR_TEST) {
+    Object.assign(user, {
+      name: '测试用户',
+      phone: '13800000000',
+      role: 'city',
+      branchId: '',
+      branchName: '',
+      gridId: '',
+      gridName: '',
+      cityName: '中山市'
+    })
+    token.value = 'test-token'
+    loginPhone.value = '13800000000'
+    page.value = 'dashboard'
+    loadDashboard().catch(() => {})
+    return
+  }
+
+  const params = new URLSearchParams(location.search)
+  token.value = params.get('token') || ''
+  loginPhone.value = params.get('phone') || params.get('mobile') || ''
+})
 
 async function handleLogin() {
   if (!agreedToTerms.value) return showToast('请先同意登录协议', 'warning')
@@ -226,6 +327,38 @@ async function loadDashboard() {
 async function refreshDashboard() { loading.value = true; try { await loadDashboard(); showToast('数据已刷新') } catch (error) { showToast(error.message || '刷新失败', 'error') } finally { loading.value = false } }
 function sendCode() { if (!/^1\d{10}$/.test(loginPhone.value)) return showToast('请先输入正确的手机号', 'warning'); loginCode.value = '123456'; showToast(isMock ? '模拟验证码：123456' : '验证码已发送') }
 function oneClickLogin() { if (!agreedToTerms.value) return showToast('请先同意登录协议', 'warning'); if (isMock) { loginPhone.value = '13800000000'; loginCode.value = '123456' }; handleLogin() }
+
+/**
+ * 测试：一键导入模拟产能数据
+ * @param {'region'|'channel'|'staff'} target
+ */
+async function testImportCapacity(target) {
+  const mockMap = {
+    region: MOCK_REGION_ROWS,
+    channel: MOCK_CHANNEL_ROWS,
+    staff: MOCK_STAFF_ROWS
+  }
+  const rows = mockMap[target]
+  if (!rows) return showToast('target 参数错误', 'error')
+
+  const requestToken = token.value || 'test-token'
+
+  loading.value = true
+  try {
+    const result = await importCapacity(target, rows, requestToken)
+    if (result?.failed > 0) {
+      showToast(`导入完成：成功 ${result.success} 条，失败 ${result.failed} 条`, 'warning')
+      // eslint-disable-next-line no-console
+      console.warn('导入失败明细：', result.errors)
+    } else {
+      showToast(`导入成功，共 ${result.success} 条`)
+    }
+  } catch (error) {
+    showToast(error.message || '导入失败', 'error')
+  } finally {
+    loading.value = false
+  }
+}
 
 function parseCsv(text) {
   const rows = []; let row = []; let cell = ''; let quoted = false
