@@ -77,7 +77,6 @@ function rsaEncrypt(value, publicKey) {
  * @returns {Object} 包含加密后data和key的对象
  */
 function encryptHandle2Payload(payload, aesKey) {
-  console.log('payload', JSON.stringify(payload))
   if (typeof window.encryptAES !== 'function') {
     throw new Error('AES 加密组件不可用')
   }

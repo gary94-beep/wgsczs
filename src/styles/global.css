@@ -890,3 +890,71 @@ button {
   .drill-row-values { align-items: flex-start; flex-direction: column; gap: 2px; }
   .brand-panel h1 { font-size: 30px; }
 }
+
+/* 弹窗遮罩 */
+.import-error-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 9999;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 12px env(safe-area-inset-bottom);
+  box-sizing: border-box;
+}
+
+/* 弹窗主体：宽度跟视口走，不固定 */
+.import-error-sheet {
+  width: 100%;
+  max-width: 100%;
+  max-height: 70vh;
+  background: #fff;
+  border-radius: 16px 16px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* 标题 */
+.import-error-header {
+  padding: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  border-bottom: 1px solid #eee;
+  word-break: break-all;
+}
+
+/* 内容：滚动，不撑开 */
+.import-error-body {
+  padding: 12px 16px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 每行错误 */
+.import-error-item {
+  padding: 6px 0;
+  font-size: 13px;
+  color: #d33;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+/* 底部按钮 */
+.import-error-footer {
+  padding: 12px 16px;
+  border-top: 1px solid #eee;
+  text-align: right;
+}
+.import-error-footer button {
+  padding: 8px 20px;
+  background: #1a73e8;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+}

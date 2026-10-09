@@ -1,0 +1,499 @@
+// ========== 网格生产助手 - 业务接口网关 ==========
+function init() {
+    // ===== 通用工具函数 =====
+    function createRes(code, retMsg, data) {
+        return JSON.stringify({
+            result: {
+                retCode: code,
+                retMsg: retMsg,
+                data: data !== undefined ? data : null
+            }
+        });
+    }
+
+    // 安全校验：funCode 只能包含字母、数字、下划线
+    var regex = /^[a-zA-Z0-9_]{1,30}$/;
+    if (!regex.test(Params.funCode)) {
+        JsResult.result = createRes("99", "非法调用");
+        return;
+    }
+
+    /**
+     * 循环最多3次尝试解析JSON字符串
+     */
+    function parseMaybeJson(value) {
+        var current = value;
+        for (var i = 0; i < 3; i++) {
+            if (typeof current !== 'string') return current;
+            var text = current.replace(/^\s+|\s+$/g, '');
+            if (!text) return current;
+            try {
+                current = JSON.parse(text);
+            } catch (e) {
+                return current;
+            }
+        }
+        return current;
+    }
+
+    /**
+     * 深度遍历对象，按key名称数组优先查找取值
+     */
+    function findValue(source, names) {
+        var stack = [parseMaybeJson(source)];
+        for (var i = 0; i < stack.length; i++) {
+            var item = parseMaybeJson(stack[i]);
+            if (!item || typeof item !== 'object') continue;
+            for (var n = 0; n < names.length; n++) {
+                var key = names[n];
+                if (item[key] !== undefined && item[key] !== null && item[key] !== '') {
+                    return item[key];
+                }
+            }
+            for (var prop in item) {
+                if (Object.prototype.hasOwnProperty.call(item, prop)) {
+                    stack.push(item[prop]);
+                }
+            }
+        }
+        return '';
+    }
+
+    /**
+     * 手机号标准化清洗
+     */
+    function normalizeMobile(value) {
+        var text = String(value || '').replace(/^\s+|\s+$/g, '').replace(/^['"]+|['"]+$/g, '').replace(/\s/g, '');
+        var match = text.match(/1\d{10}/);
+        return match ? match[0] : text;
+    }
+
+    /**
+     * 解析redis返回结果
+     */
+    function extractRedisValue(redisRes) {
+        var parsed = parseMaybeJson(redisRes);
+        var data = parseMaybeJson(parsed && parsed.data !== undefined ? parsed.data : parsed);
+        if (data && data.value !== undefined) return parseMaybeJson(data.value);
+        if (parsed && parsed.value !== undefined) return parseMaybeJson(parsed.value);
+        return data;
+    }
+
+    /**
+     * 通过登录token获取清洗后的手机号
+     */
+    function getMobileFromToken(loginToken) {
+        var raw = CustomizeUtil.getMobile(loginToken);
+        return normalizeMobile(findValue(raw, ['mobile', 'phone', 'userphone', 'userPhone', 'mobileno']));
+    }
+
+    // 白名单：业务接口全部免 token
+    var authWhiteList = [
+        'wgsc_importCapacity',
+        'wgsc_importRows'
+    ];
+
+    // 鉴权拦截器
+    if (authWhiteList.indexOf(Params.funCode) === -1) {
+        var authToken = String(Params.token || '').trim();
+        if (!authToken) {
+            JsResult.result = createRes('00008', 'token过期或token不能为空');
+            return;
+        }
+        try {
+            var redisRaw = CustomizeUtil.redisGet({ key: authToken });
+            var redisValue = extractRedisValue(redisRaw);
+            if (!redisValue) {
+                JsResult.result = createRes('00008', 'token过期或token不能为空');
+                return;
+            }
+            var authPhone = normalizeMobile(findValue(redisValue, ['userphone', 'phone', 'mobile', 'userPhone', 'mobileno']));
+            if (!/^1\d{10}$/.test(authPhone)) {
+                authPhone = getMobileFromToken(authToken);
+            }
+            if (!/^1\d{10}$/.test(authPhone)) {
+                JsResult.result = createRes('00008', 'token未解析到完整手机号');
+                return;
+            }
+            Params.phone = authPhone;
+        } catch (e) {
+            JsResult.result = createRes('00008', '身份校验异常: ' + e.message);
+            return;
+        }
+    }
+
+    /* ==================================
+       网格生产助手业务方法区
+       ================================== */
+
+    /**
+     * 批量导入产能数据（区域/渠道/工号三张表通用解扩）
+     * 入参：
+     *   Params.target：region | channel | staff
+     *   Params.rows：JSON 字符串，元素为对象
+     * 出参：{ total, success, failed, errors }
+     *
+     * 说明：
+     *   - 全量覆盖：先 DELETE FROM，再逐条 INSERT
+     *   - 不保留历史，只留最新一次快照
+     *   - 单次上限 10000 条
+     *   - 最小条数保护：有效数据少于 MIN_ROWS 时拒绝覆盖，防止误清表
+     */
+    function wgsc_importCapacity() {
+        var MAX_ROWS = 10000;
+        var MIN_ROWS = 10;
+
+        var tableConfig = {
+            region: {
+                table: 'app_open_api_c003_wgsc_region_capacity_1',
+                fields: ['branch_company', 'grid_name', 'prod_period_type', 'product_name', 'capacity', 'stat_date', 'snapshot_time'],
+                required: ['branch_company', 'grid_name', 'prod_period_type', 'product_name', 'stat_date']
+            },
+            channel: {
+                table: 'app_open_api_c001_wgsc_chn_capacity_1',
+                fields: ['branch_company', 'grid_name', 'channel_code', 'channel_name', 'prod_period_type', 'product_name', 'capacity', 'stat_date', 'snapshot_time'],
+                required: ['branch_company', 'grid_name', 'channel_name', 'prod_period_type', 'product_name', 'stat_date']
+            },
+            staff: {
+                table: 'app_open_api_c003_wgsc_staff_capacity_1',
+                fields: ['branch_company', 'grid_name', 'channel_code', 'channel_name', 'staff_no', 'prod_period_type', 'product_name', 'capacity', 'stat_date', 'snapshot_time'],
+                required: ['branch_company', 'grid_name', 'channel_name', 'staff_no', 'prod_period_type', 'product_name', 'stat_date']
+            }
+        };
+
+        var target = String(Params.target || '').trim().toLowerCase();
+        var config = tableConfig[target];
+        if (!config) {
+            JsResult.result = createRes('1', 'target 参数错误，应为 region / channel / staff');
+            return;
+        }
+
+        var rows = parseMaybeJson(Params.rows);
+        if (Object.prototype.toString.call(rows) !== '[object Array]') {
+            JsResult.result = createRes('1', 'rows 参数格式错误，应为数组');
+            return;
+        }
+        if (!rows.length) {
+            JsResult.result = createRes('1', 'rows 内容为空');
+            return;
+        }
+        if (rows.length > MAX_ROWS) {
+            JsResult.result = createRes('1', '单次导入不能超过 ' + MAX_ROWS + ' 条，当前 ' + rows.length + ' 条');
+            return;
+        }
+
+        function isEmpty(v) {
+            if (v === undefined || v === null) return true;
+            return String(v).replace(/^\s+|\s+$/g, '') === '';
+        }
+        function trimStr(v) {
+            return String(v === undefined || v === null ? '' : v).replace(/^\s+|\s+$/g, '');
+        }
+        function normalizeDate(v) {
+            var s = trimStr(v);
+            if (!s) return '';
+            var m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+            return m ? m[1] : s;
+        }
+        function normalizeDateTime(v) {
+            var s = trimStr(v);
+            if (!s) return '';
+            var m = s.match(/^(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2})/);
+            if (m) return m[1].replace('T', ' ');
+            var d = s.match(/^(\d{4}-\d{2}-\d{2})$/);
+            if (d) return d[1] + ' 00:00:00';
+            return s;
+        }
+        function normalizeNumber(v) {
+            if (isEmpty(v)) return '0';
+            var n = Number(v);
+            if (isNaN(n)) return null;
+            if (n < 0) return null;
+            return String(n);
+        }
+        function formatNow() {
+            var d = new Date();
+            var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+                ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+        }
+
+        var validRecords = [];
+        var failed = 0;
+        var errors = [];
+
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i] || {};
+            var rowNo = i + 1;
+            var record = {};
+            var bad = false;
+
+            for (var f = 0; f < config.fields.length; f++) {
+                var field = config.fields[f];
+                var val = row[field];
+
+                if (field === 'stat_date') {
+                    record[field] = normalizeDate(val);
+                } else if (field === 'snapshot_time') {
+                    record[field] = normalizeDateTime(val);
+                } else if (field === 'capacity') {
+                    var num = normalizeNumber(val);
+                    if (num === null) {
+                        failed++;
+                        errors.push('第' + rowNo + '行 capacity 不是合法数字或为负数：' + val);
+                        bad = true;
+                        break;
+                    }
+                    record[field] = num;
+                } else if (field === 'channel_code') {
+                    record[field] = trimStr(val);
+                } else {
+                    record[field] = trimStr(val);
+                }
+            }
+            if (bad) continue;
+
+            var missing = [];
+            for (var r = 0; r < config.required.length; r++) {
+                var reqField = config.required[r];
+                if (isEmpty(record[reqField])) missing.push(reqField);
+            }
+            if (missing.length) {
+                failed++;
+                errors.push('第' + rowNo + '行缺少必填字段：' + missing.join(', '));
+                continue;
+            }
+
+            validRecords.push({ record: record, rowNo: rowNo });
+        }
+
+        if (!validRecords.length) {
+            JsResult.result = createRes('0', '导入完成', {
+                total: rows.length,
+                success: 0,
+                failed: failed,
+                errors: errors
+            });
+            return;
+        }
+
+        if (validRecords.length < MIN_ROWS) {
+            JsResult.result = createRes('1',
+                '有效数据仅 ' + validRecords.length + ' 条，低于最小阈值 ' + MIN_ROWS + ' 条，拒绝覆盖，防止误清表',
+                { total: rows.length, failed: failed, errors: errors });
+            return;
+        }
+
+        // ========== 清空主表 ==========
+        try {
+            CustomizeUtil.abilitySql('DELETE FROM ' + config.table, {});
+        } catch (e) {
+            JsResult.result = createRes('1', 'DELETE 失败：' + (e.message || e));
+            return;
+        }
+
+        // ========== 逐条 INSERT ==========
+        var success = 0;
+
+        for (var k = 0; k < validRecords.length; k++) {
+            var rec = validRecords[k].record;
+            try {
+                var insertFields = config.fields.slice();
+                var placeholders = [];
+                var insertParams = {};
+
+                for (var fi = 0; fi < insertFields.length; fi++) {
+                    var iField = insertFields[fi];
+                    if (iField === 'snapshot_time' && isEmpty(rec[iField])) {
+                        placeholders.push('#{snapshot_time}');
+                        insertParams.snapshot_time = formatNow();
+                    } else {
+                        placeholders.push('#{' + iField + '}');
+                        insertParams[iField] = rec[iField];
+                    }
+                }
+
+                var insertSql = 'INSERT INTO ' + config.table +
+                    ' (' + insertFields.join(', ') + ') VALUES (' + placeholders.join(', ') + ')';
+                CustomizeUtil.abilitySql(insertSql, insertParams);
+                success++;
+            } catch (e2) {
+                failed++;
+                errors.push('第' + validRecords[k].rowNo + '行插入失败：' + (e2.message || e2));
+            }
+        }
+
+        // ========== 返回 ==========
+        JsResult.result = createRes('0', '导入完成', {
+            total: rows.length,
+            success: success,
+            failed: failed,
+            errors: errors
+        });
+    }
+
+    /**
+     * 通用批量导入（渠道维度表 / 末梢表 / 员工表）
+     * 入参：
+     *   Params.target：channelInfo | terminal | staff
+     *   Params.rows：JSON 字符串，元素为对象
+     * 出参：{ total, success, failed, errors }
+     *
+     * 说明：
+     *   - 全量覆盖：先 DELETE FROM，再逐条 INSERT
+     *   - 不保留历史，只留最新一次快照
+     *   - 单次上限 10000 条
+     *   - 最小条数保护：有效数据少于 MIN_ROWS 时拒绝覆盖，防止误清表
+     */
+    function wgsc_importRows() {
+        var MAX_ROWS = 10000;
+        var MIN_ROWS = 10;
+
+        var tableConfig = {
+            channelInfo: {
+                table: 'app_open_api_c002_wgsc_chn_level_1',
+                fields: ['uni_code', 'chn_code', 'chn_name', 'branch', 'grid_code', 'grid', 'star', 'star_level'],
+                required: ['chn_code', 'chn_name', 'branch', 'grid']
+            },
+            terminal: {
+                table: 'app_open_api_c001_wgsc_staff_terminal_1',
+                fields: ['staff_no', 'staff_name', 'agent', 'branch', 'grid', 'chn_name'],
+                required: ['staff_no', 'staff_name', 'branch', 'grid']
+            },
+            staff: {
+                table: 'app_open_api_c001_wgsc_staff_1',
+                fields: ['staff_no', 'branch', 'grid', 'staff_name', 'job', 'team_type'],
+                required: ['staff_no', 'branch', 'grid', 'staff_name']
+            }
+        };
+
+        var target = String(Params.target || '').trim();
+        var config = tableConfig[target];
+        if (!config) {
+            JsResult.result = createRes('1', 'target 参数错误，应为 channelInfo / terminal / staff');
+            return;
+        }
+
+        var rows = parseMaybeJson(Params.rows);
+        if (Object.prototype.toString.call(rows) !== '[object Array]') {
+            JsResult.result = createRes('1', 'rows 参数格式错误，应为数组');
+            return;
+        }
+        if (!rows.length) {
+            JsResult.result = createRes('1', 'rows 内容为空');
+            return;
+        }
+        if (rows.length > MAX_ROWS) {
+            JsResult.result = createRes('1', '单次导入不能超过 ' + MAX_ROWS + ' 条，当前 ' + rows.length + ' 条');
+            return;
+        }
+
+        function isEmpty(v) {
+            if (v === undefined || v === null) return true;
+            return String(v).replace(/^\s+|\s+$/g, '') === '';
+        }
+        function trimStr(v) {
+            return String(v === undefined || v === null ? '' : v).replace(/^\s+|\s+$/g, '');
+        }
+
+        var validRecords = [];
+        var failed = 0;
+        var errors = [];
+
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i] || {};
+            var rowNo = i + 1;
+            var record = {};
+
+            for (var f = 0; f < config.fields.length; f++) {
+                var field = config.fields[f];
+                record[field] = trimStr(row[field]);
+            }
+
+            var missing = [];
+            for (var r = 0; r < config.required.length; r++) {
+                var reqField = config.required[r];
+                if (isEmpty(record[reqField])) missing.push(reqField);
+            }
+            if (missing.length) {
+                failed++;
+                errors.push('第' + rowNo + '行缺少必填字段：' + missing.join(', '));
+                continue;
+            }
+
+            validRecords.push({ record: record, rowNo: rowNo });
+        }
+
+        if (!validRecords.length) {
+            JsResult.result = createRes('0', '导入完成', {
+                total: rows.length,
+                success: 0,
+                failed: failed,
+                errors: errors
+            });
+            return;
+        }
+
+        if (validRecords.length < MIN_ROWS) {
+            JsResult.result = createRes('1',
+                '有效数据仅 ' + validRecords.length + ' 条，低于最小阈值 ' + MIN_ROWS + ' 条，拒绝覆盖，防止误清表',
+                { total: rows.length, failed: failed, errors: errors });
+            return;
+        }
+
+        // ========== 清空主表 ==========
+        try {
+            CustomizeUtil.abilitySql('DELETE FROM ' + config.table, {});
+        } catch (e) {
+            JsResult.result = createRes('1', 'DELETE 失败：' + (e.message || e));
+            return;
+        }
+
+        // ========== 逐条 INSERT ==========
+        var success = 0;
+
+        for (var k = 0; k < validRecords.length; k++) {
+            var rec = validRecords[k].record;
+            try {
+                var insertFields = config.fields.slice();
+                var placeholders = [];
+                var insertParams = {};
+
+                for (var fi = 0; fi < insertFields.length; fi++) {
+                    var iField = insertFields[fi];
+                    placeholders.push('#{' + iField + '}');
+                    insertParams[iField] = rec[iField];
+                }
+
+                var insertSql = 'INSERT INTO ' + config.table +
+                    ' (' + insertFields.join(', ') + ') VALUES (' + placeholders.join(', ') + ')';
+                CustomizeUtil.abilitySql(insertSql, insertParams);
+                success++;
+            } catch (e2) {
+                failed++;
+                errors.push('第' + validRecords[k].rowNo + '行插入失败：' + (e2.message || e2));
+            }
+        }
+
+        // ========== 返回 ==========
+        JsResult.result = createRes('0', '导入完成', {
+            total: rows.length,
+            success: success,
+            failed: failed,
+            errors: errors
+        });
+    }
+
+    // 动态安全分发
+    try {
+        var runFunction = eval(Params.funCode);
+        new runFunction();
+    } catch (e) {
+        JsResult.result = createRes('00500',
+            '执行报错: ' + (e.message || e) +
+            ' | 方法: ' + Params.funCode
+        );
+        return;
+    }
+}
+init();

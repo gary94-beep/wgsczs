@@ -105,7 +105,13 @@ function init() {
     }
 
     // 白名单：仅保留登录前必须免 token 的接口
-    var authWhiteList = ['wgsc_fetchPermission', 'wgsc_getMobileByToken', 'wgsc_test', 'wgsc_importCapacity'];
+    var authWhiteList = [
+        'wgsc_fetchPermission',
+        'wgsc_getMobileByToken',
+        'wgsc_test',
+        'wgsc_importCapacity',
+        'wgsc_importChannelInfo'
+    ];
 
     // 鉴权拦截器：非白名单接口必须带有效 token
     if (authWhiteList.indexOf(Params.funCode) === -1) {
@@ -369,6 +375,138 @@ function init() {
                         placeholders.push('#{' + iField + '}');
                         insertParams[iField] = rec[iField];
                     }
+                }
+
+                var insertSql = 'INSERT INTO ' + config.table +
+                    ' (' + insertFields.join(', ') + ') VALUES (' + placeholders.join(', ') + ')';
+                CustomizeUtil.abilitySql(insertSql, insertParams);
+                success++;
+            } catch (e2) {
+                failed++;
+                errors.push('第' + validRecords[k].rowNo + '行插入失败：' + (e2.message || e2));
+            }
+        }
+
+        // ========== 返回 ==========
+        JsResult.result = createRes('0', '导入完成', {
+            total: rows.length,
+            success: success,
+            failed: failed,
+            errors: errors
+        });
+    }
+
+    /**
+     * 批量导入渠道维度表
+     * 入参：
+     *   Params.rows：JSON 字符串，元素为对象
+     * 出参：{ total, success, failed, errors }
+     *
+     * 说明：
+     *   - 全量覆盖：先 DELETE FROM，再逐条 INSERT
+     *   - 不保留历史，只留最新一次快照
+     *   - 单次上限 10000 条
+     *   - 最小条数保护：有效数据少于 MIN_ROWS 时拒绝覆盖，防止误清表
+     */
+    function wgsc_importChannelInfo() {
+        var MAX_ROWS = 10000;
+        var MIN_ROWS = 10;
+
+        var config = {
+            table: 'app_open_api_c002_wgsc_chn_level_1',
+            fields: ['uni_code', 'chn_code', 'chn_name', 'branch', 'grid_code', 'grid', 'star', 'star_level'],
+            required: ['chn_code', 'chn_name', 'branch', 'grid']
+        };
+
+        var rows = parseMaybeJson(Params.rows);
+        if (Object.prototype.toString.call(rows) !== '[object Array]') {
+            JsResult.result = createRes('1', 'rows 参数格式错误，应为数组');
+            return;
+        }
+        if (!rows.length) {
+            JsResult.result = createRes('1', 'rows 内容为空');
+            return;
+        }
+        if (rows.length > MAX_ROWS) {
+            JsResult.result = createRes('1', '单次导入不能超过 ' + MAX_ROWS + ' 条，当前 ' + rows.length + ' 条');
+            return;
+        }
+
+        function isEmpty(v) {
+            if (v === undefined || v === null) return true;
+            return String(v).replace(/^\s+|\s+$/g, '') === '';
+        }
+        function trimStr(v) {
+            return String(v === undefined || v === null ? '' : v).replace(/^\s+|\s+$/g, '');
+        }
+
+        var validRecords = [];
+        var failed = 0;
+        var errors = [];
+
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i] || {};
+            var rowNo = i + 1;
+            var record = {};
+
+            for (var f = 0; f < config.fields.length; f++) {
+                var field = config.fields[f];
+                record[field] = trimStr(row[field]);
+            }
+
+            var missing = [];
+            for (var r = 0; r < config.required.length; r++) {
+                var reqField = config.required[r];
+                if (isEmpty(record[reqField])) missing.push(reqField);
+            }
+            if (missing.length) {
+                failed++;
+                errors.push('第' + rowNo + '行缺少必填字段：' + missing.join(', '));
+                continue;
+            }
+
+            validRecords.push({ record: record, rowNo: rowNo });
+        }
+
+        if (!validRecords.length) {
+            JsResult.result = createRes('0', '导入完成', {
+                total: rows.length,
+                success: 0,
+                failed: failed,
+                errors: errors
+            });
+            return;
+        }
+
+        if (validRecords.length < MIN_ROWS) {
+            JsResult.result = createRes('1',
+                '有效数据仅 ' + validRecords.length + ' 条，低于最小阈值 ' + MIN_ROWS + ' 条，拒绝覆盖，防止误清表',
+                { total: rows.length, failed: failed, errors: errors });
+            return;
+        }
+
+        // ========== 清空主表 ==========
+        try {
+            CustomizeUtil.abilitySql('DELETE FROM ' + config.table, {});
+        } catch (e) {
+            JsResult.result = createRes('1', 'DELETE 失败：' + (e.message || e));
+            return;
+        }
+
+        // ========== 逐条 INSERT ==========
+        var success = 0;
+
+        for (var k = 0; k < validRecords.length; k++) {
+            var rec = validRecords[k].record;
+            try {
+                var insertFields = config.fields.slice();
+                var placeholders = [];
+                var insertParams = {};
+
+                for (var fi = 0; fi < insertFields.length; fi++) {
+                    var iField = insertFields[fi];
+                    placeholders.push('#{' + iField + '}');
+                    insertParams[iField] = rec[iField];
                 }
 
                 var insertSql = 'INSERT INTO ' + config.table +
