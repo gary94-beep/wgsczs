@@ -6,6 +6,7 @@ export default defineConfig(({ mode }) => {
  const env = loadEnv(mode, process.cwd(), '')
  return {
   plugins: [vue(), localAiPlugin({ key: env.MOMA_API_KEY, model: env.MOMA_MODEL || 'DeepSeek-V4-Flash' })],
+  base: '/apph5_test/wgsczs/',
   server: {
     host: '0.0.0.0',
     port: 5173,
