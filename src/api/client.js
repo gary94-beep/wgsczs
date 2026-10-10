@@ -91,7 +91,7 @@ function encryptHandle2Payload(payload, aesKey) {
  * @param {string} src - 脚本URL地址
  * @returns {Promise<void>} 加载完成的Promise
  */
-function loadExternalScript(src) {
+export function loadExternalScript(src) {
   return new Promise((resolve, reject) => {
     const existing = document.querySelector(`script[src="${src}"]`)
     if (existing) {
@@ -110,7 +110,7 @@ function loadExternalScript(src) {
       script.dataset.loaded = 'true'
       resolve()
     }
-    script.onerror = () => reject(new Error(`脚本加载失败：${src}`))
+    script.onerror = () => { script.remove(); reject(new Error(`脚本加载失败：${src}`)) }
     document.head.appendChild(script)
   })
 }
@@ -129,7 +129,7 @@ function ensureHandle2Crypto() {
       if (typeof window.encryptAES !== 'function' || typeof window.decryptAES !== 'function') {
         throw new Error('AES 加密组件不可用')
       }
-    })
+    }).catch(error => { handle2CryptoReady = undefined; throw error })
   }
   return handle2CryptoReady
 }
@@ -151,7 +151,7 @@ export async function buildHandle2Payload(serviceId, data, options = {}) {
       appid: appId || '',
       activityId: activityId || '',
       serviceId,
-      version: options.version || '1.0',
+      version: options.version || import.meta.env.VITE_API_VERSION || '1.0',
       isTest: isTest
     },
     data
@@ -166,7 +166,7 @@ export async function buildHandle2Payload(serviceId, data, options = {}) {
  * @param {string} aesKey - 本次请求的 AES 密钥
  * @returns {*} 业务 data（bizData.result.result.data）
  */
-function decryptAndUnwrap(resultData, aesKey) {
+export function decryptAndUnwrap(resultData, aesKey) {
   if (!resultData || typeof window.decryptAES !== 'function') {
     throw new Error('返回数据异常，无法解密')
   }
@@ -175,9 +175,12 @@ function decryptAndUnwrap(resultData, aesKey) {
   const bizData = JSON.parse(decryptedJson)
 
   // 两层 result
-  console.log('bizData', bizData)
-  if (bizData?.result?.result?.retCode !== '0') {
-    throw new Error(bizData?.result?.result?.retMsg || '业务处理失败')
+  const business = bizData?.result?.result
+  if (!business || String(business.retCode) !== '0') {
+    const error = new Error(business?.retMsg || '业务处理失败')
+    error.code = String(business?.retCode || '')
+    if (error.code === '00008') window.dispatchEvent(new Event('handle2-auth-expired'))
+    throw error
   }
 
   return bizData?.result?.result?.data
@@ -191,14 +194,19 @@ function decryptAndUnwrap(resultData, aesKey) {
  * @returns {Promise<*>} 业务 data
  */
 export async function postHandle2(serviceId, data, options = {}) {
+  if (!apiBase || !appId || !activityId) throw new Error('Handle2地址、APP_ID或ACTIVITY_ID未配置')
+  if (options.encryptMobile) {
+    await ensureHandle2Crypto()
+    data = { ...data, mobile: rsaEncrypt(data.mobile, HANDLE2_RSA_PUBLIC_KEY) }
+  }
   const { aesKey, body } = await buildHandle2Payload(serviceId, data, options)
 
   const response = await fetch(apiBase, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json;charset=utf-8' },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: options.signal || AbortSignal.timeout(options.timeoutMs || 60000)
   })
-  console.log('response', response)
 
   if (!response.ok) {
     throw new Error(`接口请求失败：${response.status}`)
@@ -207,14 +215,19 @@ export async function postHandle2(serviceId, data, options = {}) {
   const json = await response.json()
 
   const retInfo = json?.publicData?.retInfo
-  console.log('retInfo', retInfo)
   if (!retInfo || String(retInfo.retCode) !== '0') {
     throw new Error(retInfo?.retMsg || '网关请求失败')
   }
+  if (options.responseType === 'sendCode' && !json.data) return null
   if (!json.data) {
     throw new Error('返回数据异常，无法解密')
   }
 
+  if (options.responseType === 'auth' || options.responseType === 'sendCode') {
+    let result = window.decryptAES(json.data, aesKey)
+    for (let i = 0; i < 6 && typeof result === 'string'; i++) result = JSON.parse(result)
+    return result
+  }
   return decryptAndUnwrap(json.data, aesKey)
 }
 

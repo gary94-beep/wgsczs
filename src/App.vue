@@ -1,22 +1,41 @@
 <template>
   <div class="app-shell">
     <main v-if="page === 'login'" class="login-page">
-      <section class="brand-panel"><h1>网格生产<span>AI</span>助手</h1></section>
+      <section class="brand-panel">
+        <h1>网格生产<span>AI</span>助手</h1>
+      </section>
       <section class="login-card">
         <h2>欢迎登录</h2>
-        <label class="login-field"><span>手机号</span><input v-model.trim="loginPhone" type="tel" maxlength="11" placeholder="请输入手机号" /></label>
-        <label class="login-field"><span>验证码</span><div class="code-row"><input v-model.trim="loginCode" type="tel" maxlength="6" placeholder="请输入验证码" /><button type="button" @click="sendCode">获取</button></div></label>
-        <button class="primary-login" type="button" :disabled="loading" @click="handleLogin">登录</button>
-        <button v-if="isMock" class="quick-login" type="button" :disabled="loading" @click="oneClickLogin">本机号码一键登录</button>
-        <label class="login-agreement"><input v-model="agreedToTerms" type="checkbox" aria-label="同意登录服务条款和隐私协议" /><span>登录即同意 <span class="agreement-link">《中国移动号码服务条款》</span><span class="agreement-link">《中国移动广东公司电子渠道登录服务协议》</span>和<span class="agreement-link">《隐私协议》</span></span></label>
-        <div v-if="isMock" class="demo-accounts"><span>演示身份</span><button type="button" @click="loginPhone = '13800000000'">市公司</button><button type="button" @click="loginPhone = '13800000001'">分公司</button><button type="button" @click="loginPhone = '13800000003'">网格长</button></div>
+        <label class="login-field"><span>手机号</span><input v-model.trim="loginPhone" type="tel" maxlength="11"
+            placeholder="请输入手机号" /></label>
+        <label class="login-field"><span>验证码</span>
+          <div class="code-row"><input v-model.trim="loginCode" type="tel" maxlength="6" placeholder="请输入验证码" /><button
+              type="button" :disabled="loading || codeSending || codeCountdown > 0" @click="sendCode">{{ codeSending ?
+                '发送中' : codeCountdown > 0 ? `${codeCountdown}s` : '获取' }}</button></div>
+        </label>
+        <button class="primary-login" type="button" :disabled="loading || codeSending" @click="handleLogin">{{ loading ?
+          '登录中' : '登录' }}</button>
+        <button class="quick-login" type="button" :disabled="loading || codeSending"
+          @click="oneClickLogin">本机号码一键登录</button>
+        <label class="login-agreement"><input v-model="agreedToTerms" type="checkbox"
+            aria-label="同意登录服务条款和隐私协议" /><span>登录即同意 <span class="agreement-link">《中国移动号码服务条款》</span><span
+              class="agreement-link">《中国移动广东公司电子渠道登录服务协议》</span>和<span
+              class="agreement-link">《隐私协议》</span></span></label>
+        <div v-if="isMock" class="demo-accounts"><span>演示身份</span><button type="button"
+            @click="loginPhone = '13800000000'">市公司</button><button type="button"
+            @click="loginPhone = '13800000001'">分公司</button><button type="button"
+            @click="loginPhone = '13800000003'">网格长</button></div>
       </section>
     </main>
 
     <main v-else class="dashboard-page">
       <header v-if="stage === 'workbench'" class="top-bar">
-        <div><h1>网格生产<span>AI</span>助手</h1><p>{{ scopeName }} · {{ roleLabel }} <em v-if="isMock">演示数据</em></p></div>
-        <button type="button" title="刷新数据" aria-label="刷新数据" @click="refreshDashboard"><span class="toolbar-icon" aria-hidden="true"></span></button>
+        <div>
+          <h1>网格生产<span>AI</span>助手</h1>
+          <p>{{ scopeName }} · {{ roleLabel }} <em v-if="isMock">演示数据</em></p>
+        </div>
+        <button type="button" title="刷新数据" aria-label="刷新数据" @click="refreshDashboard"><span class="toolbar-icon"
+            aria-hidden="true"></span></button>
       </header>
 
       <nav v-if="stage !== 'workbench'" class="breadcrumbs" aria-label="当前位置">
@@ -24,110 +43,292 @@
         <template v-if="stage === 'monitor'"><strong>低产预警监控</strong></template>
         <template v-else-if="stage === 'campus'"><strong>校园生产管理</strong></template>
         <template v-else-if="stage === 'search'"><strong>产能速查</strong></template>
-        <template v-else-if="stage === 'scripts'"><button type="button" @click="returnFromScripts">低产预警监控</button><span>›</span><strong>经典话术库</strong></template>
+        <template v-else-if="stage === 'scripts'"><button type="button"
+            @click="returnFromScripts">低产预警监控</button><span>›</span><strong>经典话术库</strong></template>
         <template v-else>
           <strong v-if="stage === 'overview'">生产总览</strong>
           <button v-else type="button" @click="goOverview">生产总览</button>
-          <template v-if="stage === 'branches' || stage === 'grids' || stage === 'alerts'"><span>›</span><strong v-if="stage === 'branches' || (stage === 'alerts' && user.role === 'grid')">{{ selectedProduct?.productName }}</strong><button v-else type="button" @click="goProduct">{{ selectedProduct?.productName }}</button></template>
-          <template v-if="user.role === 'city' && (stage === 'grids' || stage === 'alerts')"><span>›</span><strong v-if="stage === 'grids'">{{ selectedBranch?.branchName }}</strong><button v-else type="button" @click="goBranch">{{ selectedBranch?.branchName }}</button></template>
+          <template v-if="stage === 'branches' || stage === 'grids' || stage === 'alerts'"><span>›</span><strong
+              v-if="stage === 'branches' || (stage === 'alerts' && user.role === 'grid')">{{
+                selectedProduct?.productName }}</strong><button v-else type="button" @click="goProduct">{{
+                selectedProduct?.productName }}</button></template>
+          <template v-if="user.role === 'city' && (stage === 'grids' || stage === 'alerts')"><span>›</span><strong
+              v-if="stage === 'grids'">{{ selectedBranch?.branchName }}</strong><button v-else type="button"
+              @click="goBranch">{{ selectedBranch?.branchName }}</button></template>
           <template v-if="stage === 'alerts'"><span>›</span><strong>{{ selectedGrid?.gridName }}</strong></template>
         </template>
       </nav>
 
       <template v-if="stage === 'workbench'">
-        <section class="workbench-heading"><h2>工作台</h2></section>
+        <section class="workbench-heading">
+          <h2>工作台</h2>
+        </section>
         <section class="workbench-menu" aria-label="工作台菜单">
-          <button type="button" @click="goOverview"><span class="menu-icon menu-icon-blue"><i class="menu-glyph menu-glyph-overview" aria-hidden="true"></i></span><span class="menu-copy"><strong>生产总览</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button type="button" @click="openSearch"><span class="menu-icon menu-icon-green"><i class="menu-glyph menu-glyph-search" aria-hidden="true"></i></span><span class="menu-copy"><strong>产能速查</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button type="button" @click="openMonitor"><span class="menu-icon menu-icon-green"><i class="menu-glyph menu-glyph-alert" aria-hidden="true"></i></span><span class="menu-copy"><strong>低产预警监控</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button type="button" @click="openCampus"><span class="menu-icon menu-icon-blue"><i class="menu-glyph menu-glyph-campus" aria-hidden="true"></i></span><span class="menu-copy"><strong>校园生产管理</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button type="button" @click="channelFileInput?.click()"><span class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入渠道维度表</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button type="button" @click="terminalFileInput?.click()"><span class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入末梢表</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button type="button" @click="staffFileInput?.click()"><span class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入员工表</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button type="button" @click="regionCapacityFileInput?.click()"><span class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入区域产能</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button type="button" @click="channelCapacityFileInput?.click()"><span class="menu-icon menu-icon-green">导</span><span class="menu-copy"><strong>导入渠道产能</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button type="button" @click="staffCapacityFileInput?.click()"><span class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入工号产能</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+          <button type="button" @click="goOverview"><span class="menu-icon menu-icon-blue"><i
+                class="menu-glyph menu-glyph-overview" aria-hidden="true"></i></span><span
+              class="menu-copy"><strong>生产总览</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+          <button type="button" @click="openSearch"><span class="menu-icon menu-icon-green"><i
+                class="menu-glyph menu-glyph-search" aria-hidden="true"></i></span><span
+              class="menu-copy"><strong>产能速查</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+          <button type="button" @click="openMonitor"><span class="menu-icon menu-icon-green"><i
+                class="menu-glyph menu-glyph-alert" aria-hidden="true"></i></span><span
+              class="menu-copy"><strong>低产预警监控</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+          <button type="button" @click="openCampus"><span class="menu-icon menu-icon-blue"><i
+                class="menu-glyph menu-glyph-campus" aria-hidden="true"></i></span><span
+              class="menu-copy"><strong>校园生产管理</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+          <button v-if="user.isSuperAdmin" type="button" @click="permissionFileInput?.click()"><span
+              class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入权限表</strong></span><i
+              class="menu-chevron" aria-hidden="true"></i></button>
+          <button v-if="user.isSuperAdmin" type="button" @click="channelFileInput?.click()"><span
+              class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入渠道维度表</strong></span><i
+              class="menu-chevron" aria-hidden="true"></i></button>
+          <button v-if="user.isSuperAdmin" type="button" @click="terminalFileInput?.click()"><span
+              class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入末梢表</strong></span><i
+              class="menu-chevron" aria-hidden="true"></i></button>
+          <button v-if="user.isSuperAdmin" type="button" @click="staffFileInput?.click()"><span
+              class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入员工表</strong></span><i
+              class="menu-chevron" aria-hidden="true"></i></button>
+          <button v-if="user.isSuperAdmin" type="button" @click="regionCapacityFileInput?.click()"><span
+              class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入区域产能</strong></span><i
+              class="menu-chevron" aria-hidden="true"></i></button>
+          <button v-if="user.isSuperAdmin" type="button" @click="channelCapacityFileInput?.click()"><span
+              class="menu-icon menu-icon-green">导</span><span class="menu-copy"><strong>导入渠道产能</strong></span><i
+              class="menu-chevron" aria-hidden="true"></i></button>
+          <button v-if="user.isSuperAdmin" type="button" @click="staffCapacityFileInput?.click()"><span
+              class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入工号产能</strong></span><i
+              class="menu-chevron" aria-hidden="true"></i></button>
         </section>
       </template>
-      
+
 
       <template v-else-if="stage === 'overview'">
-        <section class="overview-heading"><div><h2>生产总览</h2><span>{{ scopeName }} · {{ overviewLabel }}</span></div><ChannelTypeFilter v-model="selectedChannelType" @update:model-value="selectedChannel = ''" /></section>
-        <div class="source-strip"><span>产能：系统取数</span><span v-if="!selectedChannelType">目标：市公司导入</span></div>
-        <ProductionBoard :items="overview" :scope="scopeName" :stat-date="dashboard.statDate" :demo="isMock" :show-targets="!selectedChannelType" @open="openProduct" />
-        <AiAnalysisPanel :summary="overviewAiSummary" />
-        <section class="product-section"><div class="section-head"><h2>{{ selectedChannelType ? '产能表现' : '产能与目标' }}</h2><span>{{ user.role === 'grid' ? '点击查看预警' : '点击指标查看下级' }}</span></div>
-          <p class="production-cutoff">数据截止 {{ dashboard.statDate }}<span v-if="isMock"> · 演示数据</span></p>
-          <CapacityCard :show-targets="!selectedChannelType" v-for="item in overview" :key="item.productId" :title="item.productName" :item="item" :unit="item.unit" :stat-date="dashboard.statDate" :icon="productIcon(item.productId)" @open="openProduct(item.productId)" />
+        <section class="overview-heading">
+          <div>
+            <h2>生产总览</h2><span>{{ scopeName }} · {{ overviewLabel }}</span>
+          </div>
+          <ChannelTypeFilter v-model="selectedChannelType" @update:model-value="selectedChannel = ''" />
         </section>
-        <section v-if="user.isSuperAdmin === true && !selectedChannelType" class="target-management"><div class="target-heading"><span class="target-icon" aria-hidden="true"></span><div><h2>目标值管理</h2><p>按网格、产品导入日目标和月目标，自动汇总上级目标</p></div></div><div class="target-actions"><button type="button" @click="downloadTargetTemplate"><span class="action-icon download-icon" aria-hidden="true"></span>下载模板</button><button type="button" class="target-import" @click="targetFileInput?.click()"><span class="action-icon upload-icon" aria-hidden="true"></span>导入目标表</button></div><input ref="targetFileInput" type="file" accept=".csv,text/csv" hidden @change="handleTargetFile" /></section>
+        <div class="source-strip"><span>产能：系统取数</span><span v-if="!selectedChannelType">目标：市公司导入</span></div>
+        <ProductionBoard :items="overview" :scope="scopeName" :stat-date="dashboard.statDate" :demo="isMock"
+          :show-targets="!selectedChannelType" @open="openProduct" />
+        <AiAnalysisPanel :summary="overviewAiSummary" />
+        <section class="product-section">
+          <div class="section-head">
+            <h2>{{ selectedChannelType ? '产能表现' : '产能与目标' }}</h2><span>{{ user.role === 'grid' ? '点击查看预警' : '点击指标查看下级'
+            }}</span>
+          </div>
+          <p class="production-cutoff">数据截止 {{ dashboard.statDate }}<span v-if="isMock"> · 演示数据</span></p>
+          <CapacityCard :show-targets="!selectedChannelType" v-for="item in overview" :key="item.productId"
+            :title="item.productName" :item="item" :unit="item.unit" :stat-date="dashboard.statDate"
+            :icon="productIcon(item.productId)" @open="openProduct(item.productId)" />
+        </section>
+        <section v-if="user.isSuperAdmin === true && !selectedChannelType" class="target-management">
+          <div class="target-heading"><span class="target-icon" aria-hidden="true"></span>
+            <div>
+              <h2>目标值管理</h2>
+              <p>按网格、产品导入日目标和月目标，自动汇总上级目标</p>
+            </div>
+          </div>
+          <div class="target-actions"><button type="button" @click="downloadTargetTemplate"><span
+                class="action-icon download-icon" aria-hidden="true"></span>下载模板</button><button type="button"
+              class="target-import" @click="targetFileInput?.click()"><span class="action-icon upload-icon"
+                aria-hidden="true"></span>导入目标表</button></div><input ref="targetFileInput" type="file"
+            accept=".csv,text/csv" hidden @change="handleTargetFile" />
+        </section>
       </template>
 
       <template v-else-if="stage === 'branches'">
-        <header class="drill-page-title"><h2>{{ selectedProduct?.productName }}产能</h2><p>全市 · 分公司</p><ChannelTypeFilter v-model="selectedChannelType" @update:model-value="selectedChannel = ''" /></header>
+        <header class="drill-page-title">
+          <h2>{{ selectedProduct?.productName }}产能</h2>
+          <p>全市 · 分公司</p>
+          <ChannelTypeFilter v-model="selectedChannelType" @update:model-value="selectedChannel = ''" />
+        </header>
         <p class="production-cutoff">数据截止 {{ dashboard.statDate }}<span v-if="isMock"> · 演示数据</span></p>
-        <CapacityCard :show-targets="!selectedChannelType" :title="'全市' + selectedProduct?.productName" :item="cityMetric" :unit="selectedProduct?.unit" :stat-date="dashboard.statDate" :icon="productIcon(selectedProductId)" :clickable="false" />
-        <section class="drill-list"><div class="section-head"><h2>分公司产能</h2><span>{{ branchMetrics.length }} 个</span></div>
-          <CapacityCard :show-targets="!selectedChannelType" v-for="item in branchMetrics" :key="item.branchId" :title="item.branchName" :item="item" :unit="selectedProduct?.unit" :stat-date="dashboard.statDate" @open="openBranch(item.branchId)" />
+        <CapacityCard :show-targets="!selectedChannelType" :title="'全市' + selectedProduct?.productName"
+          :item="cityMetric" :unit="selectedProduct?.unit" :stat-date="dashboard.statDate"
+          :icon="productIcon(selectedProductId)" :clickable="false" />
+        <section class="drill-list">
+          <div class="section-head">
+            <h2>分公司产能</h2><span>{{ branchMetrics.length }} 个</span>
+          </div>
+          <CapacityCard :show-targets="!selectedChannelType" v-for="item in branchMetrics" :key="item.branchId"
+            :title="item.branchName" :item="item" :unit="selectedProduct?.unit" :stat-date="dashboard.statDate"
+            @open="openBranch(item.branchId)" />
         </section>
       </template>
 
       <template v-else-if="stage === 'grids'">
-        <header class="drill-page-title"><h2>{{ selectedProduct?.productName }}产能</h2><p>{{ selectedBranch?.branchName }} · 网格</p><ChannelTypeFilter v-model="selectedChannelType" @update:model-value="selectedChannel = ''" /></header>
+        <header class="drill-page-title">
+          <h2>{{ selectedProduct?.productName }}产能</h2>
+          <p>{{ selectedBranch?.branchName }} · 网格</p>
+          <ChannelTypeFilter v-model="selectedChannelType" @update:model-value="selectedChannel = ''" />
+        </header>
         <p class="production-cutoff">数据截止 {{ dashboard.statDate }}<span v-if="isMock"> · 演示数据</span></p>
-        <CapacityCard :show-targets="!selectedChannelType" :title="selectedBranch?.branchName + selectedProduct?.productName" :item="branchMetric" :unit="selectedProduct?.unit" :stat-date="dashboard.statDate" :icon="productIcon(selectedProductId)" :clickable="false" />
-        <section class="drill-list"><div class="section-head"><h2>网格产能</h2><span>{{ gridMetrics.length }} 个</span></div>
-          <CapacityCard :show-targets="!selectedChannelType" v-for="item in gridMetrics" :key="item.gridId" :title="item.gridName" :item="item" :unit="selectedProduct?.unit" :stat-date="dashboard.statDate" @open="openGrid(item.gridId)" />
+        <CapacityCard :show-targets="!selectedChannelType"
+          :title="selectedBranch?.branchName + selectedProduct?.productName" :item="branchMetric"
+          :unit="selectedProduct?.unit" :stat-date="dashboard.statDate" :icon="productIcon(selectedProductId)"
+          :clickable="false" />
+        <section class="drill-list">
+          <div class="section-head">
+            <h2>网格产能</h2><span>{{ gridMetrics.length }} 个</span>
+          </div>
+          <CapacityCard :show-targets="!selectedChannelType" v-for="item in gridMetrics" :key="item.gridId"
+            :title="item.gridName" :item="item" :unit="selectedProduct?.unit" :stat-date="dashboard.statDate"
+            @open="openGrid(item.gridId)" />
         </section>
       </template>
 
       <template v-else-if="stage === 'monitor' || stage === 'alerts'">
-        <section class="alert-heading"><h2>{{ stage === 'monitor' ? '低产预警监控' : '低产预警' }}</h2><span>{{ stage === 'monitor' ? monitorScopeLabel : selectedGrid?.gridName }} · {{ roleLabel }}</span></section>
+        <section class="alert-heading">
+          <h2>{{ stage === 'monitor' ? '低产预警监控' : '低产预警' }}</h2><span>{{ stage === 'monitor' ? monitorScopeLabel :
+            selectedGrid?.gridName }} · {{ roleLabel }}</span>
+        </section>
         <section class="filter-card">
           <div class="monitor-filters">
-            <label v-if="stage === 'monitor' && user.role === 'city'" class="monitor-filter">分公司<select v-model="monitorBranchId" @change="onMonitorBranchChange"><option value="">全部分公司</option><option v-for="branch in dashboard.organization.branches" :key="branch.branchId" :value="branch.branchId">{{ branch.branchName }}</option></select></label>
-            <label v-if="stage === 'monitor'" class="monitor-filter">网格<select v-model="monitorGridId" :disabled="user.role === 'grid'" @change="selectedChannel = ''"><option v-if="user.role !== 'grid'" value="">全部网格</option><option v-for="grid in monitorGrids" :key="grid.gridId" :value="grid.gridId">{{ grid.gridName }}</option></select></label>
+            <label v-if="stage === 'monitor' && user.role === 'city'" class="monitor-filter">分公司<select
+                v-model="monitorBranchId" @change="onMonitorBranchChange">
+                <option value="">全部分公司</option>
+                <option v-for="branch in dashboard.organization.branches" :key="branch.branchId"
+                  :value="branch.branchId">{{ branch.branchName }}</option>
+              </select></label>
+            <label v-if="stage === 'monitor'" class="monitor-filter">网格<select v-model="monitorGridId"
+                :disabled="user.role === 'grid'" @change="selectedChannel = ''">
+                <option v-if="user.role !== 'grid'" value="">全部网格</option>
+                <option v-for="grid in monitorGrids" :key="grid.gridId" :value="grid.gridId">{{ grid.gridName }}
+                </option>
+              </select></label>
             <div v-else class="monitor-readonly"><span>所在网格</span><strong>{{ selectedGrid?.gridName }}</strong></div>
-            <label v-if="stage === 'monitor'" class="monitor-filter">产品<select v-model="monitorProductId" @change="onMonitorProductChange"><option v-for="product in dashboard.products" :key="product.productId" :value="product.productId">{{ product.productName }}</option></select></label>
-            <div v-else class="monitor-readonly"><span>产品</span><strong>{{ selectedProduct?.productName }}</strong></div>
-            <div class="threshold-control"><span>低产阈值</span><div><button type="button" aria-label="降低阈值" @click="adjustThreshold(-1)">−</button><input v-model.number="threshold" type="number" min="0" :step="thresholdStep" aria-label="低产阈值" /><button type="button" aria-label="提高阈值" @click="adjustThreshold(1)">+</button></div></div>
-            <label class="period-field"><span>统计周期</span><select v-model="alertPeriod" aria-label="预警统计周期"><option value="month">本月</option><option value="day">当日</option></select></label>
+            <label v-if="stage === 'monitor'" class="monitor-filter">产品<select v-model="monitorProductId"
+                @change="onMonitorProductChange">
+                <option v-for="product in dashboard.products" :key="product.productId" :value="product.productId">{{
+                  product.productName }}</option>
+              </select></label>
+            <div v-else class="monitor-readonly"><span>产品</span><strong>{{ selectedProduct?.productName }}</strong>
+            </div>
+            <div class="threshold-control"><span>低产阈值</span>
+              <div><button type="button" aria-label="降低阈值" @click="adjustThreshold(-1)">−</button><input
+                  v-model.number="threshold" type="number" min="0" :step="thresholdStep" aria-label="低产阈值" /><button
+                  type="button" aria-label="提高阈值" @click="adjustThreshold(1)">+</button></div>
+            </div>
+            <label class="period-field"><span>统计周期</span><select v-model="alertPeriod" aria-label="预警统计周期">
+                <option value="month">本月</option>
+                <option value="day">当日</option>
+              </select></label>
           </div>
-          <label v-if="stage === 'alerts'" class="channel-filter">渠道<select v-model="selectedChannel"><option value="">全部渠道</option><option v-for="channel in channelOptions" :key="channel" :value="channel">{{ channel }}</option></select></label>
-          <div class="filter-footer"><small>{{ tab === 'people' ? '直销人员' : '渠道合计' }}产能 ≤ {{ cleanThreshold }} {{ activeProduct?.unit }}，0 为零产</small><button type="button" @click="applyFilters">筛选</button></div>
+          <label v-if="stage === 'alerts'" class="channel-filter">渠道<select v-model="selectedChannel">
+              <option value="">全部渠道</option>
+              <option v-for="channel in channelOptions" :key="channel" :value="channel">{{ channel }}</option>
+            </select></label>
+          <div class="filter-footer"><small>{{ tab === 'people' ? '直销人员' : '渠道合计' }}产能 ≤ {{ cleanThreshold }} {{
+            activeProduct?.unit }}，0 为零产</small><button type="button" @click="applyFilters">筛选</button></div>
         </section>
         <AiAnalysisPanel :summary="aiSummary" />
-        <div class="alert-summary"><div v-for="category in alertCategories" :key="category.id"><span>{{ category.label }}</span><strong>{{ category.count }}</strong><small>{{ category.id === 'people' ? '人' : '个' }}</small></div></div>
-        <div class="tabs alert-category-tabs" role="tablist" aria-label="预警分类"><button v-for="category in alertCategories" :key="category.id" type="button" role="tab" :aria-selected="tab === category.id" :class="{ active: tab === category.id }" @click="selectAlertCategory(category.id)">{{ category.label }}</button></div>
-        <section v-if="tab === 'people'" class="list-section"><div class="section-head"><h2>直销人员 · 零产 / 低产</h2><span>{{ lowPeople.length }} 人</span></div><article v-for="item in lowPeople" :key="`${item.gridId}-${item.staffId}`" class="person-card" :data-category="normalizeChannelType(item.channelType)" :class="{ zero: item.production === 0 }"><span class="person-avatar" aria-hidden="true"></span><div class="person-main"><strong>{{ item.staffName }}</strong><span class="person-category">{{ item.staffRole || '岗位未提供' }} · {{ item.staffId || '员工编号未提供' }}</span><span class="alert-organization">{{ branchName(item.branchId) }} · {{ gridName(item.gridId) || '网格未提供' }}</span></div><div class="person-score"><strong>{{ displayNumber(item.production) }}</strong><span>{{ activeProduct?.unit }}</span></div><p>{{ item.production === 0 ? '零产' : '低产' }}</p></article><p v-if="!lowPeople.length" class="empty-state">当前条件下暂无低产人员</p></section>
-        <section v-else class="list-section"><div class="section-head"><h2>{{ tab === 'stars' ? '3星+渠道' : '末梢渠道' }} · 零产 / 低产</h2><span>{{ displayedChannels.length }} 个</span></div><article v-for="item in displayedChannels" :key="`${item.gridId}-${item.channelCode || item.channel}-${item.channelType}`" class="channel-card" :data-category="item.channelType"><div class="channel-head"><strong>{{ tab === 'tail' ? item.microChannelName || item.channel : item.channel }}</strong><span>{{ item.production === 0 ? '零产' : '低产' }}</span></div><div class="channel-category">{{ tab === 'stars' ? `${item.channelStar ? item.channelStar + '星' : '星级未提供'} · ${item.channelCode || '渠道编码未提供'}` : item.serviceProvider || '区域服务商未提供' }}</div><div class="alert-organization">{{ branchName(item.branchId) }} · {{ gridName(item.gridId) || '网格未提供' }}</div><div class="channel-meta"><span>{{ displayNumber(item.production) }} {{ activeProduct?.unit }}</span><span>{{ item.staffCount }} 人</span></div></article><p v-if="!displayedChannels.length" class="empty-state">当前条件下暂无低产渠道</p></section>
-        <button class="script-library-entry" type="button" @click="openScriptLibrary"><span class="script-library-icon" aria-hidden="true"></span><span><strong>经典话术库</strong><small>产品话术 · 沟通参考</small></span><i class="menu-chevron" aria-hidden="true"></i></button>
+        <p v-if="alertLoading" aria-live="polite">正在查询预警...</p>
+        <p v-if="alertError" role="alert">{{ alertError }}</p>
+        <template v-if="alertResult">
+          <div class="alert-summary">
+            <div v-for="category in alertCategories" :key="category.id"><span>{{ category.label }}</span><strong>{{
+              category.count }}</strong><small>{{ category.id === 'people' ? '人' : '个' }}</small></div>
+          </div>
+          <div class="tabs alert-category-tabs" role="tablist" aria-label="预警分类"><button
+              v-for="category in alertCategories" :key="category.id" type="button" role="tab"
+              :aria-selected="tab === category.id" :class="{ active: tab === category.id }"
+              @click="selectAlertCategory(category.id)">{{ category.label }}</button></div>
+          <section v-if="tab === 'people'" class="list-section">
+            <div class="section-head">
+              <h2>直销人员 · 零产 / 低产</h2><span>{{ lowPeople.length }} 人</span>
+            </div>
+            <article v-for="item in lowPeople" :key="`${item.gridId}-${item.staffId}`" class="person-card"
+              :data-category="normalizeChannelType(item.channelType)" :class="{ zero: item.production === 0 }"><span
+                class="person-avatar" aria-hidden="true"></span>
+              <div class="person-main"><strong>{{ item.staffName }}</strong><span class="person-category">{{
+                item.staffRole || '岗位未提供' }} · {{ item.staffId || '员工编号未提供' }}</span><span
+                  class="alert-organization">{{ branchName(item.branchId) }} · {{ gridName(item.gridId) || '网格未提供'
+                  }}</span></div>
+              <div class="person-score"><strong>{{ displayNumber(item.production) }}</strong><span>{{
+                activeProduct?.unit }}</span></div>
+              <p>{{ item.production === 0 ? '零产' : '低产' }}</p>
+            </article>
+            <p v-if="!lowPeople.length" class="empty-state">当前条件下暂无低产人员</p>
+          </section>
+          <section v-else class="list-section">
+            <div class="section-head">
+              <h2>{{ tab === 'stars' ? '3星+渠道' : '末梢渠道' }} · 零产 / 低产</h2><span>{{ displayedChannels.length }} 个</span>
+            </div>
+            <article v-for="item in displayedChannels"
+              :key="`${item.gridId}-${item.channelCode || item.channel}-${item.channelType}`" class="channel-card"
+              :data-category="item.channelType">
+              <div class="channel-head"><strong>{{ tab === 'tail' ? item.microChannelName || item.channel : item.channel
+              }}</strong><span>{{ item.production === 0 ? '零产' : '低产' }}</span></div>
+              <div class="channel-category">{{ tab === 'stars' ? `${item.channelStar ? item.channelStar + '星' : '星级未提供'}
+                · ${item.channelCode || '渠道编码未提供'}` : item.serviceProvider || '区域服务商未提供' }}</div>
+              <div class="alert-organization">{{ branchName(item.branchId) }} · {{ gridName(item.gridId) || '网格未提供' }}
+              </div>
+              <div class="channel-meta"><span>{{ displayNumber(item.production) }} {{ activeProduct?.unit
+              }}</span><span>{{ item.staffCount }} 人</span></div>
+            </article>
+            <p v-if="!displayedChannels.length" class="empty-state">当前条件下暂无低产渠道</p>
+          </section>
+        </template>
+        <button class="script-library-entry" type="button" @click="openScriptLibrary"><span class="script-library-icon"
+            aria-hidden="true"></span><span><strong>经典话术库</strong><small>产品话术 · 沟通参考</small></span><i
+            class="menu-chevron" aria-hidden="true"></i></button>
       </template>
 
       <template v-else-if="stage === 'scripts'">
-        <header class="drill-page-title"><h2>经典话术库</h2><p>{{ scopeName }}</p></header>
-        <div class="script-product-tabs" role="tablist" aria-label="话术产品"><button v-for="product in dashboard.products" :key="product.productId" type="button" role="tab" :aria-selected="scriptProductId === product.productId" :class="{ active: scriptProductId === product.productId }" @click="scriptProductId = product.productId">{{ product.productName }}</button></div>
-        <SalesScriptPanel :key="scriptProductId" :expanded="true" :script="libraryScript" :product-id="scriptProductId" :product-name="libraryProduct?.productName" :can-edit="false" :busy="loading" @copied="showToast('话术已复制')" @error="showToast($event, 'warning')" />
-        <div v-if="user.isSuperAdmin === true" class="script-import-actions target-actions"><button type="button" :disabled="loading" @click="downloadScriptTemplate"><span class="action-icon download-icon" aria-hidden="true"></span>下载模板</button><button type="button" class="target-import" :disabled="loading" @click="scriptFileInput?.click()"><span class="action-icon upload-icon" aria-hidden="true"></span>导入文件</button><input ref="scriptFileInput" type="file" accept=".csv,text/csv" hidden @change="handleScriptFile" /></div>
+        <header class="drill-page-title">
+          <h2>经典话术库</h2>
+          <p>{{ scopeName }}</p>
+        </header>
+        <div class="script-product-tabs" role="tablist" aria-label="话术产品"><button v-for="product in dashboard.products"
+            :key="product.productId" type="button" role="tab" :aria-selected="scriptProductId === product.productId"
+            :class="{ active: scriptProductId === product.productId }" @click="scriptProductId = product.productId">{{
+              product.productName }}</button></div>
+        <SalesScriptPanel :key="scriptProductId" :expanded="true" :script="libraryScript" :product-id="scriptProductId"
+          :product-name="libraryProduct?.productName" :can-edit="false" :busy="loading" @copied="showToast('话术已复制')"
+          @error="showToast($event, 'warning')" />
+        <div v-if="user.isSuperAdmin === true" class="script-import-actions target-actions"><button type="button"
+            :disabled="loading" @click="downloadScriptTemplate"><span class="action-icon download-icon"
+              aria-hidden="true"></span>下载模板</button><button type="button" class="target-import" :disabled="loading"
+            @click="scriptFileInput?.click()"><span class="action-icon upload-icon"
+              aria-hidden="true"></span>导入文件</button><input ref="scriptFileInput" type="file" accept=".csv,text/csv"
+            hidden @change="handleScriptFile" /></div>
       </template>
       <template v-else-if="stage === 'search'">
-        <header class="drill-page-title"><h2>产能速查</h2><p>个人 / 渠道产能查询</p></header>
-        <CapacitySearch :dashboard="dashboard" :grid-ids="scopeGridIds" :scope="scopeName" :demo="isMock" />
+        <header class="drill-page-title">
+          <h2>产能速查</h2>
+          <p>个人 / 渠道产能查询</p>
+        </header>
+        <CapacitySearch :dashboard="dashboard" :grid-ids="scopeGridIds" :scope="scopeName" :demo="isMock"
+          :query-api="searchQuery" />
       </template>
       <template v-else-if="stage === 'campus'">
-        <section class="campus-placeholder"><span>校园生产管理</span><h2>校园生产通</h2><p>入口待配置</p></section>
+        <section class="campus-placeholder"><span>校园生产管理</span>
+          <h2>校园生产通</h2>
+          <p>入口待配置</p>
+        </section>
       </template>
-      <nav v-if="stage !== 'workbench'" class="bottom-nav" aria-label="主导航"><button type="button" :class="{ active: stage === 'campus' }" @click="goWorkbench"><i class="bottom-icon bottom-home" aria-hidden="true"></i><span>工作台</span></button><button type="button" :class="{ active: ['overview', 'branches', 'grids'].includes(stage) }" @click="goOverview"><i class="bottom-icon bottom-overview" aria-hidden="true"></i><span>生产总览</span></button><button type="button" :class="{ active: ['monitor', 'alerts'].includes(stage) }" @click="openMonitor"><i class="bottom-icon bottom-alert" aria-hidden="true"></i><span>预警监控</span></button></nav>
+      <nav v-if="stage !== 'workbench'" class="bottom-nav" aria-label="主导航"><button type="button"
+          :class="{ active: stage === 'campus' }" @click="goWorkbench"><i class="bottom-icon bottom-home"
+            aria-hidden="true"></i><span>工作台</span></button><button type="button"
+          :class="{ active: ['overview', 'branches', 'grids'].includes(stage) }" @click="goOverview"><i
+            class="bottom-icon bottom-overview" aria-hidden="true"></i><span>生产总览</span></button><button type="button"
+          :class="{ active: ['monitor', 'alerts'].includes(stage) }" @click="openMonitor"><i
+            class="bottom-icon bottom-alert" aria-hidden="true"></i><span>预警监控</span></button></nav>
     </main>
 
     <main v-if="loading" class="loading-mask"><span class="loading-spinner"></span><span>加载中...</span></main>
     <div v-if="toast.show" class="toast" :class="toast.type">{{ toast.message }}</div>
 
+    <input ref="permissionFileInput" type="file" accept=".xlsx,.xls,.csv" hidden
+      @change="event => handleImportFile(event, 'permission', permissionRows, '权限表')" />
     <input ref="channelFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleChannelFile" />
     <input ref="terminalFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleTerminalFile" />
     <input ref="staffFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleStaffFile" />
-    <input ref="regionCapacityFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleRegionCapacityFile" />
-    <input ref="channelCapacityFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleChannelCapacityFile" />
+    <input ref="regionCapacityFileInput" type="file" accept=".xlsx,.xls,.csv" hidden
+      @change="handleRegionCapacityFile" />
+    <input ref="channelCapacityFileInput" type="file" accept=".xlsx,.xls,.csv" hidden
+      @change="handleChannelCapacityFile" />
     <input ref="staffCapacityFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleStaffCapacityFile" />
 
     <!-- 导入失败明细弹窗 -->
@@ -146,9 +347,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { isMock } from './api/client'
-import { fetchDashboard, fetchPermission, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts } from './api/production'
+import { sendLoginCode, loginWithCode, loginWithOneClick } from './api/auth.js'
+import { fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts } from './api/production'
 import { validateScriptImport, scriptTemplateCsv } from './utils/salesScriptImport.js'
 import ChannelTypeFilter from './components/ChannelTypeFilter.vue'
 import { normalizeChannelType } from './utils/channelTypes.js'
@@ -159,9 +361,7 @@ import { buildAiSummary } from './utils/aiSummary.js'
 import ProductionBoard from './components/ProductionBoard.vue'
 import CapacitySearch from './components/CapacitySearch.vue'
 import { buildCapacityMetric } from './utils/capacityMetrics.js'
-
-// ==================== 测试开关 ====================
-const SKIP_LOGIN_FOR_TEST = true
+import { permissionRows } from './utils/permissionImport.js'
 
 const page = ref('login')
 const stage = ref('workbench')
@@ -169,6 +369,10 @@ const loading = ref(false)
 const token = ref('')
 const loginPhone = ref('')
 const loginCode = ref('')
+const codeSending = ref(false)
+const codeCountdown = ref(0)
+const codePhone = ref('')
+let codeTimer
 const agreedToTerms = ref(false)
 const user = reactive({ name: '', phone: '', role: '', branchId: '', branchName: '', gridId: '', gridName: '', cityName: '', isSuperAdmin: false })
 const scriptFileInput = ref(null)
@@ -187,6 +391,7 @@ const tab = ref('people')
 const targetFileInput = ref(null)
 const toast = reactive({ show: false, type: 'success', message: '' })
 const channelFileInput = ref(null)
+const permissionFileInput = ref(null)
 const terminalFileInput = ref(null)
 const staffFileInput = ref(null)
 const regionCapacityFileInput = ref(null)
@@ -195,6 +400,9 @@ const staffCapacityFileInput = ref(null)
 const importErrorVisible = ref(false)
 const importErrorTitle = ref('')
 const importErrorList = ref([])
+const alertResult = ref(null)
+const alertLoading = ref(false), alertError = ref('')
+let alertSequence = 0
 
 const scopeName = computed(() => user.role === 'city' ? dashboard.organization.cityName : user.role === 'grid' ? user.gridName : user.branchName)
 const roleLabel = computed(() => user.isSuperAdmin === true ? '超级管理员' : ({ city: '市公司', branch: '分公司', grid: '网格长' })[user.role] || '')
@@ -213,21 +421,21 @@ const cleanThreshold = computed(() => {
   return Math.round(Math.floor(value / thresholdStep.value + 1e-9) * thresholdStep.value * 10) / 10
 })
 
-function metric(productId, gridIds) {
-  return buildCapacityMetric(dashboard, productId, gridIds, selectedChannelType.value)
+function metric(productId, gridIds, scope = null) {
+  return buildCapacityMetric(dashboard, productId, gridIds, selectedChannelType.value, scope)
 }
 
 function gridsOf(branchId) { return dashboard.organization.grids.filter(item => item.branchId === branchId).map(item => item.gridId) }
 const scopeGridIds = computed(() => user.role === 'city' ? dashboard.organization.grids.map(item => item.gridId) : user.role === 'grid' ? [user.gridId] : gridsOf(user.branchId))
-const overview = computed(() => dashboard.products.map(item => ({ ...item, ...metric(item.productId, scopeGridIds.value) })))
+const overview = computed(() => dashboard.products.map(item => ({ ...item, ...metric(item.productId, scopeGridIds.value, { level: user.role, id: user.role === 'grid' ? user.gridId : user.branchId }) })))
 const overviewAiSummary = computed(() => ({
   scope: scopeName.value, product: '全产品生产总览', statDate: dashboard.statDate, demo: isMock, channelType: selectedChannelType.value || '全部类型',
   products: overview.value.map(item => buildAiSummary({ scope: scopeName.value, product: item, statDate: dashboard.statDate, demo: isMock, period: 'day-and-month', metric: item, categories: [], showTargets: !selectedChannelType.value }))
 }))
-const cityMetric = computed(() => metric(selectedProductId.value, scopeGridIds.value))
-const branchMetric = computed(() => metric(selectedProductId.value, gridsOf(selectedBranchId.value)))
-const branchMetrics = computed(() => dashboard.organization.branches.map(item => ({ ...item, ...metric(selectedProductId.value, gridsOf(item.branchId)) })))
-const gridMetrics = computed(() => dashboard.organization.grids.filter(item => item.branchId === selectedBranchId.value).map(item => ({ ...item, ...metric(selectedProductId.value, [item.gridId]) })))
+const cityMetric = computed(() => metric(selectedProductId.value, scopeGridIds.value, { level: 'city' }))
+const branchMetric = computed(() => metric(selectedProductId.value, gridsOf(selectedBranchId.value), { level: 'branch', id: selectedBranchId.value }))
+const branchMetrics = computed(() => dashboard.organization.branches.map(item => ({ ...item, ...metric(selectedProductId.value, gridsOf(item.branchId), { level: ['未知', '市统筹'].includes(item.branchId) ? 'grid' : 'branch', id: ['未知', '市统筹'].includes(item.branchId) ? `${item.branchId}::${item.branchId}` : item.branchId }) })))
+const gridMetrics = computed(() => dashboard.organization.grids.filter(item => item.branchId === selectedBranchId.value).map(item => ({ ...item, ...metric(selectedProductId.value, [item.gridId], { level: 'grid', id: item.gridId }) })))
 const monitorGrids = computed(() => dashboard.organization.grids.filter(item => !monitorBranchId.value || item.branchId === monitorBranchId.value))
 const monitorGridIds = computed(() => monitorGridId.value ? [monitorGridId.value] : monitorGrids.value.map(item => item.gridId))
 const monitorScopeLabel = computed(() => monitorGridId.value ? gridName(monitorGridId.value) : monitorBranchId.value ? dashboard.organization.branches.find(item => item.branchId === monitorBranchId.value)?.branchName : scopeName.value)
@@ -237,31 +445,21 @@ const alertRows = computed(() => {
   return source.filter(item => ids.has(item.gridId) && item.productId === activeProduct.value?.productId)
 })
 const channelOptions = computed(() => [...new Set(alertRows.value.map(item => item.channel || '未归类'))].sort((a, b) => a.localeCompare(b, 'zh-CN')))
-const filteredAlertRows = computed(() => alertRows.value.filter(item => !selectedChannel.value || item.channel === selectedChannel.value))
-const lowPeople = computed(() => filteredAlertRows.value.filter(item => normalizeChannelType(item.channelType) === '直销队伍' && Number(item.production) <= cleanThreshold.value).sort((a, b) => a.production - b.production))
-const lowChannels = computed(() => {
-  const map = new Map()
-  filteredAlertRows.value.forEach(item => {
-    const name = item.channel || '未归类'
-    const key = `${item.gridId}|${item.channelCode || name}|${normalizeChannelType(item.channelType)}`
-    const value = map.get(key) || { branchId: item.branchId, gridId: item.gridId, channel: name, channelCode: item.channelCode, channelStar: item.channelStar, microChannelName: item.microChannelName, serviceProvider: item.serviceProvider, channelType: normalizeChannelType(item.channelType), production: 0, staffCount: 0 }
-    value.production += Number(item.production || 0)
-    value.staffCount++
-    map.set(key, value)
-  })
-  return [...map.values()].filter(item => ['三星+渠道', '末梢渠道'].includes(item.channelType) && item.production <= cleanThreshold.value).sort((a, b) => a.production - b.production)
-})
+const lowPeople = computed(() => alertResult.value?.people || [])
+const lowChannels = computed(() => alertResult.value?.channels || [])
 
 const alertCategories = computed(() => [
-  { id: 'people', label: '直销人员', count: lowPeople.value.length },
-  { id: 'stars', label: '3星+渠道', count: lowChannels.value.filter(item => item.channelType === '三星+渠道').length },
-  { id: 'tail', label: '末梢渠道', count: lowChannels.value.filter(item => item.channelType === '末梢渠道').length }
+  { id: 'people', label: '直销人员', count: alertResult.value ? lowPeople.value.length : null },
+  { id: 'stars', label: '3星+渠道', count: alertResult.value ? lowChannels.value.filter(item => item.channelType === '三星+渠道').length : null },
+  { id: 'tail', label: '末梢渠道', count: alertResult.value ? lowChannels.value.filter(item => item.channelType === '末梢渠道').length : null }
 ])
 const displayedChannels = computed(() => lowChannels.value.filter(item => item.channelType === (tab.value === 'stars' ? '三星+渠道' : '末梢渠道')))
 const aiSummary = computed(() => {
   const ids = (stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value]).filter(id => scopeGridIds.value.includes(id))
-  return buildAiSummary({ scope: stage.value === 'monitor' ? monitorScopeLabel.value : selectedGrid.value?.gridName, product: activeProduct.value, statDate: dashboard.statDate, demo: isMock, period: alertPeriod.value, threshold: cleanThreshold.value,
-    metric: buildCapacityMetric(dashboard, activeProduct.value?.productId, ids), categories: alertCategories.value })
+  return buildAiSummary({
+    scope: stage.value === 'monitor' ? monitorScopeLabel.value : selectedGrid.value?.gridName, product: activeProduct.value, statDate: dashboard.statDate, demo: isMock, period: alertPeriod.value, threshold: cleanThreshold.value,
+    metric: buildCapacityMetric(dashboard, activeProduct.value?.productId, ids), categories: alertCategories.value
+  })
 })
 function selectAlertCategory(id) { tab.value = id; selectedChannel.value = '' }
 
@@ -285,44 +483,65 @@ function returnFromScripts() { stage.value = scriptReturnStage.value; scrollTop(
 function onMonitorBranchChange() { monitorGridId.value = ''; selectedChannel.value = '' }
 function onMonitorProductChange() { threshold.value = 1; selectedChannel.value = ''; tab.value = 'people' }
 function adjustThreshold(direction) { threshold.value = Math.round((cleanThreshold.value + direction * thresholdStep.value) * 10) / 10; if (threshold.value < 0) threshold.value = 0 }
-function applyFilters() { document.querySelector('.alert-summary')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
+async function loadAlerts() {
+  const id = ++alertSequence
+  alertResult.value = null
+  alertLoading.value = false; alertError.value = ''
+  if (!['monitor', 'alerts'].includes(stage.value) || !activeProduct.value) return
+  alertLoading.value = true
+  try {
+    const data = await fetchAlerts({ phone: user.phone, productId: activeProduct.value.productId, gridIds: stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value], threshold: cleanThreshold.value, period: alertPeriod.value, channel: selectedChannel.value }, token.value)
+    if (id === alertSequence) alertResult.value = data
+  } catch (error) { if (id === alertSequence) { alertError.value = error.message || '预警查询失败'; showToast(alertError.value, 'error') } }
+  finally { if (id === alertSequence) alertLoading.value = false }
+}
+watch([stage, monitorBranchId, monitorGridId, monitorProductId, selectedGridId, selectedProductId, cleanThreshold, alertPeriod, selectedChannel], loadAlerts)
+async function applyFilters() { await loadAlerts(); document.querySelector('.alert-summary')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
+const searchQuery = params => queryCapacity({ ...params, phone: user.phone }, token.value)
 
-onMounted(() => {
-  if (SKIP_LOGIN_FOR_TEST) {
-    Object.assign(user, {
-      name: '测试用户',
-      phone: '13800000000',
-      role: 'city',
-      branchId: '',
-      branchName: '',
-      gridId: '',
-      gridName: '',
-      cityName: '中山市'
-    })
-    token.value = 'test-token'
-    loginPhone.value = '13800000000'
-    page.value = 'dashboard'
-    loadDashboard().catch(() => {})
-    return
-  }
-
+onMounted(async () => {
   const params = new URLSearchParams(location.search)
   token.value = params.get('token') || ''
   loginPhone.value = params.get('phone') || params.get('mobile') || ''
+  if (token.value && !isMock) {
+    try { loginPhone.value = (await getMobileByToken(token.value)).mobile } catch (error) { showToast(error.message || '认证失败', 'error') }
+    const url = new URL(location.href); url.searchParams.delete('token'); history.replaceState(null, '', url)
+  }
+  window.addEventListener('handle2-auth-expired', expireSession)
 })
+onUnmounted(() => { window.removeEventListener('handle2-auth-expired', expireSession); clearInterval(codeTimer) })
+watch(loginPhone, () => { codePhone.value = ''; loginCode.value = '' })
+function expireSession() { token.value = ''; page.value = 'login'; alertSequence++; alertResult.value = null; Object.assign(dashboard, { organization: { cityName: '', branches: [], grids: [] }, rows: [], dailyRows: [], targets: [], regionRows: undefined, periodRows: [], salesScripts: [] }); showToast('登录已过期，请重新认证', 'warning') }
 
 async function handleLogin() {
+  if (loading.value || codeSending.value) return
   if (!agreedToTerms.value) return showToast('请先同意登录协议', 'warning')
   if (!/^1\d{10}$/.test(loginPhone.value)) return showToast('请输入正确的11位手机号', 'warning')
   loading.value = true
   try {
-    const permission = await fetchPermission(loginPhone.value, token.value)
-    if (!permission || !['city', 'branch', 'grid'].includes(permission.role) || (permission.role !== 'city' && !permission.branchId) || (permission.role === 'grid' && !permission.gridId)) throw new Error('该手机号暂无查看权限')
-    Object.assign(user, { isSuperAdmin: false }, permission)
-    await loadDashboard()
-    goWorkbench()
-    page.value = 'dashboard'
-  } catch (error) { showToast(error.message || '登录失败', 'error') } finally { loading.value = false }
+    const phone = loginPhone.value
+    let identity
+    if (token.value && !isMock) {
+      identity = { mobile: (await getMobileByToken(token.value)).mobile, token: token.value }
+    }
+    else {
+      if (!isMock && codePhone.value !== phone) throw new Error('请先为当前手机号获取验证码')
+      identity = await loginWithCode(phone, loginCode.value)
+    }
+    await completeLogin(identity)
+  } catch (error) { token.value = ''; showToast(error.message || '登录失败', 'error') } finally { loading.value = false }
+}
+
+async function completeLogin(identity) {
+  if (!/^1\d{10}$/.test(identity.mobile) || !identity.token) throw new Error('认证未返回有效手机号或token')
+  token.value = identity.token
+  const permission = await fetchPermission(identity.mobile, identity.token)
+  if (!permission || !['city', 'branch', 'grid'].includes(permission.role) || (permission.role !== 'city' && !permission.branchId) || (permission.role === 'grid' && !permission.gridId)) throw new Error('该手机号暂无查看权限')
+  Object.assign(user, { isSuperAdmin: false }, permission)
+  await loadDashboard()
+  goWorkbench()
+  page.value = 'dashboard'
+  codePhone.value = ''; loginCode.value = ''; codeCountdown.value = 0; clearInterval(codeTimer)
 }
 
 async function loadDashboard() {
@@ -334,12 +553,17 @@ async function loadDashboard() {
   dashboard.rows = data.rows || []
   dashboard.dailyRows = data.dailyRows || []
   dashboard.salesScripts = data.salesScripts || []
+  dashboard.regionRows = data.regionRows
+  dashboard.periodRows = data.periodRows || []
+  if (data.permission) Object.assign(user, data.permission)
+  if (data.warnings?.length) showToast(data.warnings[0], 'warning')
+  await loadAlerts()
 }
 
 async function handleSaveSalesScript(script) {
   loading.value = true
   try {
-    if (user.role !== 'city') throw new Error('仅市公司账号可维护话术')
+    if (user.isSuperAdmin !== true) throw new Error('仅超级管理员可维护话术')
     await saveSalesScript(script, user, token.value)
     await loadDashboard()
     showToast('话术已保存，更新时间已记录')
@@ -370,8 +594,33 @@ async function handleScriptFile(event) {
 }
 
 async function refreshDashboard() { loading.value = true; try { await loadDashboard(); showToast('数据已刷新') } catch (error) { showToast(error.message || '刷新失败', 'error') } finally { loading.value = false } }
-function sendCode() { if (!/^1\d{10}$/.test(loginPhone.value)) return showToast('请先输入正确的手机号', 'warning'); loginCode.value = '123456'; showToast(isMock ? '模拟验证码：123456' : '验证码已发送') }
-function oneClickLogin() { if (!agreedToTerms.value) return showToast('请先同意登录协议', 'warning'); if (isMock) { loginPhone.value = '13800000000'; loginCode.value = '123456' }; handleLogin() }
+async function refreshAfterImport() { try { await loadDashboard() } catch (error) { showImportErrors('导入后的看板暂未就绪', [error.message || '请完成同日三张产能导入后刷新']) } }
+async function sendCode() {
+  if (loading.value || codeSending.value || codeCountdown.value > 0) return
+  if (!agreedToTerms.value) return showToast('请先同意登录协议', 'warning')
+  if (!/^1\d{10}$/.test(loginPhone.value)) return showToast('请先输入正确的手机号', 'warning')
+  const phone = loginPhone.value
+  codeSending.value = true
+  try {
+    await sendLoginCode(phone)
+    if (phone !== loginPhone.value) return showToast('手机号已变更，请重新获取验证码', 'warning')
+    codePhone.value = phone
+    if (isMock) loginCode.value = '123456'
+    codeCountdown.value = 60
+    clearInterval(codeTimer)
+    codeTimer = setInterval(() => { if (--codeCountdown.value <= 0) clearInterval(codeTimer) }, 1000)
+    showToast(isMock ? '模拟验证码：123456' : '验证码请求已提交')
+  } catch (error) { codePhone.value = ''; showToast(error.message || '验证码发送失败', 'error') }
+  finally { codeSending.value = false }
+}
+async function oneClickLogin() {
+  if (loading.value || codeSending.value) return
+  if (!agreedToTerms.value) return showToast('请先同意登录协议', 'warning')
+  loading.value = true
+  try { await completeLogin(await loginWithOneClick()) }
+  catch (error) { token.value = ''; showToast(error.message || '一键登录失败，请使用短信登录', 'error') }
+  finally { loading.value = false }
+}
 
 function parseCsv(text) {
   const rows = []; let row = []; let cell = ''; let quoted = false
@@ -705,7 +954,9 @@ async function handleImportFile(event, target, buildRows, label) {
   try {
     const data = await parseExcelFile(file)
     const rows = buildRows(data)
-    const result = await importRows(target, rows, token.value || 'test-token')
+    if (!user.isSuperAdmin) throw new Error('仅超级管理员可导入')
+    const result = await importRows(target, rows, token.value, user)
+    await refreshAfterImport()
     if (result?.failed > 0) {
       showToast(`导入完成：成功 ${result.success} 条，失败 ${result.failed} 条`, 'warning')
       showImportErrors(
@@ -733,7 +984,7 @@ async function handleCapacityImportFile(event, target, buildRows, label) {
   }
   loading.value = true
   try {
-    const data = await parseExcelFile(file)
+    const data = await parseExcelFile(file, { region: '区域汇总取数', channel: '渠道汇总取数', staff: '工号汇总取数' }[target])
     let rows = buildRows(data)
 
     rows = rows.map(r => ({
@@ -743,7 +994,9 @@ async function handleCapacityImportFile(event, target, buildRows, label) {
       snapshot_time: normalizeSnapshotTime(r.snapshot_time)
     }))
 
-    const result = await importCapacity(target, rows, token.value || 'test-token')
+    if (!user.isSuperAdmin) throw new Error('仅超级管理员可导入')
+    const result = await importCapacity(target, rows, token.value)
+    await refreshAfterImport()
     if (result?.failed > 0) {
       showToast(`导入完成：成功 ${result.success} 条，失败 ${result.failed} 条`, 'warning')
       showImportErrors(
@@ -784,12 +1037,17 @@ function handleStaffCapacityFile(event) {
  * @param {File} file - 用户选择的文件
  * @returns {Promise<string[][]>} 二维数组，首行为表头
  */
-async function parseExcelFile(file) {
+function importTable(data) {
+  const header = data.findIndex(row => row.includes('分公司') && row.includes('网格') && (row.includes('产品名') || row.includes('工号编码') || row.includes('工号') || row.includes('渠道编码') || row.includes('手机号')))
+  if (header < 0) throw new Error('没有找到有效表头')
+  return data.slice(header).filter(row => !String(row[0] || '').startsWith('仅供联调'))
+}
+async function parseExcelFile(file, sheetHint = '') {
   const name = file.name || ''
 
   if (/\.csv$/i.test(name)) {
     const text = (await file.text()).replace(/^\ufeff/, '')
-    return parseCsv(text)
+    return importTable(parseCsv(text))
   }
 
   await ensureXlsx()
@@ -800,9 +1058,9 @@ async function parseExcelFile(file) {
 
   const buffer = await file.arrayBuffer()
   const workbook = window.XLSX.read(buffer, { type: 'array' })
-  const sheetName = workbook.SheetNames[0]
+  const sheetName = workbook.SheetNames.includes(sheetHint) ? sheetHint : workbook.SheetNames[0]
   const sheet = workbook.Sheets[sheetName]
-  return window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+  return importTable(window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }))
 }
 
 /**

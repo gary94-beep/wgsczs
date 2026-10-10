@@ -6,9 +6,9 @@
       <div class="capacity-period-heading"><h3><i></i>{{ period === 'day' ? '日产能' : '月产能' }}</h3><span>{{ period === 'day' ? statDate : `${statDate.slice(5, 7)}月累计` }}</span><b v-if="showTargets">{{ rate(metricFor(period)) }}</b></div>
       <div class="capacity-values"><strong>{{ format(metricFor(period).production) }}<small>{{ unit }}</small></strong><div v-if="showTargets"><span>{{ period === 'day' ? '日目标' : '月目标' }} {{ format(metricFor(period).target) }} {{ metricFor(period).hasTarget ? unit : '' }}</span><span>{{ gap(metricFor(period)) }}</span></div></div>
       <div class="capacity-progress" role="progressbar" :aria-label="`${title}${period === 'day' ? '日' : '月'}产能进度`" :aria-valuenow="metricFor(period).completionRate === null ? undefined : Math.min(100, metricFor(period).completionRate)" :aria-valuetext="metricFor(period).completionRate === null ? '暂无进度数据' : rate(metricFor(period))" aria-valuemin="0" aria-valuemax="100"><i :style="{ width: `${Math.min(100, Math.max(0, metricFor(period).completionRate || 0))}%` }"></i></div>
-      <div class="capacity-comparison" v-if="period === 'day'"><span>本周日均<b>{{ format(item.weeklyAverage) }} <small>{{ unit }}/日</small></b></span><span>{{ statDate.slice(5).replace('-', '/') }}产能<b>{{ format(item.daily.production) }} <small>{{ unit }}</small></b></span><em :class="{ 'trend-down': dailyChange?.difference < 0 }">{{ comparisonLabel(dailyChange, '本周日均') }}</em></div>
+      <div class="capacity-comparison" v-if="period === 'day'"><span>{{ weekLabel }}<b>{{ format(item.weeklyAverage) }} <small>{{ unit }}/日</small></b></span><span>{{ statDate.slice(5).replace('-', '/') }}产能<b>{{ format(item.daily.production) }} <small>{{ unit }}</small></b></span><em :class="{ 'trend-down': dailyChange?.difference < 0 }">{{ comparisonLabel(dailyChange, weekLabel) }}</em></div>
       <div class="capacity-comparison" v-else><span>上月同期日均<b>{{ format(item.previousAverage) }} <small>{{ unit }}/日</small></b></span><span>本月日均<b>{{ format(item.monthAverage) }} <small>{{ unit }}/日</small></b></span><em :class="{ 'trend-down': monthlyChange?.difference < 0 }">{{ comparisonLabel(monthlyChange, '上月同期日均') }}</em></div>
-      <CapacityTrend :points="period === 'day' ? [{ label: '周日均', value: item.weeklyAverage }, { label: statDate, value: item.daily.production }] : [{ label: '上月同期日均', value: item.previousAverage }, { label: '本月日均', value: item.monthAverage }]" :unit="`${unit}/日`" :label="`${title}${period === 'day' ? '日' : '月同期'}产能对比`" />
+      <CapacityTrend :points="period === 'day' ? [{ label: weekLabel, value: item.weeklyAverage }, { label: statDate, value: item.daily.production }] : [{ label: '上月同期日均', value: item.previousAverage }, { label: '本月日均', value: item.monthAverage }]" :unit="`${unit}/日`" :label="`${title}${period === 'day' ? '日' : '月同期'}产能对比`" />
     </section>
   </article>
 </template>
@@ -20,6 +20,7 @@ import { compareCapacity } from '../utils/capacityMetrics.js'
 const props = defineProps({ title: String, item: Object, unit: String, statDate: { type: String, default: '' }, icon: { type: String, default: 'building-2' }, clickable: { type: Boolean, default: true }, showTargets: { type: Boolean, default: true } })
 defineEmits(['open'])
 const metricFor = period => period === 'day' ? props.item.daily : props.item
+const weekLabel = computed(() => props.item.weekBasis === 'rolling7' ? '近7天日均' : '本周日均')
 const dailyChange = computed(() => compareCapacity(props.item.daily.production, props.item.weeklyAverage))
 const monthlyChange = computed(() => compareCapacity(props.item.monthAverage, props.item.previousAverage))
 function comparisonLabel(change, baseline) {

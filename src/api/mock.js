@@ -2,10 +2,45 @@ import { mockBranches, mockCapacityRows, mockGrids, mockPermissions, mockProduct
 import { buildMonthToDatePeriods } from '../utils/reportingPeriod.js'
 import { buildMockDailyRows } from '../data/mockDailyData.js'
 import { mockSalesScripts } from '../data/mockSalesScripts.js'
+import { searchCapacity } from '../utils/capacitySearch.js'
+import { normalizeChannelType } from '../utils/channelTypes.js'
 
 const delay = (ms = 180) => new Promise(resolve => setTimeout(resolve, ms))
 const targetStoreKey = 'grid-ai-demo-targets-v1'
 const salesScriptStoreKey = 'grid-ai-demo-sales-scripts-v1'
+
+export async function mockGetMobileByToken(token) {
+  await delay()
+  if (!token) throw new Error('token不能为空')
+  return { mobile: '13800000000' }
+}
+
+export async function mockFetchAlerts(params) {
+  const data = await mockFetchDashboard(params)
+  const allowed = new Set(data.organization.grids.map(row => row.gridId))
+  if ((params.gridIds || []).some(id => !allowed.has(id))) throw new Error('无权访问该网格')
+  const ids = new Set(params.gridIds?.length ? params.gridIds : allowed)
+  const threshold = Number(params.threshold)
+  if (!Number.isFinite(threshold) || threshold < 0 || !['day', 'month'].includes(params.period)) throw new Error('预警参数无效')
+  const source = (params.period === 'day' ? data.dailyRows.filter(r => r.date === data.statDate) : data.rows)
+    .filter(r => ids.has(r.gridId) && r.productId === params.productId && (!params.channel || r.channel === params.channel))
+  const groups = new Map()
+  for (const r of source) {
+    const type = normalizeChannelType(r.channelType)
+    const key = JSON.stringify([r.gridId, type, type === '直销队伍' ? r.staffId : r.channelCode || r.microChannelName || r.channel])
+    const group = groups.get(key) || { ...r, channelType: type, production: 0, staffCount: 0 }
+    group.production += r.production; group.staffCount++; groups.set(key, group)
+  }
+  const low = [...groups.values()].filter(r => r.production <= threshold).sort((a, b) => a.production - b.production)
+  return { people: low.filter(r => r.channelType === '直销队伍'), channels: low.filter(r => ['三星+渠道', '末梢渠道'].includes(r.channelType)), statDate: data.statDate }
+}
+
+export async function mockSearchCapacity(params) {
+  const data = await mockFetchDashboard(params)
+  const allowed = new Set(data.organization.grids.map(row => row.gridId))
+  if ((params.gridIds || []).some(id => !allowed.has(id))) throw new Error('无权访问该网格')
+  return { results: searchCapacity(data, { ...params, gridIds: params.gridIds?.length ? params.gridIds : [...allowed] }), statDate: data.statDate }
+}
 
 function readSalesScripts() {
   let saved = []
@@ -156,8 +191,23 @@ export async function mockImportCapacity(target, rows) {
  * @param {Object[]} rows
  * @returns {Promise<{total:number, success:number, failed:number, errors:string[]}>}
  */
-export async function mockImportRows(target, rows) {
+export async function mockImportRows(target, rows, permission) {
   await delay(300)
   const list = Array.isArray(rows) ? rows : []
+  if (target === 'permission') {
+    if (mockPermissions[permission?.phone]?.isSuperAdmin !== true) throw new Error('仅超级管理员可导入权限')
+    for (const row of list) {
+      if (row.phone === permission.phone && (row.enabled !== '1' || row.is_super_admin !== '1' || row.role !== 'city')) throw new Error('不能禁用或降级当前超级管理员')
+      const branch = mockBranches.find(item => item.branchName === row.branch)
+      const grid = mockGrids.find(item => item.gridName === row.grid && item.branchId === branch?.branchId)
+      if ((row.role !== 'city' && !branch) || (row.role === 'grid' && !grid)) throw new Error('mock模式请选择演示数据中的组织；真实组织请使用真实模式')
+    }
+    for (const row of list) {
+      const branch = mockBranches.find(item => item.branchName === row.branch)
+      const grid = mockGrids.find(item => item.gridName === row.grid && item.branchId === branch?.branchId)
+      if (row.enabled !== '1') delete mockPermissions[row.phone]
+      else mockPermissions[row.phone] = { name: row.name, phone: row.phone, role: row.role, cityName: '中山市', branchId: branch?.branchId || '', branchName: row.branch, gridId: grid?.gridId || '', gridName: row.grid, isSuperAdmin: row.is_super_admin === '1' }
+    }
+  }
   return { total: list.length, success: list.length, failed: 0, errors: [] }
 }

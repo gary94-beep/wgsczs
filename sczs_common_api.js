@@ -142,17 +142,28 @@ function init() {
             JsResult.result = createRes('1', '手机号格式错误，收到: ' + phone);
             return;
         }
-        var sql = "SELECT name, phone, role FROM app_open_api_c007_xysct_permission_1 WHERE phone = #{phone}";
+        var sql = "SELECT name, phone, role, branch, grid, super_admin FROM app_open_api_c002_wgsc_permission_1 WHERE phone = #{phone} AND enabled=1";
         var res = JSON.parse(CustomizeUtil.abilitySql(sql, { phone: phone }));
         if (!res.data || !res.data.results || res.data.results.length === 0) {
             JsResult.result = createRes('0', '该手机号暂无使用权限', null);
             return;
         }
         var permission = res.data.results[0];
+        permission.role = { '1': 'city', '2': 'branch', '3': 'grid' }[String(permission.role)];
+        if (['city', 'branch', 'grid'].indexOf(permission.role) < 0 || (permission.role !== 'city' && !permission.branch) || (permission.role === 'grid' && !permission.grid)) {
+            JsResult.result = createRes('1', '权限记录缺少角色或组织范围');
+            return;
+        }
         JsResult.result = createRes('0', '成功', {
             name: permission.name,
             phone: permission.phone,
-            role: permission.role
+            role: permission.role,
+            branchId: permission.role === 'city' ? '' : permission.branch,
+            branchName: permission.branch || '',
+            gridId: permission.role === 'grid' ? permission.branch + '::' + permission.grid : '',
+            gridName: permission.grid || '',
+            cityName: '中山市',
+            isSuperAdmin: Number(permission.super_admin) === 1
         });
     }
 
@@ -184,8 +195,9 @@ function init() {
 
     // 动态安全分发
     try {
-        var runFunction = eval(Params.funCode);
-        new runFunction();
+        var handlers = { wgsc_fetchPermission: wgsc_fetchPermission, wgsc_getMobileByToken: wgsc_getMobileByToken };
+        if (!Object.prototype.hasOwnProperty.call(handlers, Params.funCode)) throw new Error('非法调用');
+        handlers[Params.funCode]();
     } catch (e) {
         JsResult.result = createRes('00500',
             '执行报错: ' + (e.message || e) +

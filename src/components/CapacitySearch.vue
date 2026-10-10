@@ -1,5 +1,7 @@
 <template>
   <section class="capacity-search" aria-label="人员渠道产能查询">
+    <p v-if="error" role="alert">{{ error }}</p>
+    <p v-if="busy" aria-live="polite">查询中...</p>
     <header><h2>产能查询</h2><span>{{ scope }}<template v-if="demo"> · 演示数据</template></span></header>
     <div class="search-controls"><div class="search-kinds" role="group" aria-label="搜索对象"><button v-for="item in kinds" :key="item.id" type="button" :aria-pressed="kind === item.id" :class="{ active: kind === item.id }" @click="kind = item.id; limit = 10">{{ item.label }}</button></div><select v-model="productId" aria-label="查询产品"><option value="">全部产品</option><option v-for="item in dashboard.products" :key="item.productId" :value="item.productId">{{ item.productName }}</option></select></div>
     <div class="search-input"><input v-model="query" type="search" maxlength="100" :placeholder="kind === 'people' ? '搜索姓名 / 员工工号' : '搜索渠道名称 / 渠道编码'" :aria-label="kind === 'people' ? '搜索姓名或工号' : '搜索渠道名称或编码'" /><button v-if="query" type="button" title="清空搜索" aria-label="清空搜索" @click="query = ''">&#215;</button></div>
@@ -12,10 +14,25 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { searchCapacity } from '../utils/capacitySearch.js'
-const props = defineProps({ dashboard: Object, gridIds: Array, scope: String, demo: Boolean, channelType: { type: String, default: '' } })
+const props = defineProps({ dashboard: Object, gridIds: Array, scope: String, demo: Boolean, queryApi: Function, channelType: { type: String, default: '' } })
 const query = ref(''), kind = ref('people'), productId = ref(''), limit = ref(10)
 const kinds = [{ id: 'people', label: '人员' }, { id: 'channels', label: '渠道' }]
-const results = computed(() => searchCapacity(props.dashboard, { query: query.value, kind: kind.value, productId: productId.value, gridIds: props.gridIds, channelType: props.channelType }))
+const remoteResults = ref([]), error = ref(''), busy = ref(false)
+const results = computed(() => props.queryApi ? remoteResults.value : searchCapacity(props.dashboard, { query: query.value, kind: kind.value, productId: productId.value, gridIds: props.gridIds, channelType: props.channelType }))
+let sequence = 0
+watch([query, kind, productId, () => JSON.stringify(props.gridIds), () => props.channelType], (values, previous, cleanup) => {
+  const id = ++sequence
+  remoteResults.value = []; error.value = ''; busy.value = false
+  if (!props.queryApi || !query.value.trim()) return
+  const params = { query: query.value, kind: kind.value, productId: productId.value, gridIds: props.gridIds, channelType: props.channelType }
+  busy.value = true
+  const timer = setTimeout(async () => {
+    try { const data = await props.queryApi(params); if (id === sequence) remoteResults.value = data.results || [] }
+    catch (e) { if (id === sequence) error.value = e.message || '查询失败' }
+    finally { if (id === sequence) busy.value = false }
+  }, 250)
+  cleanup(() => { clearTimeout(timer); sequence++ })
+})
 watch([query, productId, () => props.channelType], () => { limit.value = 10 })
 watch(() => JSON.stringify(props.gridIds), () => { query.value = ''; limit.value = 10 })
 const branchName = id => props.dashboard.organization.branches.find(item => item.branchId === id)?.branchName || '分公司未提供'

@@ -40,11 +40,34 @@ function progress(production, targets, gridIds, field, statDate) {
     completionRate: hasTarget && target > 0 && production !== null ? Math.round(production / target * 100) : null }
 }
 
-export function buildCapacityMetric(dashboard, productId, gridIds, channelType = '') {
+export function buildCapacityMetric(dashboard, productId, gridIds, channelType = '', scope = null) {
   const ids = new Set(gridIds)
   const matches = row => row.productId === productId && ids.has(row.gridId) && matchesChannelType(row, channelType)
   const rows = dashboard.rows.filter(matches)
   const targets = dashboard.targets.filter(item => item.productId === productId && ids.has(item.gridId) && (channelType ? matchesChannelType(item, channelType) : !item.channelType))
+  if (dashboard.regionRows) {
+    // Regional summaries are authoritative and must not be mixed with staff/channel records.
+    const source = channelType ? (dashboard.periodRows || []).filter(matches) : dashboard.regionRows.filter(row => row.productId === productId &&
+      (scope ? row.level === scope.level && (scope.level === 'city' || (scope.level === 'branch' ? row.branchId === scope.id : row.gridId === scope.id)) : row.level === 'grid' && ids.has(row.gridId)))
+    const sum = period => {
+      const selected = source.filter(row => row.period === period)
+      if (!selected.length || selected.some(row => typeof row.production !== 'number' || !Number.isFinite(row.production))) return null
+      if (!scope || channelType) {
+        if (gridIds.some(id => !selected.some(row => row.gridId === id))) return null
+      } else if (selected.length !== 1) return null
+      return selected.reduce((total, row) => total + row.production, 0)
+    }
+    const monthly = progress(sum('mon'), targets, gridIds, 'target', dashboard.statDate)
+    const daily = progress(sum('day'), targets, gridIds, 'dailyTarget', dashboard.statDate)
+    const periods = buildMonthToDatePeriods(dashboard.statDate)
+    const days = dateRange(periods.current.startDate, periods.current.endDate).length
+    const previousDays = dateRange(periods.previous.startDate, periods.previous.endDate).length
+    const previous = sum('last_mon'), week = sum('week')
+    return { ...monthly, daily, weekSeries: [], monthSeries: [], previousSeries: [],
+      weeklyAverage: week === null ? null : week / 7,
+      monthAverage: monthly.production === null ? null : monthly.production / days,
+      previousAverage: previous === null ? null : previous / previousDays, weekBasis: 'rolling7' }
+  }
   const monthly = progress(rows.reduce((sum, row) => sum + Number(row.production || 0), 0), targets, gridIds, 'target', dashboard.statDate)
   if (!dashboard.statDate) return { ...monthly, daily: progress(null, [], gridIds, 'dailyTarget', ''), weekSeries: [], monthSeries: [], previousSeries: [], weeklyAverage: null, monthAverage: null, previousAverage: null }
 
