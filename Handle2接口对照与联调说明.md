@@ -37,7 +37,7 @@
 | 话术单条维护封装（当前UI隐藏编辑） | 业务 | wgsc_saveSalesScript | token,script(JSON对象) | productId,content,updatedAt,status |
 | 经典话术库查看 | 业务 | 复用wgsc_fetchDashboard | token | salesScripts中的productId,content,updatedAt,status,source |
 | 目标/话术模板下载、复制话术 | 无 | 浏览器本地操作 | 已授权范围的网格/产品或话术 | CSV下载或剪贴板结果 |
-| AI分析 | 独立后端 | POST /api/ai/analyze（已有） | summary,question；需用户同意 | answer,model |
+| AI分析 | 独立AI网关 | wgsc_analyze | token,consent,question,view,gridIds,channelType；预警另传productId,period,threshold | answer,model,statDate；汇总由后端重新取数 |
 | 校园生产管理 | 无 | 暂不实现 | 无 | 仅保留待配置入口，原需求不要求真实跳转 |
 
 ### 看板字段
@@ -58,10 +58,10 @@
 六张原表名称及字段不变。权限、目标和话术不在这六张表内，因此提供 `sql/wgsc_support_tables.sql` 三张补充表供DBA审批：
 
 1. `app_open_api_c002_wgsc_permission_1`：按实际建表结构，role为1市公司/2分公司/3网格，管理员字段为super_admin，含updated_at。接口读取后转换成city/branch/grid供前端使用；权限表单仍使用中文等级，导入时转换数字并将is_super_admin映射到super_admin。role默认值使用3，不能使用空字符串。原`xysct_permission`只有name/phone/role且属于其他项目，无法可靠限定网格权限；不要直接复用扩大权限。
-2. `app_open_api_c003_wgsc_target_1`：按网格/产品/月保存月目标，以及截止日日目标和日期。
-3. `app_open_api_c003_wgsc_script_1`：产品话术、维护时间、维护人。
+2. `app_open_api_c001_wgsc_target_1`：按网格/产品/月保存月目标，以及截止日日目标和日期。
+3. `app_open_api_c001_wgsc_script_1`：产品话术、维护时间、维护人。
 
-新增表名是建议配置，并非已部署事实。若平台指定其他表名或字段，需同步修改两份网关文件、补充SQL和相关测试。权限数据由管理员填写真实手机号码；不提供自动开通超级管理员的SQL。
+表名以上述当前网关配置为准；旧支持SQL若仍使用c003目标/话术表，DBA执行前需同步成c001。若平台指定其他表名或字段，需同步网关文件、补充SQL和相关测试。权限数据由管理员填写真实手机号码；不提供自动开通超级管理员的SQL。
 
 已制作“权限表单.xlsx”，预填5个分公司、25个镇区，姓名与手机号留空。第一页列：姓名、手机号、权限等级、分公司、网格、是否超级管理员、是否启用。权限等级支持市公司/分公司/网格（也支持city/branch/grid）；标志使用1/0。只有超级管理员显示“导入权限表”，调用wgsc_importRows(target=permission)。市公司组织字段留空，分公司只填所属分公司，网格两项都填；空姓名和手机号预置行跳过。导入按手机号新增/更新，可用enabled=0撤销，不允许降级/禁用当前管理员。首位管理员必须先由技术人员入库，否则无法自行开通。当前一人只对应一个分公司或网格，多范围权限需新增关联表，不支持逗号拼接。
 
@@ -101,6 +101,7 @@
 | VITE_ACTIVITY_ID | wgsczs | wgsczs | 控制台确认该活动已授权两个servicecode |
 | VITE_COMMON_SERVICE_CODE | Fcfc1a504f8ca30d | 同左 | 必须指向sczs_common_api |
 | VITE_BIZ_SERVICE_CODE | F7ef4926580ea087 | 同左 | 必须指向sczs_biz_api |
+| VITE_AI_SERVICE_CODE | 待填真实服务码 | 待填真实服务码 | 必须指向新增独立sczs_ai_api，参考Handle2_AI接入说明.md |
 | VITE_IS_TEST | 1 | 0 | 正式模式已明确为0，仍需平台确认取值约定 |
 | VITE_API_VERSION | 1.0 | 1.0 | client.js已读取，而非固定忽略配置 |
 
@@ -109,7 +110,7 @@
 ## 六、暂不实现的接口
 
 - 短信发送/校验、一键登录已按提供的校园生产通App.vue认证契约实现，token由平台签发；还需在平台确认当前APP_ID/ACTIVITY_ID开通这三个能力，正式域名与SDK授权、网络及token解析均需真实环境联调。本地测试不会发送真实短信。
-- Handle2版wgsc_analyze：暂不实现，原因是未提供平台HTTP能力、密钥保管和请求契约。保留已有本机MoMA测试后端；正式服务器需鉴权、限流、从已授权范围构造汇总、保管密钥。不能直接把密钥放VITE变量，也不能宣称Vite插件等于正式后端。
+- Handle2版wgsc_analyze：独立网关、鉴权、范围校验、服务端汇总及300字纯文本输出已实现；平台HTTP外呼、服务端密钥读取及限流仍需适配。前端已统一走AI网关，不再走本地Vite接口。详细契约见Handle2_AI接入说明.md；不能把密钥放VITE变量，不能将本地测试通过视为平台接通。
 - 校园真实跳转、在线逐条权限编辑、导入历史删除、导入批次事务：暂不实现，原因是缺入口/认证管理/事务契约；权限批量新增/修改/停用已经通过权限表导入支持。
 - 独立组织/产品/话术读取接口：暂不另建，原因是看板快照已包含这些数据，现有页面可以复用一次请求，避免接口重复。
 

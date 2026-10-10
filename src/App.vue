@@ -43,6 +43,7 @@
         <template v-if="stage === 'monitor'"><strong>低产预警监控</strong></template>
         <template v-else-if="stage === 'campus'"><strong>校园生产管理</strong></template>
         <template v-else-if="stage === 'search'"><strong>产能速查</strong></template>
+        <template v-else-if="stage === 'imports'"><strong>数据导入</strong></template>
         <template v-else-if="stage === 'scripts'"><button type="button"
             @click="returnFromScripts">低产预警监控</button><span>›</span><strong>经典话术库</strong></template>
         <template v-else>
@@ -76,27 +77,39 @@
           <button type="button" @click="openCampus"><span class="menu-icon menu-icon-blue"><i
                 class="menu-glyph menu-glyph-campus" aria-hidden="true"></i></span><span
               class="menu-copy"><strong>校园生产管理</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button v-if="user.isSuperAdmin" type="button" @click="permissionFileInput?.click()"><span
+          <button v-if="user.isSuperAdmin" type="button" @click="openImports"><span class="menu-icon menu-icon-blue"><i class="action-icon upload-icon" aria-hidden="true"></i></span><span class="menu-copy"><strong>数据导入</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+        </section>
+      </template>
+
+      <template v-else-if="stage === 'imports' && user.isSuperAdmin">
+        <header class="drill-page-title"><h2>数据导入</h2><p>{{ scopeName }}</p></header>
+        <section class="import-navigation" aria-label="数据导入导航">
+          <h3>权限与基础资料</h3>
+          <button :disabled="loading" type="button" @click="permissionFileInput?.click()"><span
               class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入权限表</strong></span><i
               class="menu-chevron" aria-hidden="true"></i></button>
-          <button v-if="user.isSuperAdmin" type="button" @click="channelFileInput?.click()"><span
+          <button :disabled="loading" type="button" @click="channelFileInput?.click()"><span
               class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入渠道维度表</strong></span><i
               class="menu-chevron" aria-hidden="true"></i></button>
-          <button v-if="user.isSuperAdmin" type="button" @click="terminalFileInput?.click()"><span
+          <button :disabled="loading" type="button" @click="terminalFileInput?.click()"><span
               class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入末梢表</strong></span><i
               class="menu-chevron" aria-hidden="true"></i></button>
-          <button v-if="user.isSuperAdmin" type="button" @click="staffFileInput?.click()"><span
+          <button :disabled="loading" type="button" @click="staffFileInput?.click()"><span
               class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入员工表</strong></span><i
               class="menu-chevron" aria-hidden="true"></i></button>
-          <button v-if="user.isSuperAdmin" type="button" @click="regionCapacityFileInput?.click()"><span
+          <h3>产能数据</h3>
+          <button :disabled="loading" type="button" @click="regionCapacityFileInput?.click()"><span
               class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入区域产能</strong></span><i
               class="menu-chevron" aria-hidden="true"></i></button>
-          <button v-if="user.isSuperAdmin" type="button" @click="channelCapacityFileInput?.click()"><span
+          <button :disabled="loading" type="button" @click="channelCapacityFileInput?.click()"><span
               class="menu-icon menu-icon-green">导</span><span class="menu-copy"><strong>导入渠道产能</strong></span><i
               class="menu-chevron" aria-hidden="true"></i></button>
-          <button v-if="user.isSuperAdmin" type="button" @click="staffCapacityFileInput?.click()"><span
+          <button :disabled="loading" type="button" @click="staffCapacityFileInput?.click()"><span
               class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入工号产能</strong></span><i
               class="menu-chevron" aria-hidden="true"></i></button>
+          <h3>目标与话术</h3>
+          <div class="import-navigation-row"><strong>产品目标表</strong><div class="target-actions"><button type="button" :disabled="loading" @click="downloadTargetTemplate"><span class="action-icon download-icon" aria-hidden="true"></span>下载模板</button><button type="button" :disabled="loading" class="target-import" @click="targetFileInput?.click()"><span class="action-icon upload-icon" aria-hidden="true"></span>导入目标表</button></div></div>
+          <div class="import-navigation-row"><strong>经典话术表</strong><div class="target-actions"><button type="button" :disabled="loading" @click="downloadScriptTemplate"><span class="action-icon download-icon" aria-hidden="true"></span>下载模板</button><button type="button" :disabled="loading" class="target-import" @click="scriptFileInput?.click()"><span class="action-icon upload-icon" aria-hidden="true"></span>导入话术表</button></div></div>
         </section>
       </template>
 
@@ -111,7 +124,7 @@
         <div class="source-strip"><span>产能：系统取数</span><span v-if="!selectedChannelType">目标：市公司导入</span></div>
         <ProductionBoard :items="overview" :scope="scopeName" :stat-date="dashboard.statDate" :demo="isMock"
           :show-targets="!selectedChannelType" @open="openProduct" />
-        <AiAnalysisPanel :summary="overviewAiSummary" />
+        <AiAnalysisPanel :summary="overviewAiSummary" :analyze="analyzeOverview" />
         <section class="product-section">
           <div class="section-head">
             <h2>{{ selectedChannelType ? '产能表现' : '产能与目标' }}</h2><span>{{ user.role === 'grid' ? '点击查看预警' : '点击指标查看下级'
@@ -121,19 +134,6 @@
           <CapacityCard :show-targets="!selectedChannelType" v-for="item in overview" :key="item.productId"
             :title="item.productName" :item="item" :unit="item.unit" :stat-date="dashboard.statDate"
             :icon="productIcon(item.productId)" @open="openProduct(item.productId)" />
-        </section>
-        <section v-if="user.isSuperAdmin === true && !selectedChannelType" class="target-management">
-          <div class="target-heading"><span class="target-icon" aria-hidden="true"></span>
-            <div>
-              <h2>目标值管理</h2>
-              <p>按网格、产品导入日目标和月目标，自动汇总上级目标</p>
-            </div>
-          </div>
-          <div class="target-actions"><button type="button" @click="downloadTargetTemplate"><span
-                class="action-icon download-icon" aria-hidden="true"></span>下载模板</button><button type="button"
-              class="target-import" @click="targetFileInput?.click()"><span class="action-icon upload-icon"
-                aria-hidden="true"></span>导入目标表</button></div><input ref="targetFileInput" type="file"
-            accept=".csv,text/csv" hidden @change="handleTargetFile" />
         </section>
       </template>
 
@@ -222,7 +222,7 @@
           <div class="filter-footer"><small>{{ tab === 'people' ? '直销人员' : '渠道合计' }}产能 ≤ {{ cleanThreshold }} {{
             activeProduct?.unit }}，0 为零产</small><button type="button" @click="applyFilters">筛选</button></div>
         </section>
-        <AiAnalysisPanel :summary="aiSummary" />
+        <AiAnalysisPanel :summary="aiSummary" :analyze="analyzeAlerts" />
         <p v-if="alertLoading" aria-live="polite">正在查询预警...</p>
         <p v-if="alertError" role="alert">{{ alertError }}</p>
         <template v-if="alertResult">
@@ -287,12 +287,6 @@
         <SalesScriptPanel :key="scriptProductId" :expanded="true" :script="libraryScript" :product-id="scriptProductId"
           :product-name="libraryProduct?.productName" :can-edit="false" :busy="loading" @copied="showToast('话术已复制')"
           @error="showToast($event, 'warning')" />
-        <div v-if="user.isSuperAdmin === true" class="script-import-actions target-actions"><button type="button"
-            :disabled="loading" @click="downloadScriptTemplate"><span class="action-icon download-icon"
-              aria-hidden="true"></span>下载模板</button><button type="button" class="target-import" :disabled="loading"
-            @click="scriptFileInput?.click()"><span class="action-icon upload-icon"
-              aria-hidden="true"></span>导入文件</button><input ref="scriptFileInput" type="file" accept=".csv,text/csv"
-            hidden @change="handleScriptFile" /></div>
       </template>
       <template v-else-if="stage === 'search'">
         <header class="drill-page-title">
@@ -331,6 +325,8 @@
       @change="handleChannelCapacityFile" />
     <input ref="staffCapacityFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleStaffCapacityFile" />
 
+    <input ref="targetFileInput" type="file" accept=".csv,text/csv" hidden @change="handleTargetFile" />
+    <input ref="scriptFileInput" type="file" accept=".csv,text/csv" hidden @change="handleScriptFile" />
     <!-- 导入失败明细弹窗 -->
     <div v-if="importErrorVisible" class="import-error-mask" @click.self="importErrorVisible = false">
       <section class="import-error-sheet">
@@ -350,7 +346,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { isMock } from './api/client'
 import { sendLoginCode, loginWithCode, loginWithOneClick } from './api/auth.js'
-import { fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts } from './api/production'
+import { fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts, analyzeCapacity } from './api/production'
 import { validateScriptImport, scriptTemplateCsv } from './utils/salesScriptImport.js'
 import ChannelTypeFilter from './components/ChannelTypeFilter.vue'
 import { normalizeChannelType } from './utils/channelTypes.js'
@@ -478,6 +474,9 @@ function openGrid(id) { selectedGridId.value = id; selectedChannel.value = ''; t
 function openMonitor() { monitorBranchId.value = user.role === 'city' ? '' : user.branchId; monitorGridId.value = user.role === 'grid' ? user.gridId : ''; monitorProductId.value = dashboard.products[0]?.productId || ''; selectedChannel.value = ''; threshold.value = 1; tab.value = 'people'; stage.value = 'monitor'; scrollTop() }
 function openCampus() { stage.value = 'campus'; scrollTop() }
 function openSearch() { stage.value = 'search'; scrollTop() }
+function openImports() { if (user.isSuperAdmin !== true) return showToast('仅超级管理员可导入数据', 'warning'); stage.value = 'imports'; scrollTop() }
+const analyzeOverview = request => analyzeCapacity({ ...request, view: 'overview', channelType: selectedChannelType.value }, token.value)
+const analyzeAlerts = request => analyzeCapacity({ ...request, view: 'alerts', productId: activeProduct.value?.productId, gridIds: stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value], threshold: cleanThreshold.value, period: alertPeriod.value, channel: selectedChannel.value }, token.value)
 function openScriptLibrary() { scriptReturnStage.value = stage.value; scriptProductId.value = activeProduct.value?.productId || dashboard.products[0]?.productId || ''; stage.value = 'scripts'; scrollTop() }
 function returnFromScripts() { stage.value = scriptReturnStage.value; scrollTop() }
 function onMonitorBranchChange() { monitorGridId.value = ''; selectedChannel.value = '' }

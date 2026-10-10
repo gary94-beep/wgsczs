@@ -11,7 +11,7 @@
 </template>
 <script setup>
 import { ref, watch } from 'vue'
-const props = defineProps({ summary: { type: Object, required: true } })
+const props = defineProps({ summary: { type: Object, required: true }, analyze: { type: Function, required: true } })
 const modes = ['短板分析优化', '自定义提问']
 const mode = ref(modes[0]), question = ref(''), consent = ref(false), busy = ref(false), answer = ref(''), error = ref(''), resultLabel = ref(''), resultDemo = ref(false)
 let sequence = 0
@@ -22,10 +22,8 @@ async function run() {
   const snapshot = JSON.parse(JSON.stringify(props.summary))
   busy.value = true; answer.value = ''; error.value = ''
   try {
-    const response = await fetch('/api/ai/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(65000), body: JSON.stringify({ summary: snapshot, question: mode.value === '自定义提问' ? question.value : '请进行短板分析优化，按以下结构简洁输出：1.重点短板，依据目标完成进度、产能变化和已提供的零产低产分布识别问题并列出具体数据依据；2.原因核实，将可能原因与已知事实分开，说明缺失的数据，不将未提供的预警数量视为0；3.优化建议，按优先级给出可执行的跟进动作和复核指标。不同产品单位不可直接相加；不编造资费政策、人员明细、目标或改善成效。' }) })
-    if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('AI后端未启用，请启动本地开发服务或配置正式后端')
-    const result = await response.json()
-    if (!response.ok) throw new Error(result.error || '分析失败，请重试')
+    const result = await props.analyze({ summary: snapshot, consent: true, question: mode.value === '自定义提问' ? question.value : '请简洁分析经营短板、待核实原因和优先跟进建议，列出数据依据。' })
+    if (typeof result?.answer !== 'string' || !result.answer.trim()) throw new Error('AI未返回有效分析结果')
     if (id === sequence) { answer.value = result.answer; resultLabel.value = `${snapshot.scope} · ${snapshot.product} · ${snapshot.statDate}`; resultDemo.value = snapshot.demo }
   } catch (e) { if (id === sequence) error.value = e.name === 'TimeoutError' ? '分析超时，请重试' : e.message }
   finally { busy.value = false }

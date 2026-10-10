@@ -1,14 +1,14 @@
 import { isMock, postHandle2 } from './client.js'
 import { mockFetchDashboard, mockFetchPermission, mockGetMobileByToken, mockFetchAlerts, mockSearchCapacity, mockImportTargets, mockImportCapacity, mockImportRows, mockSaveSalesScript, mockImportSalesScripts } from './mock.js'
 
-const codes = { common: import.meta.env.VITE_COMMON_SERVICE_CODE, biz: import.meta.env.VITE_BIZ_SERVICE_CODE }
+const codes = { common: import.meta.env.VITE_COMMON_SERVICE_CODE, biz: import.meta.env.VITE_BIZ_SERVICE_CODE, ai: import.meta.env.VITE_AI_SERVICE_CODE }
 
 function gateway(group, funCode, params, token, anonymous = false) {
-  if (!codes[group]) throw new Error(`未配置${group === 'common' ? '通用' : '业务'}网关servicecode`)
+  if (!codes[group]) throw new Error(`未配置${group === 'common' ? '通用' : group === 'ai' ? 'AI' : '业务'}网关servicecode`)
   if (!anonymous && !token) throw new Error('登录token缺失，请通过移动认证入口登录')
   return postHandle2('ability_customize', {
     servicecode: codes[group], token: token || '', params: { ...params, funCode, token: token || '' }
-  })
+  }, group === 'ai' ? { timeoutMs: 65000 } : {})
 }
 
 export async function fetchPermission(phone, token) {
@@ -47,4 +47,9 @@ export async function importCapacity(target, rows, token) {
 export async function importRows(target, rows, token, permission) {
   if (target === 'permission') checkAdmin(permission)
   return isMock ? mockImportRows(target, rows, permission) : gateway('biz', 'wgsc_importRows', { target, rows: JSON.stringify(rows) }, token)
+}
+
+export async function analyzeCapacity(params, token) {
+  if (params.consent !== true) throw new Error('请先同意将汇总指标发送至MoMA分析')
+  return gateway('ai', 'wgsc_analyze', { question: params.question, consent: '1', view: params.view, productId: params.productId || '', gridIds: JSON.stringify(params.gridIds || []), threshold: params.threshold ?? 1, period: params.period || 'month', channel: params.channel || '', channelType: params.channelType || '' }, token)
 }

@@ -98,3 +98,16 @@ button.capacity-card-heading:focus-visible { outline: 2px solid #287bff; outline
 .channel-head > strong { min-width: 0; overflow-wrap: anywhere; }
 .channel-head > span { flex-shrink: 0; }
 .channel-category { line-height: 1.6; overflow-wrap: anywhere; }
+
+.breadcrumbs { font-size: 16px; gap: 8px; min-height: 52px; }
+.breadcrumbs button { font-size: 16px; font-weight: 700; min-height: 44px; padding: 6px 4px; }
+.import-navigation { padding: 0 20px 24px; }
+.import-navigation h3 { margin: 24px 0 10px; font-size: 16px; color: #294e70; }
+.import-navigation > button { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 10px 4px; border: 0; border-bottom: 1px solid #dce9f6; background: transparent; color: #173457; text-align: left; font: inherit; }
+.import-navigation .menu-icon { width: 36px; height: 36px; flex: 0 0 36px; font-size: 16px; border-radius: 6px; }
+.import-navigation .menu-copy { flex: 1; }
+.import-navigation .menu-copy strong { font-size: 16px; }
+.import-navigation-row { padding: 16px 0; border-bottom: 1px solid #dce9f6; }
+.import-navigation-row > strong { display: block; font-size: 16px; margin-bottom: 10px; }
+.import-navigation-row .target-actions { margin: 0; display: flex; gap: 8px; flex-wrap: wrap; }
+.import-navigation-row .target-actions button { min-height: 44px; margin: 0; }

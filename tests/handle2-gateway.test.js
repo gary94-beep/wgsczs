@@ -6,12 +6,27 @@ import { buildCapacityMetric } from '../src/utils/capacityMetrics.js'
 
 const code = readFileSync(new URL('../sczs_biz_api.js', import.meta.url), 'utf8')
 const common = readFileSync(new URL('../sczs_common_api.js', import.meta.url), 'utf8')
+const ai = readFileSync(new URL('../sczs_ai_api.js', import.meta.url), 'utf8')
 const date = '2026-10-08'
+
+test('AI gateway is independent and has no import or dashboard endpoints', () => {
+  for (const fun of ['wgsc_importRows', 'wgsc_fetchDashboard']) {
+    const result = run(fun, {}, { source: ai })
+    assert.match(result.retMsg, /非法调用/)
+    assert.equal(result.queries.length, 0)
+  }
+  assert.match(run('wgsc_analyze', { token: '' }).retMsg, /token/)
+  const result = run('wgsc_analyze', { consent: '1', question: '分析', view: 'overview' }, {
+    transport: () => { throw new Error('Bearer secret-should-not-leak') }
+  })
+  assert.match(result.retMsg, /外呼失败/)
+  assert.ok(!JSON.stringify(result).includes('secret-should-not-leak'))
+})
 const tables = {
   permission: 'app_open_api_c002_wgsc_permission_1', region: 'app_open_api_c003_wgsc_region_capacity_1',
   channel: 'app_open_api_c001_wgsc_chn_capacity_1', staffCapacity: 'app_open_api_c003_wgsc_staff_capacity_1',
   channelInfo: 'app_open_api_c002_wgsc_chn_level_1', terminal: 'app_open_api_c001_wgsc_staff_terminal_1',
-  staff: 'app_open_api_c001_wgsc_staff_1', targets: 'app_open_api_c003_wgsc_target_1', scripts: 'app_open_api_c003_wgsc_script_1'
+  staff: 'app_open_api_c001_wgsc_staff_1', targets: 'app_open_api_c001_wgsc_target_1', scripts: 'app_open_api_c001_wgsc_script_1'
 }
 function fixture() {
   const db = Object.fromEntries(Object.values(tables).map(t => [t, []]))
@@ -35,7 +50,7 @@ function fixture() {
   }
   return db
 }
-function run(funCode, params = {}, { phone = '13800000009', db = fixture(), source = code, failWrites = false } = {}) {
+function run(funCode, params = {}, { phone = '13800000009', db = fixture(), source = funCode === 'wgsc_analyze' ? ai : code, failWrites = false, transport } = {}) {
   const queries = [], ctx = { Params: { token: 'valid', ...params, funCode }, JsResult: {}, CustomizeUtil: {
     redisGet: () => JSON.stringify({ data: { value: JSON.stringify({ phone }) } }),
     getMobile: () => ({ mobile: phone }),
@@ -56,6 +71,7 @@ function run(funCode, params = {}, { phone = '13800000009', db = fixture(), sour
       return JSON.stringify({ retCode: '0', data: { results: records } })
     }
   } }
+  if (transport) ctx.wgscMomaTransport = transport
   vm.runInNewContext(source, ctx, { timeout: 1000 })
   return { ...JSON.parse(ctx.JsResult.result).result, queries }
 }
@@ -153,4 +169,39 @@ test('permission reads translate numeric database roles and reject unknown roles
   const db = fixture()
   db[tables.permission][0].role = 9
   assert.notEqual(run('wgsc_fetchDashboard', {}, { db }).retCode, '0')
+})
+
+test('Handle2 AI reconstructs authorized summaries instead of trusting browser data', () => {
+  let request
+  const transport = req => { request = req; return { statusCode: 200, body: { choices: [{ message: { content: '## 短板\n**建议**：核实跟进进度。' } }] } } }
+  const result = run('wgsc_analyze', { consent: '1', question: '分析短板', view: 'overview', summary: { production: 999999 } }, { phone: '13800000001', transport })
+  assert.equal(result.retCode, '0', result.retMsg)
+  assert.ok(result.data.answer.length <= 300)
+  assert.ok(!/[#*|]/.test(result.data.answer))
+  const summary = JSON.parse(request.body.messages[1].content).summary
+  assert.equal(summary.products[0].month.production, 40)
+  assert.equal(summary.products[0].day.production, 3)
+  assert.equal(summary.products[0].weeklyAverage, 2)
+  assert.equal(summary.products[0].month.target, null)
+  assert.equal(summary.products[0].previousAverage, 2)
+  assert.ok(!JSON.stringify(summary).includes('13800000001'))
+  assert.ok(!JSON.stringify(summary).includes('Test Manager'))
+  assert.ok(!JSON.stringify(summary).includes('999999'))
+  assert.equal(request.url, 'https://moma.cmecloud.cn/tokenplan-personal/v1/chat/completions')
+})
+
+test('Handle2 AI validates consent, scope, adapter configuration and upstream errors', () => {
+  const params = { consent: '1', question: '分析', view: 'alerts', productId: 'newNumbers', period: 'month', threshold: 2 }
+  let called = 0
+  const transport = () => { called++; return { statusCode: 401 } }
+  assert.match(run('wgsc_analyze', { ...params, consent: '0' }, { transport }).retMsg, /同意/)
+  assert.match(run('wgsc_analyze', { ...params, gridIds: '["高新分公司::南朗"]' }, { phone: '13800000001', transport }).retMsg, /无权/)
+  assert.equal(called, 0)
+  assert.match(run('wgsc_analyze', params).retMsg, /适配器/)
+  assert.match(run('wgsc_analyze', params, { transport }).retMsg, /鉴权/)
+  let summary
+  const ok = run('wgsc_analyze', params, { transport: req => { summary = JSON.parse(req.body.messages[1].content).summary; return { statusCode: 200, body: { choices: [{ message: { content: '建议核实。'.repeat(100) } }] } } } })
+  assert.equal(ok.retCode, '0', ok.retMsg)
+  assert.equal(ok.data.answer.length, 300)
+  assert.deepEqual(summary.alerts.map(r => r.count), [1, 1, 1])
 })
