@@ -2,7 +2,8 @@
 
 ## 文件及路由
 
-- `sczs_ai_api.js`：独立 Handle2 脚本网关，运行方式与 `sczs_biz_api.js` 一致，使用 Params、JsResult、CustomizeUtil，ES5 语法。
+- `sczs_ai_api.js`：独立 Handle2 脚本网关，ES5 语法，仅包含 MoMA 请求及相关参数、响应工具；使用 Params、JsResult 和服务端适配函数，不包含 SQL、组织、产品映射、看板或目标处理。
+- `sczs_biz_api.js` 新增 `wgsc_fetchAiSummary`：负责认证、权限范围和产能汇总，供 AI 网关通过服务端调用获取数据。
 - 前端通过 `ability_customize` 调用新网关，funCode 为 `wgsc_analyze`。
 - `VITE_AI_SERVICE_CODE` 填注册这个新脚本后取得的真实 servicecode；不是模型名，不是 API Key。参考 `.env.ai.example`，填入构建使用的环境文件后重新打包。
 - `vite.config.js` 已移除本地 AI 插件；网页不再请求 `/api/ai/analyze`。`server/ai.js` 仅保留作为旧实现参考，不参与运行。
@@ -10,7 +11,15 @@
 
 ## 已实现
 
-服务端验证 token、启用状态及市公司/分公司/网格权限。按授权范围读取产能及目标，重新构造日/月产能、完成率、差距、日均比较和预警分类数量，不接受浏览器提供的分析数据。仅发送汇总指标到 MoMA，不发送手机号、姓名、工号或渠道明细。用户必须勾选发送同意。输出纯文本，最多300字。
+业务网关验证 token、启用状态及市公司/分公司/网格权限，按授权范围读取产能和目标，构造日/月产能、完成率、差距、日均比较和预警分类数量。AI 网关只获取服务端汇总，不接受浏览器提供的 summary。仅将汇总指标和用户问题发送到 MoMA，不发送原始人员/渠道明细。用户必须勾选发送同意。输出纯文本，最多300字。
+
+## 授权汇总适配器
+
+请技术人员在 AI 脚本中定义 `wgscAiSummaryProvider(request)`，通过平台真实的服务端能力调用固定的业务网关 `wgsc_fetchAiSummary`。这也是项目约定的适配函数，不是平台内置方法。不能从浏览器注册函数、直接返回 Params.summary，或把业务网关代码整份复制进 AI 文件。
+
+输入为 token、consent、view、productId、gridIds、threshold、period、channel、channelType 和固定 funCode。适配器仅转发这些参数至固定业务服务码，保持原登录 token；不得设置管理员身份或扩大组织范围。返回解包后的 `{ result: { retCode, retMsg, data } }` 对象或 JSON 字符串，其中 data 是业务网关构造的汇总，包含 statDate、products 等。不得把浏览器数据伪装成此响应。
+
+这个适配器和下面的 MoMA HTTP 适配器都需在平台配置；目前尚未提供平台跨网关调用方法，代码不会猜测平台 API 或自动降级到前端数据。
 
 ## 尚需平台适配：必须完成才可调用 MoMA
 
@@ -65,8 +74,8 @@
 
 ## 上线顺序
 
-1. 注册独立 AI 网关，配置表访问权限及 MoMA 域名外呼权限。
-2. 完成上述服务端适配器、密钥、限频及超时配置。
+1. 更新业务网关（新增 wgsc_fetchAiSummary），注册独立 AI 网关，配置调用业务网关及 MoMA 域名外呼权限。AI 网关本身不需要产能/目标表 SQL 权限。
+2. 完成授权汇总适配器、MoMA HTTP 适配器、密钥、限频及超时配置。
 3. 填 VITE_AI_SERVICE_CODE，重新构建并上传静态文件；业务网关不再承担 AI 请求。
 4. 用市公司、分公司、网格真实账号联调授权范围、同意勾选、超时、额度及输出长度。
 

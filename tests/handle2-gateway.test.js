@@ -15,7 +15,7 @@ test('AI gateway is independent and has no import or dashboard endpoints', () =>
     assert.match(result.retMsg, /非法调用/)
     assert.equal(result.queries.length, 0)
   }
-  assert.match(run('wgsc_analyze', { token: '' }).retMsg, /token/)
+  assert.match(run('wgsc_analyze', { token: '', consent: '1', question: '分析' }).retMsg, /token/)
   const result = run('wgsc_analyze', { consent: '1', question: '分析', view: 'overview' }, {
     transport: () => { throw new Error('Bearer secret-should-not-leak') }
   })
@@ -50,7 +50,7 @@ function fixture() {
   }
   return db
 }
-function run(funCode, params = {}, { phone = '13800000009', db = fixture(), source = funCode === 'wgsc_analyze' ? ai : code, failWrites = false, transport } = {}) {
+function run(funCode, params = {}, { phone = '13800000009', db = fixture(), source = funCode === 'wgsc_analyze' ? ai : code, failWrites = false, transport, provider } = {}) {
   const queries = [], ctx = { Params: { token: 'valid', ...params, funCode }, JsResult: {}, CustomizeUtil: {
     redisGet: () => JSON.stringify({ data: { value: JSON.stringify({ phone }) } }),
     getMobile: () => ({ mobile: phone }),
@@ -72,6 +72,12 @@ function run(funCode, params = {}, { phone = '13800000009', db = fixture(), sour
     }
   } }
   if (transport) ctx.wgscMomaTransport = transport
+  if (provider !== false) ctx.wgscAiSummaryProvider = provider || (request => {
+    const result = run('wgsc_fetchAiSummary', request, { phone, db, source: code })
+    queries.push(...result.queries)
+    const { queries: ignored, ...envelope } = result
+    return { result: envelope }
+  })
   vm.runInNewContext(source, ctx, { timeout: 1000 })
   return { ...JSON.parse(ctx.JsResult.result).result, queries }
 }
@@ -204,4 +210,19 @@ test('Handle2 AI validates consent, scope, adapter configuration and upstream er
   assert.equal(ok.retCode, '0', ok.retMsg)
   assert.equal(ok.data.answer.length, 300)
   assert.deepEqual(summary.alerts.map(r => r.count), [1, 1, 1])
+})
+
+test('AI gateway contains only model tools and delegates authorization to the business gateway', () => {
+  assert.ok(!/abilitySql|function dashboard|function permission|function product|function scope|function latest|region_capacity|wgsc_import/.test(ai))
+  const params = { consent: '1', question: '分析', view: 'overview' }
+  assert.match(run('wgsc_analyze', params, { provider: false }).retMsg, /业务汇总适配器/)
+  assert.match(run('wgsc_analyze', params, { provider: () => ({ forged: 123 }) }).retMsg, /格式无效/)
+  assert.match(run('wgsc_analyze', params, { provider: () => { throw new Error('Bearer private') } }).retMsg, /授权汇总/)
+  const expired = run('wgsc_analyze', params, { provider: () => ({ result: { retCode: '00008', retMsg: 'Expired' } }) })
+  assert.equal(expired.retCode, '00008')
+  for (const phone of ['13800000009', '13800000001', '13800000003']) {
+    const summary = run('wgsc_fetchAiSummary', { ...params, gridIds: '[]' }, { phone })
+    assert.equal(summary.retCode, '0', summary.retMsg)
+    assert.equal(summary.data.products[0].month.production, phone.endsWith('09') ? 100 : phone.endsWith('01') ? 40 : 35)
+  }
 })

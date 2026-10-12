@@ -38,6 +38,7 @@
 | 经典话术库查看 | 业务 | 复用wgsc_fetchDashboard | token | salesScripts中的productId,content,updatedAt,status,source |
 | 目标/话术模板下载、复制话术 | 无 | 浏览器本地操作 | 已授权范围的网格/产品或话术 | CSV下载或剪贴板结果 |
 | AI分析 | 独立AI网关 | wgsc_analyze | token,consent,question,view,gridIds,channelType；预警另传productId,period,threshold | answer,model,statDate；汇总由后端重新取数 |
+| AI授权汇总（AI网关服务端调用） | 业务 | wgsc_fetchAiSummary | token,consent,view,gridIds,channelType；预警另传productId,period,threshold | statDate,scope,products等汇总，不返回人员渠道明细 |
 | 校园生产管理 | 无 | 暂不实现 | 无 | 仅保留待配置入口，原需求不要求真实跳转 |
 
 ### 看板字段
@@ -110,7 +111,7 @@
 ## 六、暂不实现的接口
 
 - 短信发送/校验、一键登录已按提供的校园生产通App.vue认证契约实现，token由平台签发；还需在平台确认当前APP_ID/ACTIVITY_ID开通这三个能力，正式域名与SDK授权、网络及token解析均需真实环境联调。本地测试不会发送真实短信。
-- Handle2版wgsc_analyze：独立网关、鉴权、范围校验、服务端汇总及300字纯文本输出已实现；平台HTTP外呼、服务端密钥读取及限流仍需适配。前端已统一走AI网关，不再走本地Vite接口。详细契约见Handle2_AI接入说明.md；不能把密钥放VITE变量，不能将本地测试通过视为平台接通。
+- Handle2版wgsc_analyze：AI网关只负责MoMA；认证、范围校验和服务端汇总由业务网关wgsc_fetchAiSummary负责。平台服务端跨网关汇总适配器、HTTP外呼、密钥读取及限流仍需配置。前端统一走AI网关，不走本地Vite接口。详细契约见Handle2_AI接入说明.md；不能把密钥放VITE变量，不能将本地测试通过视为平台接通。
 - 校园真实跳转、在线逐条权限编辑、导入历史删除、导入批次事务：暂不实现，原因是缺入口/认证管理/事务契约；权限批量新增/修改/停用已经通过权限表导入支持。
 - 独立组织/产品/话术读取接口：暂不另建，原因是看板快照已包含这些数据，现有页面可以复用一次请求，避免接口重复。
 
