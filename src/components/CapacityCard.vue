@@ -8,14 +8,14 @@
       <div class="capacity-progress" role="progressbar" :aria-label="`${title}${period === 'day' ? '日' : '月'}产能进度`" :aria-valuenow="metricFor(period).completionRate === null ? undefined : Math.min(100, metricFor(period).completionRate)" :aria-valuetext="metricFor(period).completionRate === null ? '暂无进度数据' : rate(metricFor(period))" aria-valuemin="0" aria-valuemax="100"><i :style="{ width: `${Math.min(100, Math.max(0, metricFor(period).completionRate || 0))}%` }"></i></div>
       <div class="capacity-comparison" v-if="period === 'day'"><span>{{ weekLabel }}<b>{{ format(item.weeklyAverage) }} <small>{{ unit }}/日</small></b></span><span>{{ statDate.slice(5).replace('-', '/') }}产能<b>{{ format(item.daily.production) }} <small>{{ unit }}</small></b></span><em :class="{ 'trend-down': dailyChange?.difference < 0 }">{{ comparisonLabel(dailyChange, weekLabel) }}</em></div>
       <div class="capacity-comparison" v-else><span>上月同期日均<b>{{ format(item.previousAverage) }} <small>{{ unit }}/日</small></b></span><span>本月日均<b>{{ format(item.monthAverage) }} <small>{{ unit }}/日</small></b></span><em :class="{ 'trend-down': monthlyChange?.difference < 0 }">{{ comparisonLabel(monthlyChange, '上月同期日均') }}</em></div>
-      <CapacityTrend :points="period === 'day' ? [{ label: weekLabel, value: item.weeklyAverage }, { label: statDate, value: item.daily.production }] : [{ label: '上月同期日均', value: item.previousAverage }, { label: '本月日均', value: item.monthAverage }]" :unit="`${unit}/日`" :label="`${title}${period === 'day' ? '日' : '月同期'}产能对比`" />
+      <!-- <CapacityTrend :points="period === 'day' ? [{ label: weekLabel, value: item.weeklyAverage }, { label: statDate, value: item.daily.production }] : [{ label: '上月同期日均', value: item.previousAverage }, { label: '本月日均', value: item.monthAverage }]" :unit="`${unit}/日`" :label="`${title}${period === 'day' ? '日' : '月同期'}产能对比`" /> -->
     </section>
   </article>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import CapacityTrend from './CapacityTrend.vue'
+// import CapacityTrend from './CapacityTrend.vue'
 import { compareCapacity } from '../utils/capacityMetrics.js'
 const props = defineProps({ title: String, item: Object, unit: String, statDate: { type: String, default: '' }, icon: { type: String, default: 'building-2' }, clickable: { type: Boolean, default: true }, showTargets: { type: Boolean, default: true } })
 defineEmits(['open'])

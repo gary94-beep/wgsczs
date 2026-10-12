@@ -346,7 +346,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { isMock } from './api/client'
 import { sendLoginCode, loginWithCode, loginWithOneClick } from './api/auth.js'
-import { fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts, analyzeCapacity } from './api/production'
+import { fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts, analyzeCapacity, testAiGateway } from './api/production'
 import { validateScriptImport, scriptTemplateCsv } from './utils/salesScriptImport.js'
 import ChannelTypeFilter from './components/ChannelTypeFilter.vue'
 import { normalizeChannelType } from './utils/channelTypes.js'
@@ -506,6 +506,7 @@ onMounted(async () => {
     try { loginPhone.value = (await getMobileByToken(token.value)).mobile } catch (error) { showToast(error.message || '认证失败', 'error') }
     const url = new URL(location.href); url.searchParams.delete('token'); history.replaceState(null, '', url)
   }
+  // window.__testAiGateway = runGatewayTest
   window.addEventListener('handle2-auth-expired', expireSession)
 })
 onUnmounted(() => { window.removeEventListener('handle2-auth-expired', expireSession); clearInterval(codeTimer) })
@@ -1106,6 +1107,41 @@ function showImportErrors(title, errors) {
   importErrorTitle.value = title
   importErrorList.value = shown
   importErrorVisible.value = true
+}
+
+// ============ 【临时测试】AI 网关出网能力验证 ============
+// 测完请删除本段以及 onMounted 里的 window 挂载
+async function runGatewayTest(target) {
+  if (isMock) { showToast('Mock 模式不支持此测试', 'warning'); return null }
+  if (!token.value) { showToast('未登录', 'warning'); return null }
+
+  let momaKey = ''
+  if (target === 'moma_raw' || target === 'moma_full') {
+    momaKey = window.prompt('请输入 MoMA 密钥（sk-...）：') || ''
+    if (!momaKey) return null
+  }
+
+  loading.value = true
+  try {
+    const data = await testAiGateway(target, momaKey, token.value)
+    console.log(`%c[${target} 测试结果]`, 'color:#2974f4;font-weight:bold;font-size:14px', data)
+    if (target === 'echo') {
+      if (data?.gotJson?.hello === 'grid-ai') showToast('✅ 网关可 POST 外部 HTTPS', 'success')
+      else if (data?.status === 0) showToast('❌ 网关无法出网（超时/无响应）', 'error')
+      else showToast('⚠️ 看 Console 的 textPreview', 'warning')
+    } else if (target === 'moma_raw') {
+      showToast(data?.hasChoices ? '✅ MoMA 通了' : '⚠️ MoMA 未返回 choices，看 Console', data?.hasChoices ? 'success' : 'warning')
+    } else if (target === 'moma_full') {
+      showToast(data?.answer ? '✅ 有回答，看 Console' : '⚠️ 无 answer，看 Console', data?.answer ? 'success' : 'warning')
+    }
+    return data
+  } catch (error) {
+    console.error(`[${target} 测试失败]`, error)
+    showToast(error.message || '测试失败', 'error')
+    return null
+  } finally {
+    loading.value = false
+  }
 }
 
 function showToast(message, type = 'success') { toast.message = message; toast.type = type; toast.show = true; clearTimeout(showToast.timer); showToast.timer = setTimeout(() => { toast.show = false }, 3000) }

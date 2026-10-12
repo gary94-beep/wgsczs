@@ -1,7 +1,7 @@
 import { isMock, postHandle2 } from './client.js'
 import { mockFetchDashboard, mockFetchPermission, mockGetMobileByToken, mockFetchAlerts, mockSearchCapacity, mockImportTargets, mockImportCapacity, mockImportRows, mockSaveSalesScript, mockImportSalesScripts } from './mock.js'
 
-const codes = { common: import.meta.env.VITE_COMMON_SERVICE_CODE, biz: import.meta.env.VITE_BIZ_SERVICE_CODE, ai: import.meta.env.VITE_AI_SERVICE_CODE }
+const codes = { common: import.meta.env.VITE_COMMON_SERVICE_CODE, biz: import.meta.env.VITE_BIZ_SERVICE_CODE, ai: import.meta.env.VITE_AI_SERVICE_CODE, test: import.meta.env.VITE_TEST_SERVICE_CODE }
 
 function gateway(group, funCode, params, token, anonymous = false) {
   if (!codes[group]) throw new Error(`未配置${group === 'common' ? '通用' : group === 'ai' ? 'AI' : '业务'}网关servicecode`)
@@ -52,4 +52,21 @@ export async function importRows(target, rows, token, permission) {
 export async function analyzeCapacity(params, token) {
   if (params.consent !== true) throw new Error('请先同意将汇总指标发送至MoMA分析')
   return gateway('ai', 'wgsc_analyze', { question: params.question, consent: '1', view: params.view, productId: params.productId || '', gridIds: JSON.stringify(params.gridIds || []), threshold: params.threshold ?? 1, period: params.period || 'month', channel: params.channel || '', channelType: params.channelType || '' }, token)
+}
+
+/**
+ * 【临时测试】验证网关能否出网调 MoMA
+ * 对应网关脚本 sczs_test_api.js
+ * funCode 映射：echo → wgsc_aiTestEcho，moma_raw → wgsc_aiTestMomaRaw，moma_full → wgsc_aiTestMomaFull
+ */
+export async function testAiGateway(target, momaKey, token) {
+  if (isMock) throw new Error('该测试只能在真实环境运行，isMock=true 时不适用')
+  const funCodeMap = {
+    echo: 'wgsc_aiTestEcho',
+    moma_raw: 'wgsc_aiTestMomaRaw',
+    moma_full: 'wgsc_aiTestMomaFull'
+  }
+  const funCode = funCodeMap[target]
+  if (!funCode) throw new Error('target 须为 echo / moma_raw / moma_full')
+  return gateway('test', funCode, { momaKey: momaKey || '' }, token)
 }

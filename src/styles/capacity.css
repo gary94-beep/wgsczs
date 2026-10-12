@@ -16,19 +16,25 @@ button.capacity-card-heading:focus-visible { outline: 2px solid #287bff; outline
 .capacity-period-heading h3 i { width: 3px; height: 12px; background: var(--period-color); border-radius: 2px; }
 .capacity-period-heading > span { font-size: 11px; color: #7b8da5; }
 .capacity-period-heading > b { margin-left: auto; font-size: 17px; color: var(--period-color); }
+
+/* ========== 主数字（产能）加大 ========== */
 .capacity-values { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; margin-top: 10px; }
-.capacity-values > strong { font-size: 27px; line-height: 1.2; color: var(--period-color); overflow-wrap: anywhere; }
-.capacity-values small { margin-left: 5px; font-size: 12px; color: #607998; font-weight: 500; }
-.capacity-values > div { display: grid; gap: 3px; text-align: right; color: #607998; font-size: 11px; }
+.capacity-values > strong { font-size: 34px; line-height: 1.15; color: var(--period-color); overflow-wrap: anywhere; }
+.capacity-values small { margin-left: 5px; font-size: 16px; color: #607998; font-weight: 500; }
+.capacity-values > div { display: grid; gap: 4px; text-align: right; color: #607998; font-size: 14px; }
 .capacity-values > div > span:first-child { color: #486488; font-weight: 600; }
+
 .capacity-progress { height: 8px; margin-top: 10px; overflow: hidden; border-radius: 5px; background: #e6eef8; }
 .capacity-progress > i { display: block; height: 100%; max-width: 100%; background: var(--period-color); border-radius: inherit; transition: width .25s; }
+
+/* ========== 日月周对比加大 ========== */
 .capacity-comparison { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 14px 0 10px; }
-.capacity-comparison > span { display: grid; gap: 3px; color: #72839b; font-size: 11px; }
-.capacity-comparison b { color: #344f70; font-size: 14px; }
-.capacity-comparison small { font-size: 10px; font-weight: 400; }
-.capacity-comparison em { align-self: end; margin: 0; color: #099d87; font-style: normal; font-size: 10px; }
+.capacity-comparison > span { display: grid; gap: 3px; color: #72839b; font-size: 14px; }
+.capacity-comparison b { color: #344f70; font-size: 18px; font-weight: 700; }
+.capacity-comparison small { font-size: 13px; font-weight: 400; }
+.capacity-comparison em { align-self: end; margin: 0; color: #099d87; font-style: normal; font-size: 13px; }
 .capacity-comparison em.trend-down { color: #cb7540; }
+
 .trend-legend { display: flex; flex-wrap: wrap; gap: 8px 17px; color: #72839b; font-size: 10px; }
 .trend-legend > span { display: flex; align-items: center; gap: 5px; }
 .trend-legend i { display: inline-block; width: 14px; height: 2px; background: #3279ed; }
