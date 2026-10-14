@@ -6,9 +6,9 @@ function init() {
     channel: "app_open_api_c001_wgsc_chn_capacity_1",
     staffCapacity: "app_open_api_c003_wgsc_staff_capacity_1",
     channelInfo: "app_open_api_c002_wgsc_chn_level_1",
-    terminal: "app_open_api_c001_wgsc_staff_terminal_1",
-    staff: "app_open_api_c001_wgsc_staff_1",
-    permission: "app_open_api_c002_wgsc_permission_1",
+    terminal: "app_open_api_c002_wgsc_staff_terminal_1",
+    staff: "app_open_api_c002_wgsc_staff_1",
+    permission: "app_open_api_c003_wgsc_permission_1",
     targets: "app_open_api_c001_wgsc_target_1",
     scripts: "app_open_api_c001_wgsc_script_1"
   };
@@ -122,9 +122,17 @@ function init() {
   function gridId(b, g) {
     return b + "::" + g;
   }
+
+  // 手机号清洗，与 sczs_common_api.js 保持一致
+  function normalizeMobile(value) {
+    var s = String(value || '').replace(/^\s+|\s+$/g, '').replace(/^['"]+|['"]+$/g, '').replace(/\s/g, '');
+    var m = s.match(/1\d{10}/);
+    return m ? m[0] : s;
+  }
+
   function permission(phone) {
-    var a = sql("SELECT name,phone,role,branch,grid,super_admin FROM " + tables.permission + " WHERE phone=#{phone} AND enabled=1", { phone: phone }, true);
-    if (a.length !== 1) throw new Error("该手机号无有效权限");
+    var a = sql("SELECT name,phone,role,branch,grid,super_admin FROM " + tables.permission + " WHERE phone=#{phone} AND enabled=1 ORDER BY id DESC LIMIT 1", { phone: phone }, true);
+    if (!a || a.length === 0) throw new Error("该手机号无有效权限");
     var p = a[0];
     p.role = { 1: "city", 2: "branch", 3: "grid" }[String(p.role)];
     if (["city", "branch", "grid"].indexOf(p.role) < 0 || (p.role !== "city" && !p.branch) || (p.role === "grid" && !p.grid)) throw new Error("权限记录缺少组织范围");
@@ -132,7 +140,7 @@ function init() {
       name: p.name, phone: p.phone, role: p.role, cityName: "中山市",
       branchName: p.branch || "", branchId: p.role === "city" ? "" : p.branch,
       gridName: p.grid || "", gridId: p.role === "grid" ? gridId(p.branch, p.grid) : "",
-      isSuperAdmin: p.role === "city" && Number(p.super_admin) === 1
+      isSuperAdmin: Number(p.super_admin) === 1
     };
   }
   function authenticate() {
@@ -142,8 +150,8 @@ function init() {
     var v = parse(redis && redis.data !== undefined ? redis.data : redis);
     v = parse(v && v.value !== undefined ? v.value : v);
     if (!v) throw new Error("00008: token已过期");
-    var phone = text(find(v, ["phone", "mobile", "userphone", "userPhone", "mobileno"]));
-    if (!/^1\d{10}$/.test(phone)) phone = text(find(CustomizeUtil.getMobile(token), ["phone", "mobile", "userphone", "userPhone", "mobileno"]));
+    var phone = normalizeMobile(find(v, ["userphone", "phone", "mobile", "userPhone", "mobileno"]));
+    if (!/^1\d{10}$/.test(phone)) phone = normalizeMobile(find(CustomizeUtil.getMobile(token), ["userphone", "phone", "mobile", "userPhone", "mobileno"]));
     if (!/^1\d{10}$/.test(phone)) throw new Error("00008: token未解析到手机号");
     return permission(phone);
   }
@@ -238,8 +246,8 @@ function init() {
       } else {
         if (target === "permission") {
           if (!r.name || !/^1\d{10}$/.test(r.phone) || ["city", "branch", "grid"].indexOf(r.role) < 0 || !/^[01]$/.test(r.is_super_admin) || !/^[01]$/.test(r.enabled)) throw new Error("权限姓名/手机号/角色/标志无效");
-          if ((r.role !== "city" && !r.branch) || (r.role === "grid" && !r.grid) || (r.role === "city" && (r.branch || r.grid)) || (r.role === "branch" && r.grid) || (r.is_super_admin === "1" && r.role !== "city")) throw new Error("权限组织范围无效");
-          if (r.phone === user.phone && (r.role !== "city" || r.is_super_admin !== "1" || r.enabled !== "1")) throw new Error("不能禁用或降级当前超级管理员");
+          if ((r.role !== "city" && !r.branch) || (r.role === "grid" && !r.grid) || (r.role === "city" && (r.branch || r.grid)) || (r.role === "branch" && r.grid)) throw new Error("权限组织范围无效");
+          if (r.phone === user.phone && (r.is_super_admin !== "1" || r.enabled !== "1")) throw new Error("不能禁用或降级当前超级管理员");
           r.role = { city: 1, branch: 2, grid: 3 }[r.role];
           r.super_admin = Number(r.is_super_admin);
           delete r.is_super_admin;
@@ -259,35 +267,73 @@ function init() {
     }
     var errors = [];
     var success = 0;
-    for (var k = 0; k < records.length; k++) {
-      try {
-        upsert(tables[config[0]], config[1], records[k]);
-        success++;
-      } catch (e) {
-        errors.push("第" + (k + 1) + "行写入失败：" + e.message);
+
+    if (target === "permission") {
+      // permission 表：先查后写，避免无唯一索引时插重复
+      for (var k = 0; k < records.length; k++) {
+        var rec = records[k];
+        try {
+          var existing = sql("SELECT id FROM " + tables.permission + " WHERE phone=#{phone} LIMIT 1", { phone: rec.phone }, true);
+          if (existing && existing.length) {
+            sql("UPDATE " + tables.permission + " SET name=#{name}, role=#{role}, branch=#{branch}, grid=#{grid}, super_admin=#{super_admin}, enabled=#{enabled} WHERE phone=#{phone}", rec, false);
+          } else {
+            sql("INSERT INTO " + tables.permission + " (name, phone, role, branch, grid, super_admin, enabled) VALUES (#{name}, #{phone}, #{role}, #{branch}, #{grid}, #{super_admin}, #{enabled})", rec, false);
+          }
+          success++;
+        } catch (e) {
+          errors.push("第" + (k + 1) + "行写入失败：" + e.message);
+        }
+      }
+    } else {
+      for (var k2 = 0; k2 < records.length; k2++) {
+        try {
+          upsert(tables[config[0]], config[1], records[k2]);
+          success++;
+        } catch (e) {
+          errors.push("第" + (k2 + 1) + "行写入失败：" + e.message);
+        }
       }
     }
-    return { total: rows.length, success: success, failed: rows.length - success, errors: errors, mode: "upsert" };
+
+    return { total: rows.length, success: success, failed: rows.length - success, errors: errors, mode: capacity ? "replace" : "upsert" };
   }
 
   // ============================================================
   // dashboard
   // ============================================================
   function dashboard() {
-    // ========== 1. 读取产能表最新日期 ==========
+    // ========== 1. 读取区域产能表最新日期（作为基准） ==========
     var cutoff = latest(tables.region);
-    if (!cutoff) throw new Error("当前范围没有区域产能数据");
 
-    var cutoffChannel = latest(tables.channel);
-    if (cutoffChannel !== cutoff) throw new Error("渠道产能表最新日期不一致：region=" + cutoff + " channel=" + cutoffChannel);
+    // 区域表完全没数据 → 返回空结构，让前端能进页面
+    if (!cutoff) {
+      return {
+        organization: { cityName: "中山市", branches: [], grids: [] },
+        statDate: "",
+        products: products,
+        targets: [],
+        rows: [],
+        dailyRows: [],
+        periodRows: [],
+        regionRows: [],
+        salesScripts: [],
+        warnings: ["当前范围没有区域产能数据"],
+        weekBasis: "rolling7",
+        permission: user
+      };
+    }
 
-    var cutoffStaff = latest(tables.staffCapacity);
-    if (cutoffStaff !== cutoff) throw new Error("工号产能表最新日期不一致：region=" + cutoff + " staff=" + cutoffStaff);
-
-    // ========== 2. 读三张产能表 ==========
+    // ========== 2. 读三张产能表（按区域表日期） ==========
     var region = readTable(tables.region, false, cutoff);
     var channels = readTable(tables.channel, false, cutoff);
     var staff = readTable(tables.staffCapacity, false, cutoff);
+
+    // 日期不一致 → 只警告，不报错
+    var cutoffChannel = latest(tables.channel);
+    var cutoffStaff = latest(tables.staffCapacity);
+    var warnings = [];
+    if (cutoffChannel !== cutoff) warnings.push("渠道产能表最新日期（" + (cutoffChannel || "无") + "）与区域产能表（" + cutoff + "）不一致，本次按区域表日期读取");
+    if (cutoffStaff !== cutoff) warnings.push("工号产能表最新日期（" + (cutoffStaff || "无") + "）与区域产能表（" + cutoff + "）不一致，本次按区域表日期读取");
 
     // ========== 3. 读三张维度表 ==========
     var dc = readTable(tables.channelInfo, true);
@@ -302,7 +348,6 @@ function init() {
     var sm = {};
     var records = {};
     var regionRows = [];
-    var warnings = [];
 
     function org(b, g) {
       if (b === "全市") return;
@@ -312,7 +357,6 @@ function init() {
       }
     }
 
-    // ========== 5. 处理区域产能行 ==========
     for (var i = 0; i < region.length; i++) {
       var r = region[i];
       org(r.branch_company, r.grid_name);
@@ -330,28 +374,24 @@ function init() {
       });
     }
 
-    // ========== 6. 处理渠道维度 → cm ==========
     for (i = 0; i < dc.length; i++) {
       r = dc[i];
       org(r.branch, r.grid);
       cm[r.chn_code] = r;
     }
 
-    // ========== 7. 处理末梢 → tm ==========
     for (i = 0; i < dt.length; i++) {
       r = dt[i];
       org(r.branch, r.grid);
       tm[r.staff_no] = r;
     }
 
-    // ========== 8. 处理员工 → sm ==========
     for (i = 0; i < ds.length; i++) {
       r = ds[i];
       org(r.branch, r.grid);
       sm[r.staff_no] = r;
     }
 
-    // ========== 9. add() 聚合函数定义 ==========
     function add(row, info, type) {
       var b = row.branch_company;
       var g = row.grid_name;
@@ -390,7 +430,6 @@ function init() {
       if (e.staffCount !== null) e.staffCount++;
     }
 
-    // ========== 10. 聚合渠道产能（只取三星+） ==========
     for (i = 0; i < channels.length; i++) {
       r = channels[i];
       if (cm[r.channel_code] && cm[r.channel_code].star_level === "三星+") {
@@ -398,7 +437,6 @@ function init() {
       }
     }
 
-    // ========== 11. 聚合工号产能（直销 / 末梢） ==========
     for (i = 0; i < staff.length; i++) {
       r = staff[i];
       if (sm[r.staff_no] && tm[r.staff_no]) throw new Error("工号同时出现在员工与末梢维度：" + r.staff_no);
@@ -407,7 +445,6 @@ function init() {
       else if (warnings.length < 20) warnings.push("未匹配员工/末梢维度，已排除：" + r.staff_no);
     }
 
-    // ========== 12. 拆分月 / 日 / 周期 ==========
     var month = [];
     var day = [];
     var periodRows = [];
@@ -420,7 +457,6 @@ function init() {
       }
     }
 
-    // ========== 13. 查目标 ==========
     var args = { month: cutoff.slice(0, 7) };
     var targets = sql("SELECT * FROM " + tables.targets + " WHERE target_month=#{month}" + scope("branch", "grid", args), args, true);
     for (i = 0; i < targets.length; i++) {
@@ -439,7 +475,6 @@ function init() {
       };
     }
 
-    // ========== 14. 查话术 ==========
     var scripts = sql("SELECT product_id,content,updated_at FROM " + tables.scripts + " ORDER BY product_id", {}, true);
     for (i = 0; i < scripts.length; i++) {
       r = scripts[i];
@@ -452,7 +487,6 @@ function init() {
       };
     }
 
-    // ========== 15. 返回 ==========
     return {
       organization: {
         cityName: "中山市",
@@ -480,24 +514,24 @@ function init() {
     admin();
     var rows = array(Params.rows);
     var data = dashboard();
-    var allowed = {};
     var seen = {};
     var prepared = [];
-    for (var i = 0; i < data.organization.grids.length; i++) {
-      for (var j = 0; j < products.length; j++) {
-        allowed[data.organization.grids[i].gridId + "|" + products[j].productId] = data.organization.grids[i];
-      }
-    }
-    for (i = 0; i < rows.length; i++) {
+
+    for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
       var key = r.gridId + "|" + r.productId;
-      var g = allowed[key];
-      if (!g || seen[key]) throw new Error("目标有无效网格/产品或重复键");
+
+      if (seen[key]) throw new Error("目标有重复键：" + key);
       seen[key] = true;
+
+      var parts = String(r.gridId).split("::");
+      if (parts.length !== 2 || !parts[0] || !parts[1]) throw new Error("第" + (i + 1) + "行 gridId 格式无效：" + r.gridId);
+
       if (r.targetDate && date(r.targetDate) !== data.statDate) throw new Error("日目标须为当前统计日");
+
       prepared.push({
-        branch: g.branchId,
-        grid: g.gridName,
+        branch: parts[0],
+        grid: parts[1],
         product_id: r.productId,
         target_month: data.statDate.slice(0, 7),
         month_target: num(r.target),
@@ -505,13 +539,42 @@ function init() {
         target_date: r.targetDate ? date(r.targetDate) : null
       });
     }
-    for (key in allowed) {
-      if (Object.prototype.hasOwnProperty.call(allowed, key) && !seen[key]) throw new Error("目标表须覆盖全部网格产品");
+
+    // 先清空整表
+    sql("DELETE FROM " + tables.targets, {}, false);
+
+    // 分批 INSERT
+    var fields = ["branch", "grid", "product_id", "target_month", "month_target", "day_target", "target_date"];
+    var BATCH_SIZE = 500;
+    var errors = [];
+    var success = 0;
+
+    for (var b = 0; b < prepared.length; b += BATCH_SIZE) {
+      var batch = prepared.slice(b, b + BATCH_SIZE);
+      var args = {};
+      var valueParts = [];
+
+      for (var bi = 0; bi < batch.length; bi++) {
+        var placeholders = [];
+        for (var fi = 0; fi < fields.length; fi++) {
+          var paramName = "v_" + bi + "_" + fi;
+          args[paramName] = batch[bi][fields[fi]];
+          placeholders.push("#{" + paramName + "}");
+        }
+        valueParts.push("(" + placeholders.join(",") + ")");
+      }
+
+      var insertSql = "INSERT INTO " + tables.targets + " (" + fields.join(",") + ") VALUES " + valueParts.join(",");
+
+      try {
+        sql(insertSql, args, false);
+        success += batch.length;
+      } catch (e) {
+        errors.push("第 " + (b + 1) + "~" + (b + batch.length) + " 行写入失败：" + e.message);
+      }
     }
-    for (i = 0; i < prepared.length; i++) {
-      upsert(tables.targets, ["branch", "grid", "product_id", "target_month", "month_target", "day_target", "target_date"], prepared[i]);
-    }
-    return { imported: prepared.length };
+
+    return { imported: prepared.length, success: success, failed: prepared.length - success, errors: errors, mode: "replace" };
   }
 
   // ============================================================
@@ -616,7 +679,7 @@ function init() {
   }
 
   // ============================================================
-  // handlers
+  // buildAiSummary
   // ============================================================
   function buildAiSummary() {
     if (String(Params.consent) !== "1") throw new Error("请先同意将汇总指标发送至MoMA分析");
@@ -702,9 +765,6 @@ function init() {
     wgsc_saveSalesScript: function () { return importScripts(true); }
   };
 
-  // ============================================================
-  // 最外层 try/catch
-  // ============================================================
   try {
     if (!Object.prototype.hasOwnProperty.call(handlers, Params.funCode)) throw new Error("非法调用");
     user = authenticate();

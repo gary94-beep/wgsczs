@@ -22,6 +22,7 @@
               class="agreement-link">《中国移动广东公司电子渠道登录服务协议》</span>和<span
               class="agreement-link">《隐私协议》</span></span></label>
         <div v-if="isMock" class="demo-accounts"><span>演示身份</span><button type="button"
+            @click="loginPhone = '13800000009'">超管</button><button type="button"
             @click="loginPhone = '13800000000'">市公司</button><button type="button"
             @click="loginPhone = '13800000001'">分公司</button><button type="button"
             @click="loginPhone = '13800000003'">网格长</button></div>
@@ -83,36 +84,155 @@
 
       <template v-else-if="stage === 'imports' && user.isSuperAdmin">
         <header class="drill-page-title"><h2>数据导入</h2><p>{{ scopeName }}</p></header>
+
+        <section class="import-legend" aria-label="图标说明">
+          <span><i class="action-icon download-icon" aria-hidden="true"></i>下载模板</span>
+          <span><i class="action-icon upload-icon" aria-hidden="true"></i>导入数据</span>
+        </section>
+
         <section class="import-navigation" aria-label="数据导入导航">
           <h3>权限与基础资料</h3>
-          <button :disabled="loading" type="button" @click="permissionFileInput?.click()"><span
-              class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入权限表</strong></span><i
-              class="menu-chevron" aria-hidden="true"></i></button>
-          <button :disabled="loading" type="button" @click="channelFileInput?.click()"><span
-              class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入渠道维度表</strong></span><i
-              class="menu-chevron" aria-hidden="true"></i></button>
-          <button :disabled="loading" type="button" @click="terminalFileInput?.click()"><span
-              class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入末梢表</strong></span><i
-              class="menu-chevron" aria-hidden="true"></i></button>
-          <button :disabled="loading" type="button" @click="staffFileInput?.click()"><span
-              class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入员工表</strong></span><i
-              class="menu-chevron" aria-hidden="true"></i></button>
+
+          <div class="import-nav-item">
+            <div class="import-nav-label">
+              <span class="menu-icon menu-icon-blue">人</span>
+              <span class="menu-copy"><strong>人员权限表</strong></span>
+            </div>
+            <div class="target-actions">
+              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadPermissionTemplate">
+                <span class="action-icon download-icon" aria-hidden="true"></span>
+              </button>
+              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="permissionFileInput?.click()">
+                <span class="action-icon upload-icon" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="import-nav-item">
+            <div class="import-nav-label">
+              <span class="menu-icon menu-icon-blue">渠</span>
+              <span class="menu-copy"><strong>渠道维度表</strong></span>
+            </div>
+            <div class="target-actions">
+              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadChannelTemplate">
+                <span class="action-icon download-icon" aria-hidden="true"></span>
+              </button>
+              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="channelFileInput?.click()">
+                <span class="action-icon upload-icon" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="import-nav-item">
+            <div class="import-nav-label">
+              <span class="menu-icon menu-icon-blue">末</span>
+              <span class="menu-copy"><strong>末梢维度表</strong></span>
+            </div>
+            <div class="target-actions">
+              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadTerminalTemplate">
+                <span class="action-icon download-icon" aria-hidden="true"></span>
+              </button>
+              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="terminalFileInput?.click()">
+                <span class="action-icon upload-icon" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="import-nav-item">
+            <div class="import-nav-label">
+              <span class="menu-icon menu-icon-blue">自</span>
+              <span class="menu-copy"><strong>自控团队工号表</strong></span>
+            </div>
+            <div class="target-actions">
+              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadStaffTemplate">
+                <span class="action-icon download-icon" aria-hidden="true"></span>
+              </button>
+              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="staffFileInput?.click()">
+                <span class="action-icon upload-icon" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+
           <h3>产能数据</h3>
-          <button :disabled="loading" type="button" @click="regionCapacityFileInput?.click()"><span
-              class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入区域产能</strong></span><i
-              class="menu-chevron" aria-hidden="true"></i></button>
-          <button :disabled="loading" type="button" @click="channelCapacityFileInput?.click()"><span
-              class="menu-icon menu-icon-green">导</span><span class="menu-copy"><strong>导入渠道产能</strong></span><i
-              class="menu-chevron" aria-hidden="true"></i></button>
-          <button :disabled="loading" type="button" @click="staffCapacityFileInput?.click()"><span
-              class="menu-icon menu-icon-blue">导</span><span class="menu-copy"><strong>导入工号产能</strong></span><i
-              class="menu-chevron" aria-hidden="true"></i></button>
+
+          <div class="import-nav-item">
+            <div class="import-nav-label">
+              <span class="menu-icon menu-icon-green">区</span>
+              <span class="menu-copy"><strong>区域产能</strong></span>
+            </div>
+            <div class="target-actions">
+              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadRegionCapacityTemplate">
+                <span class="action-icon download-icon" aria-hidden="true"></span>
+              </button>
+              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="regionCapacityFileInput?.click()">
+                <span class="action-icon upload-icon" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="import-nav-item">
+            <div class="import-nav-label">
+              <span class="menu-icon menu-icon-green">渠</span>
+              <span class="menu-copy"><strong>渠道产能</strong></span>
+            </div>
+            <div class="target-actions">
+              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadChannelCapacityTemplate">
+                <span class="action-icon download-icon" aria-hidden="true"></span>
+              </button>
+              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="channelCapacityFileInput?.click()">
+                <span class="action-icon upload-icon" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="import-nav-item">
+            <div class="import-nav-label">
+              <span class="menu-icon menu-icon-green">工</span>
+              <span class="menu-copy"><strong>工号产能</strong></span>
+            </div>
+            <div class="target-actions">
+              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadStaffCapacityTemplate">
+                <span class="action-icon download-icon" aria-hidden="true"></span>
+              </button>
+              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="staffCapacityFileInput?.click()">
+                <span class="action-icon upload-icon" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+
           <h3>目标与话术</h3>
-          <div class="import-navigation-row"><strong>产品目标表</strong><div class="target-actions"><button type="button" :disabled="loading" @click="downloadTargetTemplate"><span class="action-icon download-icon" aria-hidden="true"></span>下载模板</button><button type="button" :disabled="loading" class="target-import" @click="targetFileInput?.click()"><span class="action-icon upload-icon" aria-hidden="true"></span>导入目标表</button></div></div>
-          <div class="import-navigation-row"><strong>经典话术表</strong><div class="target-actions"><button type="button" :disabled="loading" @click="downloadScriptTemplate"><span class="action-icon download-icon" aria-hidden="true"></span>下载模板</button><button type="button" :disabled="loading" class="target-import" @click="scriptFileInput?.click()"><span class="action-icon upload-icon" aria-hidden="true"></span>导入话术表</button></div></div>
+
+          <div class="import-nav-item">
+            <div class="import-nav-label">
+              <span class="menu-icon menu-icon-yellow">产</span>
+              <span class="menu-copy"><strong>产品目标表</strong></span>
+            </div>
+            <div class="target-actions">
+              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadTargetTemplate">
+                <span class="action-icon download-icon" aria-hidden="true"></span>
+              </button>
+              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="targetFileInput?.click()">
+                <span class="action-icon upload-icon" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="import-nav-item">
+            <div class="import-nav-label">
+              <span class="menu-icon menu-icon-yellow">经</span>
+              <span class="menu-copy"><strong>经典话术表</strong></span>
+            </div>
+            <div class="target-actions">
+              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadScriptTemplate">
+                <span class="action-icon download-icon" aria-hidden="true"></span>
+              </button>
+              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="scriptFileInput?.click()">
+                <span class="action-icon upload-icon" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
         </section>
       </template>
-
 
       <template v-else-if="stage === 'overview'">
         <section class="overview-heading">
@@ -288,6 +408,7 @@
           :product-name="libraryProduct?.productName" :can-edit="false" :busy="loading" @copied="showToast('话术已复制')"
           @error="showToast($event, 'warning')" />
       </template>
+
       <template v-else-if="stage === 'search'">
         <header class="drill-page-title">
           <h2>产能速查</h2>
@@ -296,12 +417,14 @@
         <CapacitySearch :dashboard="dashboard" :grid-ids="scopeGridIds" :scope="scopeName" :demo="isMock"
           :query-api="searchQuery" />
       </template>
+
       <template v-else-if="stage === 'campus'">
         <section class="campus-placeholder"><span>校园生产管理</span>
           <h2>校园生产通</h2>
           <p>入口待配置</p>
         </section>
       </template>
+
       <nav v-if="stage !== 'workbench'" class="bottom-nav" aria-label="主导航"><button type="button"
           :class="{ active: stage === 'campus' }" @click="goWorkbench"><i class="bottom-icon bottom-home"
             aria-hidden="true"></i><span>工作台</span></button><button type="button"
@@ -314,8 +437,7 @@
     <main v-if="loading" class="loading-mask"><span class="loading-spinner"></span><span>加载中...</span></main>
     <div v-if="toast.show" class="toast" :class="toast.type">{{ toast.message }}</div>
 
-    <input ref="permissionFileInput" type="file" accept=".xlsx,.xls,.csv" hidden
-      @change="event => handleImportFile(event, 'permission', permissionRows, '权限表')" />
+    <input ref="permissionFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handlePermissionFile" />
     <input ref="channelFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleChannelFile" />
     <input ref="terminalFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleTerminalFile" />
     <input ref="staffFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleStaffFile" />
@@ -327,7 +449,7 @@
 
     <input ref="targetFileInput" type="file" accept=".csv,text/csv" hidden @change="handleTargetFile" />
     <input ref="scriptFileInput" type="file" accept=".csv,text/csv" hidden @change="handleScriptFile" />
-    <!-- 导入失败明细弹窗 -->
+
     <div v-if="importErrorVisible" class="import-error-mask" @click.self="importErrorVisible = false">
       <section class="import-error-sheet">
         <header class="import-error-header">{{ importErrorTitle }}</header>
@@ -346,8 +468,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { isMock } from './api/client'
 import { sendLoginCode, loginWithCode, loginWithOneClick } from './api/auth.js'
-import { fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts, analyzeCapacity, testAiGateway } from './api/production'
-import { validateScriptImport, scriptTemplateCsv } from './utils/salesScriptImport.js'
+import { fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts, analyzeCapacity } from './api/production'
 import ChannelTypeFilter from './components/ChannelTypeFilter.vue'
 import { normalizeChannelType } from './utils/channelTypes.js'
 import CapacityCard from './components/CapacityCard.vue'
@@ -357,7 +478,16 @@ import { buildAiSummary } from './utils/aiSummary.js'
 import ProductionBoard from './components/ProductionBoard.vue'
 import CapacitySearch from './components/CapacitySearch.vue'
 import { buildCapacityMetric } from './utils/capacityMetrics.js'
-import { permissionRows } from './utils/permissionImport.js'
+import { parseCsv, parseExcelFile, normalizeCapacityRows, downloadCsv } from './utils/imports/helpers.js'
+import { channelInfoRows, channelInfoTemplateCsv } from './utils/imports/channelInfo.js'
+import { terminalInfoRows, terminalInfoTemplateCsv } from './utils/imports/terminalInfo.js'
+import { staffInfoRows, staffInfoTemplateCsv } from './utils/imports/staffInfo.js'
+import { regionCapacityRows, regionCapacityTemplateCsv } from './utils/imports/regionCapacity.js'
+import { channelCapacityRows, channelCapacityTemplateCsv } from './utils/imports/channelCapacity.js'
+import { staffCapacityRows, staffCapacityTemplateCsv } from './utils/imports/staffCapacity.js'
+import { permissionRows, permissionTemplateCsv } from './utils/imports/permission.js'
+import { validateScriptImport, scriptTemplateCsv } from './utils/imports/salesScript.js'
+import { parseTargetFile, targetTemplateCsv } from './utils/imports/targets.js'
 
 const page = ref('login')
 const stage = ref('workbench')
@@ -506,7 +636,6 @@ onMounted(async () => {
     try { loginPhone.value = (await getMobileByToken(token.value)).mobile } catch (error) { showToast(error.message || '认证失败', 'error') }
     const url = new URL(location.href); url.searchParams.delete('token'); history.replaceState(null, '', url)
   }
-  // window.__testAiGateway = runGatewayTest
   window.addEventListener('handle2-auth-expired', expireSession)
 })
 onUnmounted(() => { window.removeEventListener('handle2-auth-expired', expireSession); clearInterval(codeTimer) })
@@ -556,7 +685,7 @@ async function loadDashboard() {
   dashboard.regionRows = data.regionRows
   dashboard.periodRows = data.periodRows || []
   if (data.permission) Object.assign(user, data.permission)
-  if (data.warnings?.length) showToast(data.warnings[0], 'warning')
+  if (data.warnings?.length) showToast(data.warnings.join('；'), 'warning')
   await loadAlerts()
 }
 
@@ -570,29 +699,6 @@ async function handleSaveSalesScript(script) {
   } catch (error) { showToast(error.message || '话术保存失败', 'error') }
   finally { loading.value = false }
 }
-
-function downloadScriptTemplate() {
-  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载话术模板', 'warning')
-  const url = URL.createObjectURL(new Blob([scriptTemplateCsv(dashboard.products)], { type: 'text/csv;charset=utf-8' }))
-  const link = document.createElement('a'); link.href = url; link.download = '经典话术导入模板.csv'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-async function handleScriptFile(event) {
-  const file = event.target.files?.[0]
-  event.target.value = ''
-  if (!file) return
-  loading.value = true
-  try {
-    if (user.isSuperAdmin !== true) throw new Error('仅超级管理员可导入话术')
-    if (!/\.csv$/i.test(file.name)) throw new Error('请导入CSV格式话术模板')
-    if (file.size > 200000) throw new Error('文件大小不能超过200KB')
-    const rows = validateScriptImport(parseCsv((await file.text()).replace(/^\ufeff/, '')), dashboard.products)
-    const result = await importSalesScripts(rows, user, token.value)
-    await loadDashboard()
-    showToast(`已导入 ${result.imported} 条话术`)
-  } catch (error) { showToast(error.message || '话术导入失败', 'error') }
-  finally { loading.value = false }
-}
-
 async function refreshDashboard() { loading.value = true; try { await loadDashboard(); showToast('数据已刷新') } catch (error) { showToast(error.message || '刷新失败', 'error') } finally { loading.value = false } }
 async function refreshAfterImport() { try { await loadDashboard() } catch (error) { showImportErrors('导入后的看板暂未就绪', [error.message || '请完成同日三张产能导入后刷新']) } }
 async function sendCode() {
@@ -622,322 +728,98 @@ async function oneClickLogin() {
   finally { loading.value = false }
 }
 
-function parseCsv(text) {
-  const rows = []; let row = []; let cell = ''; let quoted = false
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i]
-    if (char === '"') { if (quoted && text[i + 1] === '"') { cell += '"'; i++ } else quoted = !quoted }
-    else if (char === ',' && !quoted) { row.push(cell.trim()); cell = '' }
-    else if ((char === '\n' || char === '\r') && !quoted) { if (char === '\r' && text[i + 1] === '\n') i++; row.push(cell.trim()); if (row.some(Boolean)) rows.push(row); row = []; cell = '' }
-    else cell += char
-  }
-  if (quoted) throw new Error('CSV 引号未闭合')
-  row.push(cell.trim()); if (row.some(Boolean)) rows.push(row)
-  return rows
+// ==================== 模板下载 ====================
+function downloadPermissionTemplate() {
+  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载权限模板', 'warning')
+  downloadCsv(permissionTemplateCsv(), '人员权限表导入模板.csv')
 }
-
+function downloadChannelTemplate() {
+  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载渠道维度模板', 'warning')
+  downloadCsv(channelInfoTemplateCsv(), '渠道维度表导入模板.csv')
+}
+function downloadTerminalTemplate() {
+  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载末梢模板', 'warning')
+  downloadCsv(terminalInfoTemplateCsv(), '末梢维度表导入模板.csv')
+}
+function downloadStaffTemplate() {
+  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载员工模板', 'warning')
+  downloadCsv(staffInfoTemplateCsv(), '自控团队工号表导入模板.csv')
+}
+function downloadRegionCapacityTemplate() {
+  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载区域产能模板', 'warning')
+  downloadCsv(regionCapacityTemplateCsv(), '区域汇总产能表导入模板.csv')
+}
+function downloadChannelCapacityTemplate() {
+  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载渠道产能模板', 'warning')
+  downloadCsv(channelCapacityTemplateCsv(), '渠道汇总产能表导入模板.csv')
+}
+function downloadStaffCapacityTemplate() {
+  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载工号产能模板', 'warning')
+  downloadCsv(staffCapacityTemplateCsv(), '工号汇总产能表导入模板.csv')
+}
 function downloadTargetTemplate() {
   if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载目标模板', 'warning')
-  const lines = ['gridId,productId,target,dailyTarget,targetDate', ...dashboard.organization.grids.flatMap(grid => dashboard.products.map(product => {
-    const item = dashboard.targets.find(item => item.gridId === grid.gridId && item.productId === product.productId && !item.channelType)
-    return `${grid.gridId},${product.productId},${item?.target ?? ''},${item?.targetDate === dashboard.statDate ? item?.dailyTarget ?? '' : ''},${dashboard.statDate}`
-  }))]
-  const url = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }))
-  const link = document.createElement('a'); link.href = url; link.download = '网格产品目标模板.csv'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
+  downloadCsv(targetTemplateCsv(dashboard), '产能目标表导入模板.csv')
+}
+function downloadScriptTemplate() {
+  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载话术模板', 'warning')
+  downloadCsv(scriptTemplateCsv(dashboard.products), '产品经典话术表导入模板.csv')
 }
 
+// ==================== 数据导入 ====================
+function handlePermissionFile(event) {
+  return handleImportFile(event, 'permission', permissionRows, '权限表')
+}
+function handleChannelFile(event) {
+  return handleImportFile(event, 'channelInfo', channelInfoRows, '渠道维度表')
+}
+function handleTerminalFile(event) {
+  return handleImportFile(event, 'terminal', terminalInfoRows, '末梢表')
+}
+function handleStaffFile(event) {
+  return handleImportFile(event, 'staff', staffInfoRows, '员工表')
+}
+function handleRegionCapacityFile(event) {
+  return handleCapacityImportFile(event, 'region', regionCapacityRows, '区域产能')
+}
+function handleChannelCapacityFile(event) {
+  return handleCapacityImportFile(event, 'channel', channelCapacityRows, '渠道产能')
+}
+function handleStaffCapacityFile(event) {
+  return handleCapacityImportFile(event, 'staff', staffCapacityRows, '工号产能')
+}
 async function handleTargetFile(event) {
   const file = event.target.files?.[0]
   event.target.value = ''
   if (!file) return
   try {
     if (user.isSuperAdmin !== true) throw new Error('仅超级管理员可导入目标')
-    const data = parseCsv((await file.text()).replace(/^\ufeff/, ''))
-    const includesDaily = data[0]?.join(',') === 'gridId,productId,target,dailyTarget,targetDate'
-    if (!includesDaily && data[0]?.join(',') !== 'gridId,productId,target') throw new Error('请使用下载的目标模板，或旧版三列月目标模板')
-    const validKeys = new Set(dashboard.organization.grids.flatMap(grid => dashboard.products.map(product => `${grid.gridId}|${product.productId}`)))
-    const imported = new Map()
-    for (const [index, row] of data.slice(1).entries()) {
-      if (row.length !== (includesDaily ? 5 : 3)) throw new Error(`第 ${index + 2} 行列数不正确`)
-      const [gridId, productId, rawTarget, rawDaily, targetDate] = row; const key = `${gridId}|${productId}`; const target = Number(rawTarget)
-      if (!validKeys.has(key)) throw new Error(`第 ${index + 2} 行网格或产品无效`)
-      if (imported.has(key)) throw new Error(`第 ${index + 2} 行目标重复`)
-      if (rawTarget === '' || !Number.isFinite(target) || target < 0) throw new Error(`第 ${index + 2} 行目标值无效`)
-      const previous = dashboard.targets.find(item => item.gridId === gridId && item.productId === productId && !item.channelType)
-      const daily = includesDaily ? (rawDaily === '' ? null : Number(rawDaily)) : previous?.dailyTarget ?? null
-      if (daily !== null && (!Number.isFinite(daily) || daily < 0)) throw new Error(`第 ${index + 2} 行日目标无效`)
-      if (includesDaily && targetDate !== dashboard.statDate) throw new Error(`第 ${index + 2} 行日目标日期须为数据截止日 ${dashboard.statDate}`)
-      imported.set(key, { gridId, productId, target, dailyTarget: daily, targetDate: includesDaily ? targetDate : previous?.targetDate || dashboard.statDate })
-    }
-    if (imported.size !== validKeys.size) throw new Error(`目标表须包含全部 ${validKeys.size} 条网格产品记录`)
+    const rows = await parseTargetFile(file, dashboard)
     loading.value = true
-    await importTargets([...imported.values()], user, token.value)
+    await importTargets(rows, user, token.value)
     await loadDashboard()
-    showToast(`已导入 ${imported.size} 条目标`)
-  } catch (error) { showToast(error.message || '导入失败', 'error') } finally { loading.value = false }
-}
-
-// ==================== 渠道维度表导入 ====================
-const CHANNEL_COLUMN_MAP = {
-  '全网统一渠道编码': 'uni_code',
-  '渠道编码': 'chn_code',
-  '渠道名称': 'chn_name',
-  '分公司': 'branch',
-  '网格编码': 'grid_code',
-  '网格': 'grid',
-  '渠道星级': 'star',
-  '渠道状态': 'status'
-}
-
-const CN_NUM = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 }
-
-function parseStarLevel(text) {
-  const s = String(text || '').trim()
-  if (!s) return 0
-  const ar = s.match(/(\d+)\s*星/)
-  if (ar) return Number(ar[1])
-  const cn = s.match(/([一二三四五六七八九十])\s*星/)
-  if (cn) return CN_NUM[cn[1]] || 0
-  return 0
-}
-
-function normalizeStar(text) {
-  return parseStarLevel(text) >= 3 ? '三星+' : '非三星+'
-}
-
-function buildChannelRows(data) {
-  if (!Array.isArray(data) || !data.length) throw new Error('文件内容为空')
-  const header = data[0].map(item => String(item || '').trim())
-  const REQUIRED_COLS = ['全网统一渠道编码', '渠道编码', '渠道名称', '分公司', '网格编码', '网格', '渠道星级']
-  const missing = REQUIRED_COLS.filter(col => !header.includes(col))
-  if (missing.length) throw new Error(`缺少列：${missing.join('、')}`)
-
-  const rows = []
-  for (let i = 1; i < data.length; i++) {
-    const line = data[i]
-    if (!line || !line.some(cell => String(cell || '').trim())) continue
-    const record = {}
-    Object.keys(CHANNEL_COLUMN_MAP).forEach(col => {
-      const index = header.indexOf(col)
-      const field = CHANNEL_COLUMN_MAP[col]
-      record[field] = String(index >= 0 && line[index] != null ? line[index] : '').trim()
-    })
-    if (!record.chn_code) continue
-    if (record.status !== '正常营业') continue
-    record.star_level = normalizeStar(record.star)
-    delete record.status
-    rows.push(record)
+    showToast(`已导入 ${rows.length} 条目标`)
+  } catch (error) {
+    showToast(error.message || '导入失败', 'error')
+  } finally {
+    loading.value = false
   }
-  if (!rows.length) throw new Error('文件无有效数据行（可能没有“正常营业”的渠道）')
-  return rows
 }
-
-// ==================== 末梢表导入 ====================
-const TERMINAL_COLUMN_MAP = {
-  '工号编码': 'staff_no',
-  '工号名称': 'staff_name',
-  '区域服务商': 'agent',
-  '分公司': 'branch',
-  '网格': 'grid',
-  '小微渠道名称': 'chn_name'
-}
-
-function buildTerminalRows(data) {
-  if (!Array.isArray(data) || !data.length) throw new Error('文件内容为空')
-  const header = data[0].map(item => String(item || '').trim())
-  const REQUIRED_COLS = ['工号编码', '工号名称', '分公司', '网格']
-  const missing = REQUIRED_COLS.filter(col => !header.includes(col))
-  if (missing.length) throw new Error(`缺少列：${missing.join('、')}`)
-
-  const rows = []
-  for (let i = 1; i < data.length; i++) {
-    const line = data[i]
-    if (!line || !line.some(cell => String(cell || '').trim())) continue
-    const record = {}
-    Object.keys(TERMINAL_COLUMN_MAP).forEach(col => {
-      const index = header.indexOf(col)
-      const field = TERMINAL_COLUMN_MAP[col]
-      record[field] = String(index >= 0 && line[index] != null ? line[index] : '').trim()
-    })
-    if (!record.staff_no) continue
-    rows.push(record)
-  }
-  if (!rows.length) throw new Error('文件无有效数据行')
-  return rows
-}
-
-// ==================== 员工表导入 ====================
-const STAFF_COLUMN_MAP = {
-  '工号': 'staff_no',
-  '分公司': 'branch',
-  '网格': 'grid',
-  '姓名': 'staff_name',
-  '岗位名称': 'job',
-  '队伍类型': 'team_type'
-}
-
-function buildStaffRows(data) {
-  if (!Array.isArray(data) || !data.length) throw new Error('文件内容为空')
-  const header = data[0].map(item => String(item || '').trim())
-  const REQUIRED_COLS = ['工号', '分公司', '网格', '姓名']
-  const missing = REQUIRED_COLS.filter(col => !header.includes(col))
-  if (missing.length) throw new Error(`缺少列：${missing.join('、')}`)
-
-  const rows = []
-  for (let i = 1; i < data.length; i++) {
-    const line = data[i]
-    if (!line || !line.some(cell => String(cell || '').trim())) continue
-    const record = {}
-    Object.keys(STAFF_COLUMN_MAP).forEach(col => {
-      const index = header.indexOf(col)
-      const field = STAFF_COLUMN_MAP[col]
-      record[field] = String(index >= 0 && line[index] != null ? line[index] : '').trim()
-    })
-    if (!record.staff_no) continue
-    rows.push(record)
-  }
-  if (!rows.length) throw new Error('文件无有效数据行')
-  return rows
-}
-
-// ==================== 产能导入列映射 ====================
-const REGION_CAPACITY_COLUMN_MAP = {
-  '分公司': 'branch_company',
-  '网格': 'grid_name',
-  '产能类型（时间）': 'prod_period_type',
-  '产品名': 'product_name',
-  '产能': 'capacity',
-  '统计日期': 'stat_date',
-  '取数时间': 'snapshot_time'
-}
-
-const CHANNEL_CAPACITY_COLUMN_MAP = {
-  '分公司': 'branch_company',
-  '网格': 'grid_name',
-  '渠道编码': 'channel_code',
-  '渠道名称': 'channel_name',
-  '产能类型（时间）': 'prod_period_type',
-  '产品名': 'product_name',
-  '产能': 'capacity',
-  '统计日期': 'stat_date',
-  '取数时间': 'snapshot_time'
-}
-
-const STAFF_CAPACITY_COLUMN_MAP = {
-  '分公司': 'branch_company',
-  '网格': 'grid_name',
-  '渠道编码': 'channel_code',
-  '渠道名称': 'channel_name',
-  '员工编号': 'staff_no',
-  '产能类型（时间）': 'prod_period_type',
-  '产品名': 'product_name',
-  '产能': 'capacity',
-  '统计日期': 'stat_date',
-  '取数时间': 'snapshot_time'
-}
-
-function buildRegionCapacityRows(data) {
-  if (!Array.isArray(data) || !data.length) throw new Error('文件内容为空')
-  const header = data[0].map(item => String(item || '').trim())
-  const REQUIRED_COLS = ['分公司', '网格', '产能类型（时间）', '产品名', '产能', '统计日期']
-  const missing = REQUIRED_COLS.filter(col => !header.includes(col))
-  if (missing.length) throw new Error(`缺少列：${missing.join('、')}`)
-
-  const rows = []
-  for (let i = 1; i < data.length; i++) {
-    const line = data[i]
-    if (!line || !line.some(cell => String(cell || '').trim())) continue
-    const record = {}
-    Object.keys(REGION_CAPACITY_COLUMN_MAP).forEach(col => {
-      const index = header.indexOf(col)
-      const field = REGION_CAPACITY_COLUMN_MAP[col]
-      record[field] = String(index >= 0 && line[index] != null ? line[index] : '').trim()
-    })
-    if (!record.branch_company || !record.grid_name || !record.product_name) continue
-    rows.push(record)
-  }
-  if (!rows.length) throw new Error('文件无有效数据行')
-  return rows
-}
-
-function buildChannelCapacityRows(data) {
-  if (!Array.isArray(data) || !data.length) throw new Error('文件内容为空')
-  const header = data[0].map(item => String(item || '').trim())
-  const REQUIRED_COLS = ['分公司', '网格', '渠道名称', '产能类型（时间）', '产品名', '产能', '统计日期']
-  const missing = REQUIRED_COLS.filter(col => !header.includes(col))
-  if (missing.length) throw new Error(`缺少列：${missing.join('、')}`)
-
-  const rows = []
-  for (let i = 1; i < data.length; i++) {
-    const line = data[i]
-    if (!line || !line.some(cell => String(cell || '').trim())) continue
-    const record = {}
-    Object.keys(CHANNEL_CAPACITY_COLUMN_MAP).forEach(col => {
-      const index = header.indexOf(col)
-      const field = CHANNEL_CAPACITY_COLUMN_MAP[col]
-      record[field] = String(index >= 0 && line[index] != null ? line[index] : '').trim()
-    })
-    if (!record.branch_company || !record.grid_name || !record.channel_name || !record.product_name) continue
-    rows.push(record)
-  }
-  if (!rows.length) throw new Error('文件无有效数据行')
-  return rows
-}
-
-function buildStaffCapacityRows(data) {
-  if (!Array.isArray(data) || !data.length) throw new Error('文件内容为空')
-  const header = data[0].map(item => String(item || '').trim())
-  const REQUIRED_COLS = ['分公司', '网格', '渠道名称', '员工编号', '产能类型（时间）', '产品名', '产能', '统计日期']
-  const missing = REQUIRED_COLS.filter(col => !header.includes(col))
-  if (missing.length) throw new Error(`缺少列：${missing.join('、')}`)
-
-  const rows = []
-  for (let i = 1; i < data.length; i++) {
-    const line = data[i]
-    if (!line || !line.some(cell => String(cell || '').trim())) continue
-    const record = {}
-    Object.keys(STAFF_CAPACITY_COLUMN_MAP).forEach(col => {
-      const index = header.indexOf(col)
-      const field = STAFF_CAPACITY_COLUMN_MAP[col]
-      record[field] = String(index >= 0 && line[index] != null ? line[index] : '').trim()
-    })
-    if (!record.branch_company || !record.grid_name || !record.staff_no || !record.product_name) continue
-    rows.push(record)
-  }
-  if (!rows.length) throw new Error('文件无有效数据行')
-  return rows
-}
-
-// ==================== 产能类型 / 日期归一化 ====================
-const PERIOD_TYPE_MAP = {
-  '月产能（mon）': 'mon',
-  '日产能（day）': 'day',
-  '7天产能（week）': 'week',
-  '上月同期产能（last mon）': 'last_mon',
-  'mon': 'mon',
-  'day': 'day',
-  'week': 'week',
-  'last_mon': 'last_mon'
-}
-
-function normalizePeriodType(value) {
-  return PERIOD_TYPE_MAP[String(value || '').trim()] || String(value || '').trim()
-}
-
-function normalizeStatDate(value) {
-  const s = String(value || '').trim()
-  if (!s) return ''
-  const m = s.match(/^(\d{4})(\d{2})(\d{2})$/)
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`
-  return s
-}
-
-function normalizeSnapshotTime(value) {
-  const s = String(value || '').trim()
-  if (!s) return ''
-  const m = s.match(/^(\d{4})(\d{2})(\d{2})\s+(\d{2})(\d{2})(\d{2})$/)
-  if (m) return `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]}`
-  return s
+async function handleScriptFile(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  loading.value = true
+  try {
+    if (user.isSuperAdmin !== true) throw new Error('仅超级管理员可导入话术')
+    if (!/\.csv$/i.test(file.name)) throw new Error('请导入CSV格式话术模板')
+    if (file.size > 200000) throw new Error('文件大小不能超过200KB')
+    const rows = validateScriptImport(parseCsv((await file.text()).replace(/^\ufeff/, '')), dashboard.products)
+    const result = await importSalesScripts(rows, user, token.value)
+    await loadDashboard()
+    showToast(`已导入 ${result.imported} 条话术`)
+  } catch (error) { showToast(error.message || '话术导入失败', 'error') }
+  finally { loading.value = false }
 }
 
 // ==================== 通用上传处理 ====================
@@ -986,23 +868,14 @@ async function handleCapacityImportFile(event, target, buildRows, label) {
   try {
     const data = await parseExcelFile(file, { region: '区域汇总取数', channel: '渠道汇总取数', staff: '工号汇总取数' }[target])
     let rows = buildRows(data)
-
-    rows = rows.map(r => ({
-      ...r,
-      prod_period_type: normalizePeriodType(r.prod_period_type),
-      stat_date: normalizeStatDate(r.stat_date),
-      snapshot_time: normalizeSnapshotTime(r.snapshot_time)
-    }))
+    rows = normalizeCapacityRows(rows)
 
     if (!user.isSuperAdmin) throw new Error('仅超级管理员可导入')
     const result = await importCapacity(target, rows, token.value)
     await refreshAfterImport()
     if (result?.failed > 0) {
       showToast(`导入完成：成功 ${result.success} 条，失败 ${result.failed} 条`, 'warning')
-      showImportErrors(
-        `导入完成：成功 ${result.success} 条，失败 ${result.failed} 条`,
-        result.errors || []
-      )
+      showImportErrors(`导入完成：成功 ${result.success} 条，失败 ${result.failed} 条`, result.errors || [])
     } else {
       showToast(`导入成功，共 ${result.success} 条`)
     }
@@ -1013,90 +886,7 @@ async function handleCapacityImportFile(event, target, buildRows, label) {
   }
 }
 
-function handleChannelFile(event) {
-  return handleImportFile(event, 'channelInfo', buildChannelRows, '渠道维度表')
-}
-function handleTerminalFile(event) {
-  return handleImportFile(event, 'terminal', buildTerminalRows, '末梢表')
-}
-function handleStaffFile(event) {
-  return handleImportFile(event, 'staff', buildStaffRows, '员工表')
-}
-function handleRegionCapacityFile(event) {
-  return handleCapacityImportFile(event, 'region', buildRegionCapacityRows, '区域产能')
-}
-function handleChannelCapacityFile(event) {
-  return handleCapacityImportFile(event, 'channel', buildChannelCapacityRows, '渠道产能')
-}
-function handleStaffCapacityFile(event) {
-  return handleCapacityImportFile(event, 'staff', buildStaffCapacityRows, '工号产能')
-}
-
-/**
- * 解析 Excel / CSV 文件为二维数组
- * @param {File} file - 用户选择的文件
- * @returns {Promise<string[][]>} 二维数组，首行为表头
- */
-function importTable(data) {
-  const header = data.findIndex(row => row.includes('分公司') && row.includes('网格') && (row.includes('产品名') || row.includes('工号编码') || row.includes('工号') || row.includes('渠道编码') || row.includes('手机号')))
-  if (header < 0) throw new Error('没有找到有效表头')
-  return data.slice(header).filter(row => !String(row[0] || '').startsWith('仅供联调'))
-}
-async function parseExcelFile(file, sheetHint = '') {
-  const name = file.name || ''
-
-  if (/\.csv$/i.test(name)) {
-    const text = (await file.text()).replace(/^\ufeff/, '')
-    return importTable(parseCsv(text))
-  }
-
-  await ensureXlsx()
-
-  if (typeof window.XLSX === 'undefined') {
-    throw new Error('Excel 解析组件未加载')
-  }
-
-  const buffer = await file.arrayBuffer()
-  const workbook = window.XLSX.read(buffer, { type: 'array' })
-  const sheetName = workbook.SheetNames.includes(sheetHint) ? sheetHint : workbook.SheetNames[0]
-  const sheet = workbook.Sheets[sheetName]
-  return importTable(window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }))
-}
-
-/**
- * 动态加载 SheetJS，用于解析 .xlsx / .xls
- * @returns {Promise<void>}
- */
-function ensureXlsx() {
-  if (window.XLSX) return Promise.resolve()
-  return new Promise((resolve, reject) => {
-    const src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
-    const existing = document.querySelector(`script[src="${src}"]`)
-    if (existing) {
-      if (existing.dataset.loaded === 'true') resolve()
-      else {
-        existing.addEventListener('load', resolve, { once: true })
-        existing.addEventListener('error', () => reject(new Error('SheetJS 加载失败')), { once: true })
-      }
-      return
-    }
-    const script = document.createElement('script')
-    script.src = src
-    script.async = false
-    script.onload = () => {
-      script.dataset.loaded = 'true'
-      resolve()
-    }
-    script.onerror = () => reject(new Error('SheetJS 加载失败'))
-    document.head.appendChild(script)
-  })
-}
-
-/**
- * 展示导入失败明细弹窗
- * @param {string} title - 弹窗标题
- * @param {string[]} errors - 错误信息数组
- */
+// ==================== 导入失败弹窗 ====================
 function showImportErrors(title, errors) {
   const list = Array.isArray(errors) ? errors : []
   const MAX_SHOW = 100
@@ -1107,41 +897,6 @@ function showImportErrors(title, errors) {
   importErrorTitle.value = title
   importErrorList.value = shown
   importErrorVisible.value = true
-}
-
-// ============ 【临时测试】AI 网关出网能力验证 ============
-// 测完请删除本段以及 onMounted 里的 window 挂载
-async function runGatewayTest(target) {
-  if (isMock) { showToast('Mock 模式不支持此测试', 'warning'); return null }
-  if (!token.value) { showToast('未登录', 'warning'); return null }
-
-  let momaKey = ''
-  if (target === 'moma_raw' || target === 'moma_full') {
-    momaKey = window.prompt('请输入 MoMA 密钥（sk-...）：') || ''
-    if (!momaKey) return null
-  }
-
-  loading.value = true
-  try {
-    const data = await testAiGateway(target, momaKey, token.value)
-    console.log(`%c[${target} 测试结果]`, 'color:#2974f4;font-weight:bold;font-size:14px', data)
-    if (target === 'echo') {
-      if (data?.gotJson?.hello === 'grid-ai') showToast('✅ 网关可 POST 外部 HTTPS', 'success')
-      else if (data?.status === 0) showToast('❌ 网关无法出网（超时/无响应）', 'error')
-      else showToast('⚠️ 看 Console 的 textPreview', 'warning')
-    } else if (target === 'moma_raw') {
-      showToast(data?.hasChoices ? '✅ MoMA 通了' : '⚠️ MoMA 未返回 choices，看 Console', data?.hasChoices ? 'success' : 'warning')
-    } else if (target === 'moma_full') {
-      showToast(data?.answer ? '✅ 有回答，看 Console' : '⚠️ 无 answer，看 Console', data?.answer ? 'success' : 'warning')
-    }
-    return data
-  } catch (error) {
-    console.error(`[${target} 测试失败]`, error)
-    showToast(error.message || '测试失败', 'error')
-    return null
-  } finally {
-    loading.value = false
-  }
 }
 
 function showToast(message, type = 'success') { toast.message = message; toast.type = type; toast.show = true; clearTimeout(showToast.timer); showToast.timer = setTimeout(() => { toast.show = false }, 3000) }

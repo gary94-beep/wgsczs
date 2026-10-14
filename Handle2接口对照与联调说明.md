@@ -58,7 +58,7 @@
 
 六张原表名称及字段不变。权限、目标和话术不在这六张表内，因此提供 `sql/wgsc_support_tables.sql` 三张补充表供DBA审批：
 
-1. `app_open_api_c002_wgsc_permission_1`：按实际建表结构，role为1市公司/2分公司/3网格，管理员字段为super_admin，含updated_at。接口读取后转换成city/branch/grid供前端使用；权限表单仍使用中文等级，导入时转换数字并将is_super_admin映射到super_admin。role默认值使用3，不能使用空字符串。原`xysct_permission`只有name/phone/role且属于其他项目，无法可靠限定网格权限；不要直接复用扩大权限。
+1. `app_open_api_c003_wgsc_permission_1`：按实际建表结构，role为1市公司/2分公司/3网格，管理员字段为super_admin，含updated_at。接口读取后转换成city/branch/grid供前端使用；权限表单仍使用中文等级，导入时转换数字并将is_super_admin映射到super_admin。role默认值使用3，不能使用空字符串。原`xysct_permission`只有name/phone/role且属于其他项目，无法可靠限定网格权限；不要直接复用扩大权限。
 2. `app_open_api_c001_wgsc_target_1`：按网格/产品/月保存月目标，以及截止日日目标和日期。
 3. `app_open_api_c001_wgsc_script_1`：产品话术、维护时间、维护人。
 

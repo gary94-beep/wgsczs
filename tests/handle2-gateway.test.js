@@ -23,10 +23,10 @@ test('AI gateway is independent and has no import or dashboard endpoints', () =>
   assert.ok(!JSON.stringify(result).includes('secret-should-not-leak'))
 })
 const tables = {
-  permission: 'app_open_api_c002_wgsc_permission_1', region: 'app_open_api_c003_wgsc_region_capacity_1',
+  permission: 'app_open_api_c003_wgsc_permission_1', region: 'app_open_api_c003_wgsc_region_capacity_1',
   channel: 'app_open_api_c001_wgsc_chn_capacity_1', staffCapacity: 'app_open_api_c003_wgsc_staff_capacity_1',
-  channelInfo: 'app_open_api_c002_wgsc_chn_level_1', terminal: 'app_open_api_c001_wgsc_staff_terminal_1',
-  staff: 'app_open_api_c001_wgsc_staff_1', targets: 'app_open_api_c001_wgsc_target_1', scripts: 'app_open_api_c001_wgsc_script_1'
+  channelInfo: 'app_open_api_c002_wgsc_chn_level_1', terminal: 'app_open_api_c002_wgsc_staff_terminal_1',
+  staff: 'app_open_api_c002_wgsc_staff_1', targets: 'app_open_api_c001_wgsc_target_1', scripts: 'app_open_api_c001_wgsc_script_1'
 }
 function fixture() {
   const db = Object.fromEntries(Object.values(tables).map(t => [t, []]))

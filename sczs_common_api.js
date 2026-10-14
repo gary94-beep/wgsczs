@@ -142,7 +142,7 @@ function init() {
             JsResult.result = createRes('1', '手机号格式错误，收到: ' + phone);
             return;
         }
-        var sql = "SELECT name, phone, role, branch, grid, super_admin FROM app_open_api_c002_wgsc_permission_1 WHERE phone = #{phone} AND enabled=1";
+        var sql = "SELECT name, phone, role, branch, grid, super_admin FROM app_open_api_c003_wgsc_permission_1 WHERE phone = #{phone} AND enabled=1";
         var res = JSON.parse(CustomizeUtil.abilitySql(sql, { phone: phone }));
         if (!res.data || !res.data.results || res.data.results.length === 0) {
             JsResult.result = createRes('0', '该手机号暂无使用权限', null);

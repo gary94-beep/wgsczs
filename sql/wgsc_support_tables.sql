@@ -1,5 +1,5 @@
 -- Proposed additional tables. Deploy with DBA approval; the six provided tables are unchanged.
-CREATE TABLE IF NOT EXISTS app_open_api_c002_wgsc_permission_1 (
+CREATE TABLE IF NOT EXISTS app_open_api_c003_wgsc_permission_1 (
   id BIGINT NOT NULL AUTO_INCREMENT,
   phone VARCHAR(16) NOT NULL,
   name VARCHAR(64) NOT NULL,

@@ -107,13 +107,117 @@ button.capacity-card-heading:focus-visible { outline: 2px solid #287bff; outline
 
 .breadcrumbs { font-size: 16px; gap: 8px; min-height: 52px; }
 .breadcrumbs button { font-size: 16px; font-weight: 700; min-height: 44px; padding: 6px 4px; }
+
+/* ==================== 数据导入 ==================== */
 .import-navigation { padding: 0 20px 24px; }
 .import-navigation h3 { margin: 24px 0 10px; font-size: 16px; color: #294e70; }
-.import-navigation > button { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 10px 4px; border: 0; border-bottom: 1px solid #dce9f6; background: transparent; color: #173457; text-align: left; font: inherit; }
-.import-navigation .menu-icon { width: 36px; height: 36px; flex: 0 0 36px; font-size: 16px; border-radius: 6px; }
-.import-navigation .menu-copy { flex: 1; }
-.import-navigation .menu-copy strong { font-size: 16px; }
-.import-navigation-row { padding: 16px 0; border-bottom: 1px solid #dce9f6; }
-.import-navigation-row > strong { display: block; font-size: 16px; margin-bottom: 10px; }
-.import-navigation-row .target-actions { margin: 0; display: flex; gap: 8px; flex-wrap: wrap; }
-.import-navigation-row .target-actions button { min-height: 44px; margin: 0; }
+
+/* 顶部图例 */
+.import-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin: 0 20px 16px;
+  padding: 12px 16px;
+  border: 1px solid #d8e7f5;
+  border-radius: 8px;
+  background: #f6fbff;
+  color: #486488;
+  font-size: 13px;
+}
+.import-legend > span { display: inline-flex; align-items: center; gap: 8px; }
+
+/* 每行：左侧标签 + 右侧两个图标 */
+.import-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid #dce9f6;
+}
+.import-nav-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 4px;
+  color: #173457;
+}
+.import-nav-label .menu-icon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  font-size: 16px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+}
+.import-nav-label .menu-copy { flex: 1; min-width: 0; }
+.import-nav-label .menu-copy strong { font-size: 16px; }
+.menu-icon-yellow { background: #fff6e0; color: #c98a00; }
+
+/* 右侧操作按钮：纯图标、无边框、无文字 */
+.import-nav-item .target-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin: 0;
+  padding-right: 4px;
+}
+.import-nav-item .icon-action {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2874ed;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.import-nav-item .icon-action:hover:not(:disabled) { background: #eaf4ff; }
+.import-nav-item .icon-action:active:not(:disabled) { background: #d6e8ff; }
+.import-nav-item .icon-action:disabled { color: #b3c4d8; cursor: not-allowed; }
+.import-nav-item .icon-action .action-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-block;
+  background-color: currentColor;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+}
+
+/* 图例里的图标 */
+.import-legend .action-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-block;
+  background-color: #2874ed;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+}
+
+/* 图标形状（若项目里已定义 .download-icon / .upload-icon，可删掉这两段） */
+.import-nav-item .action-icon.download-icon,
+.import-legend .action-icon.download-icon {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/%3E%3Cpolyline points='7 10 12 15 17 10'/%3E%3Cline x1='12' y1='15' x2='12' y2='3'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/%3E%3Cpolyline points='7 10 12 15 17 10'/%3E%3Cline x1='12' y1='15' x2='12' y2='3'/%3E%3C/svg%3E");
+}
+.import-nav-item .action-icon.upload-icon,
+.import-legend .action-icon.upload-icon {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/%3E%3Cpolyline points='17 8 12 3 7 8'/%3E%3Cline x1='12' y1='3' x2='12' y2='15'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/%3E%3Cpolyline points='17 8 12 3 7 8'/%3E%3Cline x1='12' y1='3' x2='12' y2='15'/%3E%3C/svg%3E");
+}
