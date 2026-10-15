@@ -2,7 +2,7 @@
   <div class="app-shell">
     <main v-if="page === 'login'" class="login-page">
       <section class="brand-panel">
-        <h1>网格生产<span>AI</span>助手</h1>
+        <BrandHeading />
       </section>
       <section class="login-card">
         <h2>欢迎登录</h2>
@@ -32,7 +32,7 @@
     <main v-else class="dashboard-page">
       <header v-if="stage === 'workbench'" class="top-bar">
         <div>
-          <h1>网格生产<span>AI</span>助手</h1>
+          <BrandHeading compact />
           <p>{{ scopeName }} · {{ roleLabel }} <em v-if="isMock">演示数据</em></p>
         </div>
         <button type="button" title="刷新数据" aria-label="刷新数据" @click="refreshDashboard"><span class="toolbar-icon"
@@ -41,12 +41,12 @@
 
       <nav v-if="stage !== 'workbench'" class="breadcrumbs" aria-label="当前位置">
         <button type="button" @click="goWorkbench">工作台</button><span>›</span>
-        <template v-if="stage === 'monitor'"><strong>低产预警监控</strong></template>
+        <template v-if="stage === 'warnings'"><strong>预警监控</strong></template><template v-else-if="stage === 'monitor'"><button type="button" @click="openMonitor">预警监控</button><span>›</span><strong>{{ isChangeAlert ? '异动预警' : '低产预警' }}</strong></template>
         <template v-else-if="stage === 'campus'"><strong>校园生产管理</strong></template>
         <template v-else-if="stage === 'search'"><strong>产能速查</strong></template>
         <template v-else-if="stage === 'imports'"><strong>数据导入</strong></template>
         <template v-else-if="stage === 'scripts'"><button type="button"
-            @click="returnFromScripts">低产预警监控</button><span>›</span><strong>经典话术库</strong></template>
+            @click="returnFromScripts">预警监控</button><span>›</span><strong>经典话术库</strong></template>
         <template v-else>
           <strong v-if="stage === 'overview'">生产总览</strong>
           <button v-else type="button" @click="goOverview">生产总览</button>
@@ -74,11 +74,11 @@
               class="menu-copy"><strong>产能速查</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
           <button type="button" @click="openMonitor"><span class="menu-icon menu-icon-green"><i
                 class="menu-glyph menu-glyph-alert" aria-hidden="true"></i></span><span
-              class="menu-copy"><strong>低产预警监控</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+              class="menu-copy"><strong>预警监控</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
           <button type="button" @click="openCampus"><span class="menu-icon menu-icon-blue"><i
                 class="menu-glyph menu-glyph-campus" aria-hidden="true"></i></span><span
               class="menu-copy"><strong>校园生产管理</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button v-if="user.isSuperAdmin" type="button" @click="openImports"><span class="menu-icon menu-icon-blue"><i class="action-icon upload-icon" aria-hidden="true"></i></span><span class="menu-copy"><strong>数据导入</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+          <button v-if="user.isSuperAdmin" type="button" @click="openImports"><span class="menu-icon menu-icon-blue"><i class="data-import-icon" :style="dataImportIconStyle" aria-hidden="true"></i></span><span class="menu-copy"><strong>数据导入</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
         </section>
       </template>
 
@@ -242,9 +242,9 @@
           <ChannelTypeFilter v-model="selectedChannelType" @update:model-value="selectedChannel = ''" />
         </section>
         <div class="source-strip"><span>产能：系统取数</span><span v-if="!selectedChannelType">目标：市公司导入</span></div>
-        <ProductionBoard :items="overview" :scope="scopeName" :stat-date="dashboard.statDate" :demo="isMock"
+        <ProductionBoard v-model:period="overviewPeriod" :items="overview" :scope="scopeName" :stat-date="dashboard.statDate" :demo="isMock"
           :show-targets="!selectedChannelType" @open="openProduct" />
-        <AiAnalysisPanel :summary="overviewAiSummary" :analyze="analyzeOverview" />
+        <OperatingAnalysis :items="overview" :stat-date="dashboard.statDate" :period="overviewPeriod" :demo="isMock" :show-targets="!selectedChannelType" />
         <section class="product-section">
           <div class="section-head">
             <h2>{{ selectedChannelType ? '产能表现' : '产能与目标' }}</h2><span>{{ user.role === 'grid' ? '点击查看预警' : '点击指标查看下级'
@@ -298,9 +298,17 @@
         </section>
       </template>
 
+      <template v-else-if="stage === 'warnings'">
+        <header class="drill-page-title"><h2>预警监控</h2><p>{{ scopeName }}</p></header>
+        <div class="workbench-menu warning-menu">
+          <button type="button" @click="openAlertMonitor('low')"><span class="menu-icon menu-icon-green"><i class="warning-entry-icon" :style="warningIcons.low" aria-hidden="true"></i></span><span class="menu-copy"><strong>低产预警</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+          <button type="button" @click="openAlertMonitor('change')"><span class="menu-icon menu-icon-blue"><i class="warning-entry-icon" :style="warningIcons.change" aria-hidden="true"></i></span><span class="menu-copy"><strong>异动预警</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+        </div>
+      </template>
+
       <template v-else-if="stage === 'monitor' || stage === 'alerts'">
         <section class="alert-heading">
-          <h2>{{ stage === 'monitor' ? '低产预警监控' : '低产预警' }}</h2><span>{{ stage === 'monitor' ? monitorScopeLabel :
+          <h2>{{ isChangeAlert ? '异动预警' : '低产预警' }}</h2><span>{{ stage === 'monitor' ? monitorScopeLabel :
             selectedGrid?.gridName }} · {{ roleLabel }}</span>
         </section>
         <section class="filter-card">
@@ -325,39 +333,43 @@
               </select></label>
             <div v-else class="monitor-readonly"><span>产品</span><strong>{{ selectedProduct?.productName }}</strong>
             </div>
-            <div class="threshold-control"><span>低产阈值</span>
+            <div v-if="!isChangeAlert" class="threshold-control"><span>低产阈值</span>
               <div><button type="button" aria-label="降低阈值" @click="adjustThreshold(-1)">−</button><input
                   v-model.number="threshold" type="number" min="0" :step="thresholdStep" aria-label="低产阈值" /><button
                   type="button" aria-label="提高阈值" @click="adjustThreshold(1)">+</button></div>
             </div>
-            <label class="period-field"><span>统计周期</span><select v-model="alertPeriod" aria-label="预警统计周期">
+            <label v-if="!isChangeAlert" class="period-field"><span>统计周期</span><select v-model="alertPeriod" aria-label="预警统计周期">
                 <option value="month">本月</option>
                 <option value="day">当日</option>
               </select></label>
+            <label v-if="isChangeAlert" class="monitor-filter">日均减少率（%）<input v-model.number="declineRate" type="number" min="0" max="100" step="1" aria-label="日均减少率" /></label>
+            <label v-if="isChangeAlert" class="monitor-filter">日均减少值（{{ activeProduct?.unit }}/日）<input v-model.number="declineValue" type="number" min="0" step="0.1" aria-label="日均减少值" /></label>
+            <div v-if="isChangeAlert" class="monitor-readonly"><span>统计周期</span><strong>本月与上月同期</strong></div>
           </div>
           <label v-if="stage === 'alerts'" class="channel-filter">渠道<select v-model="selectedChannel">
               <option value="">全部渠道</option>
               <option v-for="channel in channelOptions" :key="channel" :value="channel">{{ channel }}</option>
             </select></label>
-          <div class="filter-footer"><small>{{ tab === 'people' ? '直销人员' : '渠道合计' }}产能 ≤ {{ cleanThreshold }} {{
-            activeProduct?.unit }}，0 为零产</small><button type="button" @click="applyFilters">筛选</button></div>
+          <div class="filter-footer"><small v-if="isChangeAlert">日均下降 ≥ {{ declineRate }}%，且减少 ≥ {{ declineValue }} {{ activeProduct?.unit }}/日</small><small v-else>{{ tab === 'people' ? '直销人员' : '渠道合计' }}产能 ≤ {{ cleanThreshold }} {{
+            activeProduct?.unit }}，0 为零产</small><div class="filter-actions"><button type="button" @click="applyFilters">筛选</button><button type="button" class="alert-export" :disabled="!alertResult || alertLoading || loading || exportBusy" title="导出当前筛选条件下全部预警分类" @click="exportAlerts"><i class="export-alert-icon" :style="exportIconStyle" aria-hidden="true"></i>{{ exportBusy ? '导出中' : '导出Excel' }}</button></div></div>
         </section>
-        <AiAnalysisPanel :summary="aiSummary" :analyze="analyzeAlerts" />
         <p v-if="alertLoading" aria-live="polite">正在查询预警...</p>
         <p v-if="alertError" role="alert">{{ alertError }}</p>
         <template v-if="alertResult">
           <div class="alert-summary">
-            <div v-for="category in alertCategories" :key="category.id"><span>{{ category.label }}</span><strong>{{
-              category.count }}</strong><small>{{ category.id === 'people' ? '人' : '个' }}</small></div>
+            <div v-for="category in alertCategories" :key="category.id" class="alert-scale-column">
+              <span class="scale-title">{{ category.id === 'people' ? '直销队伍' : category.label }}总规模</span>
+              <strong class="summary-total-count">{{ category.total ?? '—' }}<small>{{ category.id === 'people' ? '人' : '个' }}</small></strong>
+              <span>{{ isChangeAlert ? '异动预警' : '低产预警' }}</span>
+              <strong class="summary-warning-count">{{ category.count }}<small>{{ category.id === 'people' ? '人' : '个' }}</small></strong>
+              <span>{{ isChangeAlert ? '异动预警率' : '低产预警率' }}</span><strong class="summary-warning-rate">{{ category.rate === null ? '—' : category.rate + '%' }}</strong>
+            </div>
           </div>
           <div class="tabs alert-category-tabs" role="tablist" aria-label="预警分类"><button
               v-for="category in alertCategories" :key="category.id" type="button" role="tab"
               :aria-selected="tab === category.id" :class="{ active: tab === category.id }"
               @click="selectAlertCategory(category.id)">{{ category.label }}</button></div>
           <section v-if="tab === 'people'" class="list-section">
-            <div class="section-head">
-              <h2>直销人员 · 零产 / 低产</h2><span>{{ lowPeople.length }} 人</span>
-            </div>
             <article v-for="item in lowPeople" :key="`${item.gridId}-${item.staffId}`" class="person-card"
               :data-category="normalizeChannelType(item.channelType)" :class="{ zero: item.production === 0 }"><span
                 class="person-avatar" aria-hidden="true"></span>
@@ -367,27 +379,26 @@
                   }}</span></div>
               <div class="person-score"><strong>{{ displayNumber(item.production) }}</strong><span>{{
                 activeProduct?.unit }}</span></div>
-              <p>{{ item.production === 0 ? '零产' : '低产' }}</p>
+              <p>{{ isChangeAlert ? '异动' : item.production === 0 ? '零产' : '低产' }}</p>
+              <div v-if="isChangeAlert" class="change-comparison"><span>上月同期日均 {{ displayNumber(item.previousAverage) }} · 本月日均 {{ displayNumber(item.monthAverage) }} {{ activeProduct?.unit }}/日</span><strong>-{{ displayNumber(item.declineValue) }} {{ activeProduct?.unit }}/日（-{{ displayNumber(item.declineRate) }}%）</strong></div>
             </article>
-            <p v-if="!lowPeople.length" class="empty-state">当前条件下暂无低产人员</p>
+            <p v-if="!lowPeople.length" class="empty-state">当前条件下暂无{{ isChangeAlert ? '异动' : '低产' }}人员</p>
           </section>
           <section v-else class="list-section">
-            <div class="section-head">
-              <h2>{{ tab === 'stars' ? '3星+渠道' : '末梢渠道' }} · 零产 / 低产</h2><span>{{ displayedChannels.length }} 个</span>
-            </div>
             <article v-for="item in displayedChannels"
               :key="`${item.gridId}-${item.channelCode || item.channel}-${item.channelType}`" class="channel-card"
               :data-category="item.channelType">
               <div class="channel-head"><strong>{{ tab === 'tail' ? item.microChannelName || item.channel : item.channel
-              }}</strong><span>{{ item.production === 0 ? '零产' : '低产' }}</span></div>
+              }}</strong><span>{{ isChangeAlert ? '异动' : item.production === 0 ? '零产' : '低产' }}</span></div>
               <div class="channel-category">{{ tab === 'stars' ? `${item.channelStar ? item.channelStar + '星' : '星级未提供'}
                 · ${item.channelCode || '渠道编码未提供'}` : item.serviceProvider || '区域服务商未提供' }}</div>
               <div class="alert-organization">{{ branchName(item.branchId) }} · {{ gridName(item.gridId) || '网格未提供' }}
               </div>
               <div class="channel-meta"><span>{{ displayNumber(item.production) }} {{ activeProduct?.unit
               }}</span><span>{{ item.staffCount }} 人</span></div>
+              <div v-if="isChangeAlert" class="change-comparison"><span>上月同期日均 {{ displayNumber(item.previousAverage) }} · 本月日均 {{ displayNumber(item.monthAverage) }} {{ activeProduct?.unit }}/日</span><strong>-{{ displayNumber(item.declineValue) }} {{ activeProduct?.unit }}/日（-{{ displayNumber(item.declineRate) }}%）</strong></div>
             </article>
-            <p v-if="!displayedChannels.length" class="empty-state">当前条件下暂无低产渠道</p>
+            <p v-if="!displayedChannels.length" class="empty-state">当前条件下暂无{{ isChangeAlert ? '异动' : '低产' }}渠道</p>
           </section>
         </template>
         <button class="script-library-entry" type="button" @click="openScriptLibrary"><span class="script-library-icon"
@@ -430,7 +441,7 @@
             aria-hidden="true"></i><span>工作台</span></button><button type="button"
           :class="{ active: ['overview', 'branches', 'grids'].includes(stage) }" @click="goOverview"><i
             class="bottom-icon bottom-overview" aria-hidden="true"></i><span>生产总览</span></button><button type="button"
-          :class="{ active: ['monitor', 'alerts'].includes(stage) }" @click="openMonitor"><i
+          :class="{ active: ['warnings', 'monitor', 'alerts'].includes(stage) }" @click="openMonitor"><i
             class="bottom-icon bottom-alert" aria-hidden="true"></i><span>预警监控</span></button></nav>
     </main>
 
@@ -466,19 +477,24 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import lowWarningIcon from './assets/warning-icons/triangle-alert.svg'
+import changeWarningIcon from './assets/warning-icons/chart-no-axes-combined.svg'
 import { isMock } from './api/client'
 import { sendLoginCode, loginWithCode, loginWithOneClick } from './api/auth.js'
-import { fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts, analyzeCapacity } from './api/production'
+import { fetchChangeAlerts, fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts } from './api/production'
 import ChannelTypeFilter from './components/ChannelTypeFilter.vue'
 import { normalizeChannelType } from './utils/channelTypes.js'
 import CapacityCard from './components/CapacityCard.vue'
 import SalesScriptPanel from './components/SalesScriptPanel.vue'
-import AiAnalysisPanel from './components/AiAnalysisPanel.vue'
-import { buildAiSummary } from './utils/aiSummary.js'
 import ProductionBoard from './components/ProductionBoard.vue'
+import BrandHeading from './components/BrandHeading.vue'
+import OperatingAnalysis from './components/OperatingAnalysis.vue'
+import { buildAlertExport, createAlertWorkbook } from './utils/alertExport.js'
+import downloadIcon from './assets/action-icons/download.svg'
+import uploadIcon from './assets/action-icons/upload.svg'
 import CapacitySearch from './components/CapacitySearch.vue'
 import { buildCapacityMetric } from './utils/capacityMetrics.js'
-import { parseCsv, parseExcelFile, normalizeCapacityRows, downloadCsv } from './utils/imports/helpers.js'
+import { parseCsv, parseExcelFile, normalizeCapacityRows, downloadCsv, ensureXlsx } from './utils/imports/helpers.js'
 import { channelInfoRows, channelInfoTemplateCsv } from './utils/imports/channelInfo.js'
 import { terminalInfoRows, terminalInfoTemplateCsv } from './utils/imports/terminalInfo.js'
 import { staffInfoRows, staffInfoTemplateCsv } from './utils/imports/staffInfo.js'
@@ -489,6 +505,15 @@ import { permissionRows, permissionTemplateCsv } from './utils/imports/permissio
 import { validateScriptImport, scriptTemplateCsv } from './utils/imports/salesScript.js'
 import { parseTargetFile, targetTemplateCsv } from './utils/imports/targets.js'
 
+const warningIcons = {
+  low: { '--warning-icon': `url(${JSON.stringify(lowWarningIcon)})` },
+  change: { '--warning-icon': `url(${JSON.stringify(changeWarningIcon)})` }
+}
+const exportIconStyle = { '--export-icon': `url(${JSON.stringify(downloadIcon)})` }
+const dataImportIconStyle = { '--import-icon': `url(${JSON.stringify(uploadIcon)})` }
+const exportBusy = ref(false)
+const alertSnapshot = ref(null)
+const overviewPeriod = ref('month')
 const page = ref('login')
 const stage = ref('workbench')
 const loading = ref(false)
@@ -506,6 +531,10 @@ const dashboard = reactive({ organization: { cityName: '', branches: [], grids: 
 const selectedProductId = ref('')
 const selectedBranchId = ref('')
 const selectedGridId = ref('')
+const alertMode = ref('low')
+const declineRate = ref(30)
+const declineValue = ref(5)
+const isChangeAlert = computed(() => stage.value === 'monitor' && alertMode.value === 'change')
 const monitorBranchId = ref('')
 const monitorGridId = ref('')
 const monitorProductId = ref('')
@@ -554,10 +583,6 @@ function metric(productId, gridIds, scope = null) {
 function gridsOf(branchId) { return dashboard.organization.grids.filter(item => item.branchId === branchId).map(item => item.gridId) }
 const scopeGridIds = computed(() => user.role === 'city' ? dashboard.organization.grids.map(item => item.gridId) : user.role === 'grid' ? [user.gridId] : gridsOf(user.branchId))
 const overview = computed(() => dashboard.products.map(item => ({ ...item, ...metric(item.productId, scopeGridIds.value, { level: user.role, id: user.role === 'grid' ? user.gridId : user.branchId }) })))
-const overviewAiSummary = computed(() => ({
-  scope: scopeName.value, product: '全产品生产总览', statDate: dashboard.statDate, demo: isMock, channelType: selectedChannelType.value || '全部类型',
-  products: overview.value.map(item => buildAiSummary({ scope: scopeName.value, product: item, statDate: dashboard.statDate, demo: isMock, period: 'day-and-month', metric: item, categories: [], showTargets: !selectedChannelType.value }))
-}))
 const cityMetric = computed(() => metric(selectedProductId.value, scopeGridIds.value, { level: 'city' }))
 const branchMetric = computed(() => metric(selectedProductId.value, gridsOf(selectedBranchId.value), { level: 'branch', id: selectedBranchId.value }))
 const branchMetrics = computed(() => dashboard.organization.branches.map(item => ({ ...item, ...metric(selectedProductId.value, gridsOf(item.branchId), { level: ['未知', '市统筹'].includes(item.branchId) ? 'grid' : 'branch', id: ['未知', '市统筹'].includes(item.branchId) ? `${item.branchId}::${item.branchId}` : item.branchId }) })))
@@ -578,15 +603,12 @@ const alertCategories = computed(() => [
   { id: 'people', label: '直销人员', count: alertResult.value ? lowPeople.value.length : null },
   { id: 'stars', label: '3星+渠道', count: alertResult.value ? lowChannels.value.filter(item => item.channelType === '三星+渠道').length : null },
   { id: 'tail', label: '末梢渠道', count: alertResult.value ? lowChannels.value.filter(item => item.channelType === '末梢渠道').length : null }
-])
+].map(category => {
+  const value = alertResult.value?.totals?.[category.id]
+  const total = typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+  return { ...category, total, rate: total !== null && total > 0 && category.count <= total ? Math.round(category.count / total * 1000) / 10 : null }
+}))
 const displayedChannels = computed(() => lowChannels.value.filter(item => item.channelType === (tab.value === 'stars' ? '三星+渠道' : '末梢渠道')))
-const aiSummary = computed(() => {
-  const ids = (stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value]).filter(id => scopeGridIds.value.includes(id))
-  return buildAiSummary({
-    scope: stage.value === 'monitor' ? monitorScopeLabel.value : selectedGrid.value?.gridName, product: activeProduct.value, statDate: dashboard.statDate, demo: isMock, period: alertPeriod.value, threshold: cleanThreshold.value,
-    metric: buildCapacityMetric(dashboard, activeProduct.value?.productId, ids), categories: alertCategories.value
-  })
-})
 function selectAlertCategory(id) { tab.value = id; selectedChannel.value = '' }
 
 function displayNumber(value) { return Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 }) }
@@ -601,12 +623,11 @@ function goBranch() { stage.value = 'grids'; selectedGridId.value = ''; scrollTo
 function openProduct(id) { selectedProductId.value = id; selectedBranchId.value = user.role === 'city' ? '' : user.branchId; selectedGridId.value = user.role === 'grid' ? user.gridId : ''; selectedChannel.value = ''; threshold.value = 1; tab.value = 'people'; stage.value = user.role === 'city' ? 'branches' : user.role === 'branch' ? 'grids' : 'alerts'; scrollTop() }
 function openBranch(id) { selectedBranchId.value = id; stage.value = 'grids'; scrollTop() }
 function openGrid(id) { selectedGridId.value = id; selectedChannel.value = ''; threshold.value = 1; tab.value = 'people'; stage.value = 'alerts'; scrollTop() }
-function openMonitor() { monitorBranchId.value = user.role === 'city' ? '' : user.branchId; monitorGridId.value = user.role === 'grid' ? user.gridId : ''; monitorProductId.value = dashboard.products[0]?.productId || ''; selectedChannel.value = ''; threshold.value = 1; tab.value = 'people'; stage.value = 'monitor'; scrollTop() }
+function openMonitor() { stage.value = 'warnings'; scrollTop() }
+function openAlertMonitor(mode) { alertMode.value = mode; monitorBranchId.value = user.role === 'city' ? '' : user.branchId; monitorGridId.value = user.role === 'grid' ? user.gridId : ''; monitorProductId.value = dashboard.products[0]?.productId || ''; selectedChannel.value = ''; threshold.value = 1; tab.value = 'people'; stage.value = 'monitor'; scrollTop() }
 function openCampus() { stage.value = 'campus'; scrollTop() }
 function openSearch() { stage.value = 'search'; scrollTop() }
 function openImports() { if (user.isSuperAdmin !== true) return showToast('仅超级管理员可导入数据', 'warning'); stage.value = 'imports'; scrollTop() }
-const analyzeOverview = request => analyzeCapacity({ ...request, view: 'overview', channelType: selectedChannelType.value }, token.value)
-const analyzeAlerts = request => analyzeCapacity({ ...request, view: 'alerts', productId: activeProduct.value?.productId, gridIds: stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value], threshold: cleanThreshold.value, period: alertPeriod.value, channel: selectedChannel.value }, token.value)
 function openScriptLibrary() { scriptReturnStage.value = stage.value; scriptProductId.value = activeProduct.value?.productId || dashboard.products[0]?.productId || ''; stage.value = 'scripts'; scrollTop() }
 function returnFromScripts() { stage.value = scriptReturnStage.value; scrollTop() }
 function onMonitorBranchChange() { monitorGridId.value = ''; selectedChannel.value = '' }
@@ -615,17 +636,33 @@ function adjustThreshold(direction) { threshold.value = Math.round((cleanThresho
 async function loadAlerts() {
   const id = ++alertSequence
   alertResult.value = null
+  alertSnapshot.value = null
   alertLoading.value = false; alertError.value = ''
   if (!['monitor', 'alerts'].includes(stage.value) || !activeProduct.value) return
   alertLoading.value = true
   try {
-    const data = await fetchAlerts({ phone: user.phone, productId: activeProduct.value.productId, gridIds: stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value], threshold: cleanThreshold.value, period: alertPeriod.value, channel: selectedChannel.value }, token.value)
-    if (id === alertSequence) alertResult.value = data
+    const params = { declineRate: declineRate.value, declineValue: declineValue.value, phone: user.phone, productId: activeProduct.value.productId, gridIds: [...(stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value])], threshold: cleanThreshold.value, period: alertPeriod.value, channel: selectedChannel.value }
+    const snapshot = { ...params, product: { ...activeProduct.value }, kind: isChangeAlert.value ? 'change' : 'low', scope: stage.value === 'monitor' ? monitorScopeLabel.value : selectedGrid.value?.gridName }
+    const data = await (isChangeAlert.value ? fetchChangeAlerts : fetchAlerts)(params, token.value)
+    if (id === alertSequence) { alertResult.value = data; alertSnapshot.value = snapshot }
   } catch (error) { if (id === alertSequence) { alertError.value = error.message || '预警查询失败'; showToast(alertError.value, 'error') } }
   finally { if (id === alertSequence) alertLoading.value = false }
 }
-watch([stage, monitorBranchId, monitorGridId, monitorProductId, selectedGridId, selectedProductId, cleanThreshold, alertPeriod, selectedChannel], loadAlerts)
+watch([stage, alertMode, declineRate, declineValue, monitorBranchId, monitorGridId, monitorProductId, selectedGridId, selectedProductId, cleanThreshold, alertPeriod, selectedChannel], loadAlerts)
 async function applyFilters() { await loadAlerts(); document.querySelector('.alert-summary')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
+async function exportAlerts() {
+  if (exportBusy.value || alertLoading.value || !alertResult.value || !alertSnapshot.value) return
+  exportBusy.value = true
+  const sequence = alertSequence, sessionToken = token.value
+  try {
+    const model = buildAlertExport({ data: dashboard, result: alertResult.value, product: alertSnapshot.value.product, filters: alertSnapshot.value, demo: isMock })
+    await ensureXlsx()
+    if (sequence !== alertSequence || sessionToken !== token.value || page.value === 'login') throw new Error('筛选或登录状态已变化，请重新导出')
+    window.XLSX.writeFile(createAlertWorkbook(window.XLSX, model), model.filename, { compression: true })
+    showToast(`已导出 ${model.rows.length - 1} 条预警`, 'success')
+  } catch (error) { showToast(error.message || '导出失败', 'error') }
+  finally { exportBusy.value = false }
+}
 const searchQuery = params => queryCapacity({ ...params, phone: user.phone }, token.value)
 
 onMounted(async () => {

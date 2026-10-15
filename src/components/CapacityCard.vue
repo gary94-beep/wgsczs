@@ -1,7 +1,7 @@
 <template>
   <article class="capacity-card">
-    <button v-if="clickable" class="capacity-card-heading" type="button" @click="$emit('open')"><span class="capacity-product-icon" :style="{ '--capacity-icon': `url(/icons/${icon}.svg)` }" aria-hidden="true"></span><strong>{{ title }}</strong><i class="product-chevron" aria-hidden="true"></i></button>
-    <div v-else class="capacity-card-heading"><span class="capacity-product-icon" :style="{ '--capacity-icon': `url(/icons/${icon}.svg)` }" aria-hidden="true"></span><strong>{{ title }}</strong><span class="capacity-summary-tag">汇总</span></div>
+    <button v-if="clickable" class="capacity-card-heading" type="button" @click="$emit('open')"><span class="capacity-product-icon" :style="iconStyle" aria-hidden="true"></span><strong>{{ title }}</strong><i class="product-chevron" aria-hidden="true"></i></button>
+    <div v-else class="capacity-card-heading"><span class="capacity-product-icon" :style="iconStyle" aria-hidden="true"></span><strong>{{ title }}</strong><span class="capacity-summary-tag">汇总</span></div>
     <section v-for="period in ['day', 'month']" :key="period" class="capacity-period" :class="`capacity-${period}`" :aria-label="`${title}${period === 'day' ? '日产能' : '月产能'}`">
       <div class="capacity-period-heading"><h3><i></i>{{ period === 'day' ? '日产能' : '月产能' }}</h3><span>{{ period === 'day' ? statDate : `${statDate.slice(5, 7)}月累计` }}</span><b v-if="showTargets">{{ rate(metricFor(period)) }}</b></div>
       <div class="capacity-values"><strong>{{ format(metricFor(period).production) }}<small>{{ unit }}</small></strong><div v-if="showTargets"><span>{{ period === 'day' ? '日目标' : '月目标' }} {{ format(metricFor(period).target) }} {{ metricFor(period).hasTarget ? unit : '' }}</span><span>{{ gap(metricFor(period)) }}</span></div></div>
@@ -15,10 +15,18 @@
 
 <script setup>
 import { computed } from 'vue'
+import contactIcon from '../assets/product-icons/contact.svg'
+import giftIcon from '../assets/product-icons/gift.svg'
+import smartphoneIcon from '../assets/product-icons/smartphone.svg'
+import houseIcon from '../assets/product-icons/house.svg'
+import wifiIcon from '../assets/product-icons/wifi.svg'
+import buildingIcon from '../assets/product-icons/building-2.svg'
 // import CapacityTrend from './CapacityTrend.vue'
 import { compareCapacity } from '../utils/capacityMetrics.js'
 const props = defineProps({ title: String, item: Object, unit: String, statDate: { type: String, default: '' }, icon: { type: String, default: 'building-2' }, clickable: { type: Boolean, default: true }, showTargets: { type: Boolean, default: true } })
 defineEmits(['open'])
+const iconUrl = computed(() => ({ contact: contactIcon, gift: giftIcon, smartphone: smartphoneIcon, house: houseIcon, wifi: wifiIcon })[props.icon] || buildingIcon)
+const iconStyle = computed(() => ({ '--capacity-icon': `url(${JSON.stringify(iconUrl.value)})` }))
 const metricFor = period => period === 'day' ? props.item.daily : props.item
 const weekLabel = computed(() => props.item.weekBasis === 'rolling7' ? '近7天日均' : '本周日均')
 const dailyChange = computed(() => compareCapacity(props.item.daily.production, props.item.weeklyAverage))

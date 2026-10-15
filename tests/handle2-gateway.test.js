@@ -146,9 +146,41 @@ test('validation errors produce no writes; common permission now returns organiz
   assert.equal(p.data.gridId, '城区分公司::东区')
   assert.equal(p.data.isSuperAdmin, false)
 })
-test('same-period cutoff must match all three capacity tables', () => {
+test('dashboard warns about different cutoff dates and excludes stale rows', () => {
   const db = fixture(); db[tables.channel].forEach(r => { r.stat_date = '2026-10-07' })
-  assert.match(run('wgsc_fetchDashboard', {}, { db }).retMsg, /日期不一致/)
+  const result = run('wgsc_fetchDashboard', {}, { db })
+  assert.equal(result.retCode, '0')
+  assert.ok(result.data.warnings.some(warning => warning.includes('不一致')))
+  assert.ok(!result.data.periodRows.some(row => row.channelType === '三星+渠道'))
+})
+
+test('change alerts use aggregate daily averages and reject out-of-scope filters', () => {
+  const db = fixture()
+  for (const table of [tables.channel, tables.staffCapacity]) for (const row of db[table]) if (row.prod_period_type === 'last_mon') row.capacity = 80
+  const params = { productId: 'newNumbers', gridIds: '["城区分公司::东区"]', declineRate: 30, declineValue: 5 }
+  const result = run('wgsc_fetchChangeAlerts', params, { db, phone: '13800000003' })
+  assert.equal(result.retCode, '0', result.retMsg)
+  assert.equal(result.data.people.length, 1)
+  assert.equal(result.data.channels.length, 2)
+  assert.deepEqual(result.data.totals, { people: 1, stars: 1, tail: 1 })
+  assert.equal(result.data.people[0].monthAverage, 2 / 8)
+  assert.equal(result.data.people[0].previousAverage, 160 / 8)
+  assert.equal(run('wgsc_fetchChangeAlerts', { ...params, declineRate: 100 }, { db }).data.people.length, 0)
+  assert.match(run('wgsc_fetchChangeAlerts', { ...params, gridIds: '["高新分公司::南朗"]' }, { db, phone: '13800000003' }).retMsg, /无权/)
+  assert.notEqual(run('wgsc_fetchChangeAlerts', { ...params, declineValue: '' }, { db }).retCode, '0')
+})
+
+test('population totals include registered staff with no capacity and deduplicate microchannels', () => {
+  const db = fixture()
+  db[tables.staff].push({ staff_no: 'S2', staff_name: 'No data', branch: '城区分公司', grid: '东区', team_type: '商企经理' })
+  db[tables.staff].push({ staff_no: 'OUT2', staff_name: 'Other', branch: '高新分公司', grid: '南朗', team_type: '行销经理' })
+  const params = { productId: 'newNumbers', gridIds: '["城区分公司::东区"]', period: 'month', threshold: 0 }
+  const result = run('wgsc_fetchAlerts', params, { db, phone: '13800000003' })
+  assert.equal(result.retCode, '0', result.retMsg)
+  assert.deepEqual(result.data.totals, { people: 2, stars: 1, tail: 1 })
+  assert.equal(result.data.people.length, 0)
+  const channel = run('wgsc_fetchAlerts', { ...params, channel: 'D1' }, { db, phone: '13800000003' })
+  assert.deepEqual(channel.data.totals, { people: 1, stars: 0, tail: 0 })
 })
 test('permission updates are admin-only and cannot revoke the active administrator', () => {
   const row = { name: 'Manager', phone: '13800000111', role: 'grid', branch: '城区分公司', grid: '东区', is_super_admin: '0', enabled: '1' }

@@ -1,4 +1,5 @@
 import { isMock, postHandle2 } from './client.js'
+import { mockFetchChangeAlerts } from './mock.js'
 import { mockFetchDashboard, mockFetchPermission, mockGetMobileByToken, mockFetchAlerts, mockSearchCapacity, mockImportTargets, mockImportCapacity, mockImportRows, mockSaveSalesScript, mockImportSalesScripts } from './mock.js'
 
 const codes = { common: import.meta.env.VITE_COMMON_SERVICE_CODE, biz: import.meta.env.VITE_BIZ_SERVICE_CODE, ai: import.meta.env.VITE_AI_SERVICE_CODE, test: import.meta.env.VITE_TEST_SERVICE_CODE }
@@ -25,6 +26,9 @@ export async function fetchAlerts(params, token) {
 }
 export async function queryCapacity(params, token) {
   return isMock ? mockSearchCapacity(params) : gateway('biz', 'wgsc_searchCapacity', { ...params, gridIds: JSON.stringify(params.gridIds || []) }, token)
+}
+export async function fetchChangeAlerts(params, token) {
+  return isMock ? mockFetchChangeAlerts(params) : gateway('biz', 'wgsc_fetchChangeAlerts', { ...params, gridIds: JSON.stringify(params.gridIds || []) }, token)
 }
 function checkAdmin(permission) {
   if (permission?.isSuperAdmin !== true) throw new Error('仅超级管理员可导入或维护')

@@ -68,3 +68,13 @@ test('AI uses the independent real gateway even when business data is mock', asy
   vm.runInContext('codes.ai = undefined', missing.context)
   await assert.rejects(missing.context.analyzeCapacity({ consent: true }, 'TOKEN'), /AI.*servicecode/)
 })
+
+test('change alert query uses the existing authenticated business Handle2 gateway', async () => {
+  const { context: c, calls } = api(false)
+  await c.fetchChangeAlerts({ productId: 'newNumbers', gridIds: ['G'], declineRate: 30, declineValue: 5 }, 'TOKEN')
+  assert.equal(calls[0].data.servicecode, 'BIZ')
+  assert.equal(calls[0].data.params.funCode, 'wgsc_fetchChangeAlerts')
+  assert.equal(calls[0].data.params.gridIds, '["G"]')
+  assert.equal(calls[0].data.params.declineRate, 30)
+  await assert.rejects(c.fetchChangeAlerts({}, ''), /token/)
+})

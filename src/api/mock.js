@@ -4,6 +4,13 @@ import { buildMockDailyRows } from '../data/mockDailyData.js'
 import { mockSalesScripts } from '../data/mockSalesScripts.js'
 import { searchCapacity } from '../utils/capacitySearch.js'
 import { normalizeChannelType } from '../utils/channelTypes.js'
+import { buildChangeAlerts } from '../utils/changeAlerts.js'
+import { buildAlertTotals } from '../utils/alertTotals.js'
+
+export async function mockFetchChangeAlerts(params) {
+  const data = await mockFetchDashboard(params)
+  return { ...buildChangeAlerts(data, params), totals: buildAlertTotals(data, params), totalSource: 'mockRecords' }
+}
 
 const delay = (ms = 180) => new Promise(resolve => setTimeout(resolve, ms))
 const targetStoreKey = 'grid-ai-demo-targets-v1'
@@ -32,7 +39,7 @@ export async function mockFetchAlerts(params) {
     group.production += r.production; group.staffCount++; groups.set(key, group)
   }
   const low = [...groups.values()].filter(r => r.production <= threshold).sort((a, b) => a.production - b.production)
-  return { people: low.filter(r => r.channelType === '直销队伍'), channels: low.filter(r => ['三星+渠道', '末梢渠道'].includes(r.channelType)), statDate: data.statDate }
+  return { people: low.filter(r => r.channelType === '直销队伍'), channels: low.filter(r => ['三星+渠道', '末梢渠道'].includes(r.channelType)), statDate: data.statDate, totals: buildAlertTotals(data, params), totalSource: 'mockRecords' }
 }
 
 export async function mockSearchCapacity(params) {

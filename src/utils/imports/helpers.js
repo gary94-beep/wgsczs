@@ -43,7 +43,7 @@ export async function parseExcelFile(file, sheetHint = '') {
 export function ensureXlsx() {
   if (window.XLSX) return Promise.resolve()
   return new Promise((resolve, reject) => {
-    const src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+    const src = new URL(`${import.meta.env.BASE_URL}vendor/xlsx.full.min.js`, window.location.origin).href
     const existing = document.querySelector(`script[src="${src}"]`)
     if (existing) {
       if (existing.dataset.loaded === 'true') resolve()
@@ -57,7 +57,7 @@ export function ensureXlsx() {
     script.src = src
     script.async = false
     script.onload = () => { script.dataset.loaded = 'true'; resolve() }
-    script.onerror = () => reject(new Error('SheetJS 加载失败'))
+    script.onerror = () => { script.remove(); reject(new Error('Excel 组件加载失败，请检查静态资源是否部署完整')) }
     document.head.appendChild(script)
   })
 }

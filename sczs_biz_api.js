@@ -156,6 +156,7 @@ function init() {
     return permission(phone);
   }
   var user;
+  var alertRoster = null;
   function admin() {
     if (!user.isSuperAdmin) throw new Error("仅超级管理员可导入或维护");
   }
@@ -445,6 +446,21 @@ function init() {
       else if (warnings.length < 20) warnings.push("未匹配员工/末梢维度，已排除：" + r.staff_no);
     }
 
+    // Population is based on authorized dimension tables, not low-production rows.
+    alertRoster = [];
+    for (i = 0; i < ds.length; i++) {
+      r = ds[i];
+      alertRoster.push({ gridId: gridId(r.branch, r.grid), kind: "people", identity: r.staff_no || null });
+    }
+    for (i = 0; i < dc.length; i++) {
+      r = dc[i];
+      if (r.star_level === "三星+") alertRoster.push({ gridId: gridId(r.branch, r.grid), kind: "stars", identity: r.chn_code || null });
+    }
+    for (i = 0; i < dt.length; i++) {
+      r = dt[i];
+      alertRoster.push({ gridId: gridId(r.branch, r.grid), kind: "tail", identity: r.chn_name ? "tail:" + JSON.stringify([r.agent, r.chn_name]) : null });
+    }
+
     var month = [];
     var day = [];
     var periodRows = [];
@@ -621,6 +637,28 @@ function init() {
   // ============================================================
   // alerts
   // ============================================================
+  function populationTotals(data) {
+    var ids = parse(Params.gridIds || "[]");
+    var counts = { people: 0, stars: 0, tail: 0 }, seen = {}, matches = {};
+    if (!alertRoster) return { people: null, stars: null, tail: null };
+    if (Params.channel) for (var i = 0; i < data.periodRows.length; i++) {
+      var row = data.periodRows[i];
+      if (row.productId !== Params.productId || row.channel !== Params.channel) continue;
+      var kind = { "直销队伍": "people", "三星+渠道": "stars", "末梢渠道": "tail" }[row.channelType];
+      matches[JSON.stringify([row.gridId, kind, kind === "people" ? row.staffId : row.channelCode])] = true;
+    }
+    for (var j = 0; j < alertRoster.length; j++) {
+      var member = alertRoster[j];
+      if (ids.length && ids.indexOf(member.gridId) < 0) continue;
+      if (!member.identity) { counts[member.kind] = null; continue; }
+      var key = JSON.stringify([member.gridId, member.kind, member.identity]);
+      if ((Params.channel && !matches[key]) || seen[key]) continue;
+      seen[key] = true;
+      if (counts[member.kind] !== null) counts[member.kind]++;
+    }
+    return counts;
+  }
+
   function alerts() {
     if (["month", "day"].indexOf(Params.period) < 0) throw new Error("预警周期无效");
     product(Params.productId);
@@ -637,7 +675,7 @@ function init() {
     }
     people.sort(function (a, b) { return a.production - b.production; });
     channels.sort(function (a, b) { return a.production - b.production; });
-    return { people: people, channels: channels, statDate: data.statDate };
+    return { people: people, channels: channels, statDate: data.statDate, totals: populationTotals(data), totalSource: "dimension" };
   }
 
   // ============================================================
@@ -753,7 +791,49 @@ function init() {
     return summary;
   }
 
+  function changeAlerts() {
+    product(Params.productId);
+    var rate = num(Params.declineRate === undefined ? 30 : Params.declineRate);
+    var value = num(Params.declineValue === undefined ? 5 : Params.declineValue);
+    if (rate > 100) throw new Error("日均减少率须为0至100");
+    var data = dashboard();
+    filtered(data, "month");
+    var ids = parse(Params.gridIds || "[]"), groups = {};
+    var cutoff = new Date(data.statDate + "T00:00:00Z"), days = cutoff.getUTCDate();
+    var previousDays = Math.min(days, new Date(Date.UTC(cutoff.getUTCFullYear(), cutoff.getUTCMonth(), 0)).getUTCDate());
+    for (var i = 0; i < data.periodRows.length; i++) {
+      var row = data.periodRows[i];
+      if (row.productId !== Params.productId || (ids.length && ids.indexOf(row.gridId) < 0) ||
+          (Params.channel && row.channel !== Params.channel) || ["mon", "last_mon"].indexOf(row.period) < 0) continue;
+      var identity = row.channelType === "直销队伍" ? row.staffId : row.channelCode;
+      if (!identity || ["直销队伍", "三星+渠道", "末梢渠道"].indexOf(row.channelType) < 0) continue;
+      var key = JSON.stringify([row.gridId, row.channelType, identity]);
+      if (!groups[key]) groups[key] = { row: row, current: null, previous: null, invalid: false };
+      var group = groups[key], field = row.period === "mon" ? "current" : "previous";
+      if (typeof row.production !== "number" || !isFinite(row.production) || row.production < 0) group.invalid = true;
+      else group[field] = (group[field] === null ? 0 : group[field]) + row.production;
+    }
+    var people = [], channels = [];
+    for (var k in groups) if (Object.prototype.hasOwnProperty.call(groups, k)) {
+      var g = groups[k];
+      if (g.invalid || g.current === null || g.previous === null || g.previous === 0) continue;
+      var current = g.current / days, previous = g.previous / previousDays;
+      var decrease = previous - current, percentage = decrease / previous * 100;
+      if (decrease <= 0 || decrease + 1e-9 < value || percentage + 1e-9 < rate) continue;
+      var result = {};
+      for (var name in g.row) if (Object.prototype.hasOwnProperty.call(g.row, name)) result[name] = g.row[name];
+      result.production = g.current;
+      result.monthAverage = current; result.previousAverage = previous;
+      result.declineValue = decrease; result.declineRate = percentage;
+      (result.channelType === "直销队伍" ? people : channels).push(result);
+    }
+    function order(a, b) { return b.declineRate - a.declineRate || b.declineValue - a.declineValue; }
+    people.sort(order); channels.sort(order);
+    return { people: people, channels: channels, statDate: data.statDate, totals: populationTotals(data), totalSource: "dimension" };
+  }
+
   var handlers = {
+    wgsc_fetchChangeAlerts: changeAlerts,
     wgsc_fetchAiSummary: buildAiSummary,
     wgsc_fetchDashboard: dashboard,
     wgsc_fetchAlerts: alerts,
