@@ -245,6 +245,18 @@
         <ProductionBoard v-model:period="overviewPeriod" :items="overview" :scope="scopeName" :stat-date="dashboard.statDate" :demo="isMock"
           :show-targets="!selectedChannelType" @open="openProduct" />
         <OperatingAnalysis :items="overview" :stat-date="dashboard.statDate" :period="overviewPeriod" :demo="isMock" :show-targets="!selectedChannelType" />
+
+        <!-- AI 分析结果 -->
+        <section v-if="aiAnalysis.loading || aiAnalysis.error || aiAnswerOverview" class="ai-analysis-card">
+          <header class="ai-analysis-head">
+            <h3>AI 经营分析</h3>
+            <span v-if="aiUpdatedAtOverview">更新于 {{ formatTime(aiUpdatedAtOverview) }}</span>
+          </header>
+          <p v-if="aiAnalysis.loading" class="ai-analysis-hint">加载中...</p>
+          <p v-else-if="aiAnalysis.error" class="ai-analysis-error">{{ aiAnalysis.error }}</p>
+          <p v-else class="ai-analysis-body">{{ aiAnswerOverview }}</p>
+        </section>
+
         <section class="product-section">
           <div class="section-head">
             <h2>{{ selectedChannelType ? '产能表现' : '产能与目标' }}</h2><span>{{ user.role === 'grid' ? '点击查看预警' : '点击指标查看下级'
@@ -284,6 +296,18 @@
           <ChannelTypeFilter v-model="selectedChannelType" @update:model-value="selectedChannel = ''" />
         </header>
         <p class="production-cutoff">数据截止 {{ dashboard.statDate }}<span v-if="isMock"> · 演示数据</span></p>
+
+        <!-- 分公司 AI 分析 -->
+        <section v-if="aiAnalysis.loading || aiAnalysis.error || aiAnswerBranch" class="ai-analysis-card">
+          <header class="ai-analysis-head">
+            <h3>AI 经营分析 · {{ selectedBranch?.branchName }}</h3>
+            <span v-if="aiUpdatedAtBranch">更新于 {{  formatTime(aiUpdatedAtBranch) }}</span>
+          </header>
+          <p v-if="aiAnalysis.loading" class="ai-analysis-hint">加载中...</p>
+          <p v-else-if="aiAnalysis.error" class="ai-analysis-error">{{ aiAnalysis.error }}</p>
+          <p v-else class="ai-analysis-body">{{ aiAnswerBranch }}</p>
+        </section>
+
         <CapacityCard :show-targets="!selectedChannelType"
           :title="selectedBranch?.branchName + selectedProduct?.productName" :item="branchMetric"
           :unit="selectedProduct?.unit" :stat-date="dashboard.statDate" :icon="productIcon(selectedProductId)"
@@ -311,6 +335,18 @@
           <h2>{{ isChangeAlert ? '异动预警' : '低产预警' }}</h2><span>{{ stage === 'monitor' ? monitorScopeLabel :
             selectedGrid?.gridName }} · {{ roleLabel }}</span>
         </section>
+
+        <!-- 网格 AI 分析（仅 stage=alerts 时显示） -->
+        <section v-if="stage === 'alerts' && (aiAnalysis.loading || aiAnalysis.error || aiAnswerGrid)" class="ai-analysis-card">
+          <header class="ai-analysis-head">
+            <h3>AI 经营分析 · {{ selectedGrid?.gridName }}</h3>
+            <span v-if="aiUpdatedAtGrid">更新于 {{  formatTime(aiUpdatedAtGrid) }}</span>
+          </header>
+          <p v-if="aiAnalysis.loading" class="ai-analysis-hint">加载中...</p>
+          <p v-else-if="aiAnalysis.error" class="ai-analysis-error">{{ aiAnalysis.error }}</p>
+          <p v-else class="ai-analysis-body">{{ aiAnswerGrid }}</p>
+        </section>
+
         <section class="filter-card">
           <div class="monitor-filters">
             <label v-if="stage === 'monitor' && user.role === 'city'" class="monitor-filter">分公司<select
@@ -481,7 +517,7 @@ import lowWarningIcon from './assets/warning-icons/triangle-alert.svg'
 import changeWarningIcon from './assets/warning-icons/chart-no-axes-combined.svg'
 import { isMock } from './api/client'
 import { sendLoginCode, loginWithCode, loginWithOneClick } from './api/auth.js'
-import { fetchChangeAlerts, fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts } from './api/production'
+import { fetchChangeAlerts, fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts, fetchAiAnalysis } from './api/production'
 import ChannelTypeFilter from './components/ChannelTypeFilter.vue'
 import { normalizeChannelType } from './utils/channelTypes.js'
 import CapacityCard from './components/CapacityCard.vue'
@@ -559,6 +595,13 @@ const alertResult = ref(null)
 const alertLoading = ref(false), alertError = ref('')
 let alertSequence = 0
 
+// AI 分析结果
+const aiAnalysis = reactive({
+  loading: false,
+  error: '',
+  byScope: {}    // key: "scopeType::scopeId" -> { answer, updatedAt }
+})
+
 const scopeName = computed(() => user.role === 'city' ? dashboard.organization.cityName : user.role === 'grid' ? user.gridName : user.branchName)
 const roleLabel = computed(() => user.isSuperAdmin === true ? '超级管理员' : ({ city: '市公司', branch: '分公司', grid: '网格长' })[user.role] || '')
 const overviewLabel = computed(() => ({ city: '全市生产总览', branch: '分公司生产总览', grid: '网格生产总览' })[user.role] || '生产总览')
@@ -575,6 +618,46 @@ const cleanThreshold = computed(() => {
   const value = Math.max(0, Number(threshold.value) || 0)
   return Math.round(Math.floor(value / thresholdStep.value + 1e-9) * thresholdStep.value * 10) / 10
 })
+
+// ============ AI 分析结果（按 scope 取） ============
+function aiScopeKey(type, id) { return `${type}::${id}` }
+function aiEntry(type, id) { return aiAnalysis.byScope[aiScopeKey(type, id)] || null }
+const aiAnswerOverview = computed(() => {
+  if (user.role === 'city') return aiEntry('city', '全市')?.answer || ''
+  if (user.role === 'branch') return aiEntry('branch', user.branchId)?.answer || ''
+  if (user.role === 'grid') return aiEntry('grid', user.gridId)?.answer || ''
+  return ''
+})
+const aiUpdatedAtOverview = computed(() => {
+  if (user.role === 'city') return aiEntry('city', '全市')?.updatedAt || ''
+  if (user.role === 'branch') return aiEntry('branch', user.branchId)?.updatedAt || ''
+  if (user.role === 'grid') return aiEntry('grid', user.gridId)?.updatedAt || ''
+  return ''
+})
+const aiAnswerBranch = computed(() => selectedBranchId.value ? (aiEntry('branch', selectedBranchId.value)?.answer || '') : '')
+const aiUpdatedAtBranch = computed(() => selectedBranchId.value ? (aiEntry('branch', selectedBranchId.value)?.updatedAt || '') : '')
+const aiAnswerGrid = computed(() => selectedGridId.value ? (aiEntry('grid', selectedGridId.value)?.answer || '') : '')
+const aiUpdatedAtGrid = computed(() => selectedGridId.value ? (aiEntry('grid', selectedGridId.value)?.updatedAt || '') : '')
+
+async function loadAiAnalysis(statDate) {
+  aiAnalysis.loading = true
+  aiAnalysis.error = ''
+  try {
+    const data = await fetchAiAnalysis({ statDate }, token.value)
+    const map = {}
+    for (const row of (data?.rows || [])) {
+      map[aiScopeKey(row.scopeType, row.scopeId)] = {
+        answer: row.answer || '',
+        updatedAt: row.updatedAt || ''
+      }
+    }
+    aiAnalysis.byScope = map
+  } catch (e) {
+    aiAnalysis.error = e.message || 'AI 分析读取失败'
+  } finally {
+    aiAnalysis.loading = false
+  }
+}
 
 function metric(productId, gridIds, scope = null) {
   return buildCapacityMetric(dashboard, productId, gridIds, selectedChannelType.value, scope)
@@ -677,7 +760,7 @@ onMounted(async () => {
 })
 onUnmounted(() => { window.removeEventListener('handle2-auth-expired', expireSession); clearInterval(codeTimer) })
 watch(loginPhone, () => { codePhone.value = ''; loginCode.value = '' })
-function expireSession() { token.value = ''; page.value = 'login'; alertSequence++; alertResult.value = null; Object.assign(dashboard, { organization: { cityName: '', branches: [], grids: [] }, rows: [], dailyRows: [], targets: [], regionRows: undefined, periodRows: [], salesScripts: [] }); showToast('登录已过期，请重新认证', 'warning') }
+function expireSession() { token.value = ''; page.value = 'login'; alertSequence++; alertResult.value = null; aiAnalysis.byScope = {}; Object.assign(dashboard, { organization: { cityName: '', branches: [], grids: [] }, rows: [], dailyRows: [], targets: [], regionRows: undefined, periodRows: [], salesScripts: [] }); showToast('登录已过期，请重新认证', 'warning') }
 
 async function handleLogin() {
   if (loading.value || codeSending.value) return
@@ -724,6 +807,8 @@ async function loadDashboard() {
   if (data.permission) Object.assign(user, data.permission)
   if (data.warnings?.length) showToast(data.warnings.join('；'), 'warning')
   await loadAlerts()
+  // AI 分析结果
+  await loadAiAnalysis(dashboard.statDate)
 }
 
 async function handleSaveSalesScript(script) {
@@ -921,6 +1006,18 @@ async function handleCapacityImportFile(event, target, buildRows, label) {
   } finally {
     loading.value = false
   }
+}
+
+function formatTime(val) {
+  if (!val) return ''
+  // 如果是纯数字的时间戳
+  if (typeof val === 'number' || /^\d+$/.test(val)) {
+    const d = new Date(Number(val))
+    const pad = n => n < 10 ? '0' + n : n
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+  // 如果本来就是字符串，直接截取到分钟
+  return String(val).slice(0, 16)
 }
 
 // ==================== 导入失败弹窗 ====================

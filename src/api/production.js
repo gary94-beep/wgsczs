@@ -74,3 +74,14 @@ export async function testAiGateway(target, momaKey, token) {
   if (!funCode) throw new Error('target 须为 echo / moma_raw / moma_full')
   return gateway('test', funCode, { momaKey: momaKey || '' }, token)
 }
+
+// ============================================================
+// AI 分析结果读取
+// ============================================================
+export async function fetchAiAnalysis(params, token) {
+  return gateway('ai', 'wgsc_aiGetAnalysisResult', {
+    statDate: params.statDate || '',
+    scopeType: params.scopeType || '',
+    scopeId: params.scopeId || ''
+  }, token)
+}
