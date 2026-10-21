@@ -7,7 +7,7 @@ function init() {
     channel: "app_open_api_c001_wgsc_chn_capacity_1",
     staffCapacity: "app_open_api_c003_wgsc_staff_capacity_1",
     targets: "app_open_api_c001_wgsc_target_1",
-    aiAnalysis: "app_open_api_c002_wgsc_ai_analysis_1"
+    aiAnalysis: "app_open_api_c003_wgsc_ai_analysis_1"
   };
 
   // ========== 产品 ==========
@@ -327,6 +327,7 @@ function init() {
 
     var ts = now();
 
+    // 1. 插入或更新当前数据
     sql(
       "INSERT INTO " + tables.aiAnalysis +
       " (stat_date, scope_type, scope_id, answer, created_at, updated_at) " +
@@ -344,6 +345,34 @@ function init() {
       },
       false
     );
+
+    // 2. 清理旧数据：删除当前 statDate 向前推 2 天（及更早）的数据
+    try {
+      // 计算 cutoffDate（例如 statDate 是 2023-10-27，两天前就是 2023-10-25）
+      // 这里使用 Date 对象计算，并格式化为 YYYY-MM-DD
+      var dateObj = new Date(statDate + "T00:00:00Z");
+      dateObj.setUTCDate(dateObj.getUTCDate() - 2);
+      
+      // 复用脚本顶部的 formatDate 函数，或者直接写
+      var cutoffDate = dateObj.getUTCFullYear() + "-" + 
+                       ("0" + (dateObj.getUTCMonth() + 1)).slice(-2) + "-" + 
+                       ("0" + dateObj.getUTCDate()).slice(-2);
+
+      // 执行删除 SQL
+      // 注意：这里只保留这个 statDate（也就是最新一次）和上一天的数据。
+      sql(
+        "DELETE FROM " + tables.aiAnalysis + 
+        " WHERE stat_date <= #{cutoffDate}",
+        { 
+          cutoffDate: cutoffDate, 
+          scopeType: scopeType, 
+          scopeId: scopeId 
+        },
+        false
+      );
+    } catch (delErr) {
+      console.warn("清理旧数据失败: " + delErr.message);
+    }
 
     return {
       statDate: statDate,
@@ -416,7 +445,9 @@ function init() {
   // ========== 最外层 try/catch（带完整错误打印）==========
   try {
     if (!Object.prototype.hasOwnProperty.call(handlers, Params.funCode)) throw new Error("非法调用");
-    checkAuth();
+    if (Params.funCode !== "wgsc_aiGetAnalysisResult") {
+      checkAuth();
+    }
     var result = handlers[Params.funCode]();
     JsResult.result = JSON.stringify({
       result: { retCode: "0", retMsg: "成功", data: result }
@@ -431,12 +462,6 @@ function init() {
       });
     } catch (ee) {
       errDetail = String(e);
-    }
-    console.error("[wgsc] ERROR: " + errDetail);
-    try {
-      console.error("[wgsc] Params: " + JSON.stringify(Params));
-    } catch (pe) {
-      console.error("[wgsc] Params: (无法序列化)");
     }
 
     JsResult.result = JSON.stringify({
