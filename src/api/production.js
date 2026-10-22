@@ -54,8 +54,15 @@ export async function importRows(target, rows, token, permission) {
   return isMock ? mockImportRows(target, rows, permission) : gateway('biz', 'wgsc_importRows', { target, rows: JSON.stringify(rows) }, token)
 }
 
+export async function analyzeCapacity(params, token) {
+  if (params.consent !== true) throw new Error('请先同意将汇总指标发送至MoMA分析')
+  return gateway('ai', 'wgsc_analyze', { question: params.question, consent: '1', view: params.view, productId: params.productId || '', gridIds: JSON.stringify(params.gridIds || []), threshold: params.threshold ?? 1, period: params.period || 'month', channel: params.channel || '', channelType: params.channelType || '' }, token)
+}
+
 /**
  * 【临时测试】验证网关能否出网调 MoMA
+ * 对应网关脚本 sczs_test_api.js
+ * funCode 映射：echo → wgsc_aiTestEcho，moma_raw → wgsc_aiTestMomaRaw，moma_full → wgsc_aiTestMomaFull
  */
 export async function testAiGateway(target, momaKey, token) {
   if (isMock) throw new Error('该测试只能在真实环境运行，isMock=true 时不适用')
@@ -78,7 +85,6 @@ export async function fetchAiAnalysis(params, token) {
     statDate: params.statDate || '',
     scopeType: params.scopeType || '',
     scopeId: params.scopeId || '',
-    // 【修复点】：强制兜底为 ''，防止 JS 在 JSON 序列化时把 undefined 字段丢弃
     channelType: params.channelType || ''
   }, token)
 }

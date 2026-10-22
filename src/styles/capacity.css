@@ -117,7 +117,7 @@ button.capacity-card-heading:focus-visible { outline: 2px solid #287bff; outline
 .alert-summary .alert-scale-column > strong small { font-weight: 700; }
 .warning-menu .warning-entry-icon { display: block; width: 28px; height: 28px; background: currentColor; mask: var(--warning-icon) center / contain no-repeat; -webkit-mask: var(--warning-icon) center / contain no-repeat; }
 
-.login-page .brand-panel { position: relative; top: 24px; }
+.login-page .brand-panel { position: relative; top: 42px; }
 .login-page { padding-top: 102px; }
 @media (max-width: 360px) {
   .login-page { padding-top: 88px; }
@@ -126,19 +126,22 @@ button.capacity-card-heading:focus-visible { outline: 2px solid #287bff; outline
   .login-page { padding-top: 69px; }
 }
 .login-page .brand-panel h1 { font-size: 35px; line-height: 1.25; }
-.brand-lockup { display: flex; align-items: center; justify-content: center; gap: 10px; width: max-content; max-width: 100%; }
-.brand-lockup .brand-accent { display: block; width: 4px; height: 34px; flex: 0 0 4px; border-radius: 3px; background: #0eaa93; }
-.login-page .brand-panel .brand-lockup h1, .top-bar .brand-lockup h1 { margin: 0; color: #12264f; font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', sans-serif; font-size: 34px; line-height: 1.3; font-weight: 700; font-style: normal; white-space: nowrap; }
-.brand-lockup h1 .brand-ai { display: inline-block; padding: 0 2px; margin-right: 7px; color: #2874ee; font-size: inherit; font-weight: inherit; font-style: italic; }
+.brand-lockup { position: relative; display: flex; align-items: center; justify-content: center; gap: 10px; width: max-content; max-width: 100%; padding-right: 4px; padding-bottom: 12px; }
+.login-page .brand-panel .brand-lockup h1, .top-bar .brand-lockup h1 { margin: 0; color: #12264f; font-family: 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', sans-serif; font-size: 36px; line-height: 1.3; font-weight: 900; font-style: normal; transform: skewX(-10deg); -webkit-text-stroke: .65px currentColor; paint-order: stroke fill; white-space: nowrap; letter-spacing: 0; }
+.brand-lockup h1 .brand-ai { display: inline-block; padding: 0 2px; margin-left: 3px; margin-right: 7px; color: #2874ee; font-family: Arial, sans-serif; font-size: inherit; font-weight: 900; font-style: normal; }
 .brand-lockup h1::before, .brand-lockup h1::after { display: none; }
+.brand-speed { position: absolute; bottom: 2px; right: 8px; display: flex; gap: 5px; width: 55%; height: 4px; transform: skewX(-35deg); pointer-events: none; }
+.brand-speed i { display: block; flex: 0 0 13px; background: #2874ee; }
+.brand-speed i:first-child { flex: 1; background: linear-gradient(90deg, #77d5ed, #2874ee); }
+.login-page .login-card h2 { font-weight: 900; transform: skewX(-5deg); }
+.login-page .login-card h2::after { display: none; content: none; }
 .top-bar > div { flex: 1; min-width: 0; }
 .top-bar .brand-lockup { justify-content: flex-start; }
 .top-bar .brand-lockup h1 { font-size: 27px; }
-.top-bar .brand-lockup .brand-accent { height: 28px; }
 .login-page .login-card { margin-top: 136px; }
 @media (max-width: 360px) {
   .login-page .login-card { margin-top: 136px; }
-  .login-page .brand-panel .brand-lockup h1 { font-size: 28px; }
+  .login-page .brand-panel .brand-lockup h1 { font-size: 29px; }
   .top-bar .brand-lockup h1 { font-size: 23px; }
 }
 @media (max-height: 700px) {

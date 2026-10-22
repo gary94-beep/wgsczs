@@ -1024,7 +1024,8 @@ async function handleCapacityImportFile(event, target, buildRows, label) {
   } catch (error) {
     showToast(error.message || `${label}导入失败`, 'error')
   } finally {
-    loading.value = false  }
+    loading.value = false
+  }
 }
 
 function formatTime(val) {
