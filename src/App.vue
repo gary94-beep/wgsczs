@@ -596,7 +596,7 @@ let alertSequence = 0
 const aiAnalysis = reactive({
   loading: false,
   error: '',
-  byScope: {}    // key: "scopeType::scopeId" -> { answer, updatedAt }
+  byScope: {}    // key: "scopeType::scopeId::channelType" -> { answer, updatedAt }
 })
 
 const scopeName = computed(() => user.role === 'city' ? dashboard.organization.cityName : user.role === 'grid' ? user.gridName : user.branchName)
@@ -616,9 +616,15 @@ const cleanThreshold = computed(() => {
   return Math.round(Math.floor(value / thresholdStep.value + 1e-9) * thresholdStep.value * 10) / 10
 })
 
-// ============ AI 分析结果（按 scope 取） ============
-function aiScopeKey(type, id) { return `${type}::${id}` }
-function aiEntry(type, id) { return aiAnalysis.byScope[aiScopeKey(type, id)] || null }
+// ============ AI 分析结果（按 scope + channel 取） ============
+function aiScopeKey(type, id, channel = '') { 
+  const c = channel || '全部类型'
+  return `${type}::${id}::${c}` 
+}
+function aiEntry(type, id) { 
+  const currentType = selectedChannelType.value || '全部类型'
+  return aiAnalysis.byScope[aiScopeKey(type, id, currentType)] || null 
+}
 const aiAnswerOverview = computed(() => {
   if (user.role === 'city') return aiEntry('city', '全市')?.answer || ''
   if (user.role === 'branch') return aiEntry('branch', user.branchId)?.answer || ''
@@ -640,10 +646,19 @@ async function loadAiAnalysis(statDate) {
   aiAnalysis.loading = true
   aiAnalysis.error = ''
   try {
-    const data = await fetchAiAnalysis({ statDate, phone: user.phone }, token.value)
+    const currentChannelType = selectedChannelType.value || ''
+    
+    const data = await fetchAiAnalysis({ 
+      statDate, 
+      phone: user.phone,
+      channelType: currentChannelType 
+    }, token.value)
+    
     const map = {}
     for (const row of (data?.rows || [])) {
-      map[aiScopeKey(row.scopeType, row.scopeId)] = {
+      // 【核心修改】：把 channelType 也加入到缓存的 Key 里面
+      const cacheKey = aiScopeKey(row.scopeType, row.scopeId, row.channelType)
+      map[cacheKey] = {
         answer: row.answer || '',
         updatedAt: row.updatedAt || ''
       }
@@ -729,6 +744,14 @@ async function loadAlerts() {
   finally { if (id === alertSequence) alertLoading.value = false }
 }
 watch([stage, alertMode, declineRate, declineValue, monitorBranchId, monitorGridId, monitorProductId, selectedGridId, selectedProductId, cleanThreshold, alertPeriod, selectedChannel], loadAlerts)
+
+// 【监听渠道切换】：当用户切换渠道类型时，重新拉取 AI 分析
+watch(selectedChannelType, () => {
+  if (dashboard.statDate) {
+    loadAiAnalysis(dashboard.statDate)
+  }
+})
+
 async function applyFilters() { await loadAlerts(); document.querySelector('.alert-summary')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
 async function exportAlerts() {
   if (exportBusy.value || alertLoading.value || !alertResult.value || !alertSnapshot.value) return
@@ -1001,8 +1024,7 @@ async function handleCapacityImportFile(event, target, buildRows, label) {
   } catch (error) {
     showToast(error.message || `${label}导入失败`, 'error')
   } finally {
-    loading.value = false
-  }
+    loading.value = false  }
 }
 
 function formatTime(val) {
