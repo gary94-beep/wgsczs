@@ -346,32 +346,29 @@ function init() {
       false
     );
 
-    // 2. 清理旧数据：删除当前 statDate 向前推 2 天（及更早）的数据
+    // 2. 清理旧数据：全表清理，删除当前 statDate 向前推 2 天（及更早）的数据
     try {
       // 计算 cutoffDate（例如 statDate 是 2023-10-27，两天前就是 2023-10-25）
-      // 这里使用 Date 对象计算，并格式化为 YYYY-MM-DD
       var dateObj = new Date(statDate + "T00:00:00Z");
       dateObj.setUTCDate(dateObj.getUTCDate() - 2);
       
-      // 复用脚本顶部的 formatDate 函数，或者直接写
       var cutoffDate = dateObj.getUTCFullYear() + "-" + 
                        ("0" + (dateObj.getUTCMonth() + 1)).slice(-2) + "-" + 
                        ("0" + dateObj.getUTCDate()).slice(-2);
 
-      // 执行删除 SQL
-      // 注意：这里只保留这个 statDate（也就是最新一次）和上一天的数据。
+      // 执行全表删除 SQL，只保留 cutoffDate 之后的数据
+      // 注意：args 里只能传 SQL 中用到的 #{cutoffDate}，否则平台底层会报事务异常
       sql(
         "DELETE FROM " + tables.aiAnalysis + 
         " WHERE stat_date <= #{cutoffDate}",
         { 
-          cutoffDate: cutoffDate, 
-          scopeType: scopeType, 
-          scopeId: scopeId 
+          cutoffDate: cutoffDate 
         },
         false
       );
     } catch (delErr) {
-      console.warn("清理旧数据失败: " + delErr.message);
+      // 静默处理清理失败，避免影响主流程的保存结果
+      // console.warn("清理旧数据失败: " + delErr.message);
     }
 
     return {
@@ -435,19 +432,47 @@ function init() {
     return { count: out.length, rows: out };
   }
 
+  // ============================================================
+  // 接口 4：清理过期数据（仅保留最新和前一天）
+  // ============================================================
+  function cleanExpiredData() {
+    var statDate = date(Params.statDate);
+    
+    // 计算 cutoffDate（当前 statDate 向前推 2 天）
+    var dateObj = new Date(statDate + "T00:00:00Z");
+    dateObj.setUTCDate(dateObj.getUTCDate() - 2);
+    
+    var cutoffDate = dateObj.getUTCFullYear() + "-" + 
+                     ("0" + (dateObj.getUTCMonth() + 1)).slice(-2) + "-" + 
+                     ("0" + dateObj.getUTCDate()).slice(-2);
+
+    // 执行全表清理删除
+    sql(
+      "DELETE FROM " + tables.aiAnalysis + " WHERE stat_date <= #{cutoffDate}",
+      { cutoffDate: cutoffDate },
+      false
+    );
+
+    return {
+      cleaned: true,
+      cutoffDate: cutoffDate
+    };
+  }
+
   // ========== handlers ==========
   var handlers = {
     wgsc_aiFetchAnalysisInput: fetchAnalysisInput,
     wgsc_aiSaveAnalysisResult: saveAnalysisResult,
-    wgsc_aiGetAnalysisResult: getAnalysisResult
+    wgsc_aiGetAnalysisResult: getAnalysisResult,
+    wgsc_aiCleanExpiredData: cleanExpiredData
   };
 
   // ========== 最外层 try/catch（带完整错误打印）==========
   try {
     if (!Object.prototype.hasOwnProperty.call(handlers, Params.funCode)) throw new Error("非法调用");
-    if (Params.funCode !== "wgsc_aiGetAnalysisResult") {
-      checkAuth();
-    }
+    if (Params.funCode !== "wgsc_aiGetAnalysisResult") {
+      checkAuth();
+    }
     var result = handlers[Params.funCode]();
     JsResult.result = JSON.stringify({
       result: { retCode: "0", retMsg: "成功", data: result }

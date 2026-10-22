@@ -148,11 +148,11 @@ export async function buildHandle2Payload(serviceId, data, options = {}) {
     publicData: {
       reqTime: reqTime(),
       reqSeq: reqSeq(),
-      appid: appId || '',
-      activityId: activityId || '',
+      appid: options.appId || appId || '',
+      activityId: options.activityId || activityId || '',
       serviceId,
       version: options.version || import.meta.env.VITE_API_VERSION || '1.0',
-      isTest: isTest
+      isTest: options.isTest ?? isTest
     },
     data
   }, aesKey)
@@ -166,7 +166,7 @@ export async function buildHandle2Payload(serviceId, data, options = {}) {
  * @param {string} aesKey - 本次请求的 AES 密钥
  * @returns {*} 业务 data（bizData.result.result.data）
  */
-export function decryptAndUnwrap(resultData, aesKey) {
+export function decryptAndUnwrap(resultData, aesKey, options = {}) {
   if (!resultData || typeof window.decryptAES !== 'function') {
     throw new Error('返回数据异常，无法解密')
   }
@@ -179,7 +179,7 @@ export function decryptAndUnwrap(resultData, aesKey) {
   if (!business || String(business.retCode) !== '0') {
     const error = new Error(business?.retMsg || '业务处理失败')
     error.code = String(business?.retCode || '')
-    if (error.code === '00008') window.dispatchEvent(new Event('handle2-auth-expired'))
+    if (error.code === '00008' && options.dispatchAuthExpired !== false) window.dispatchEvent(new Event('handle2-auth-expired'))
     throw error
   }
 
@@ -228,7 +228,7 @@ export async function postHandle2(serviceId, data, options = {}) {
     for (let i = 0; i < 6 && typeof result === 'string'; i++) result = JSON.parse(result)
     return result
   }
-  return decryptAndUnwrap(json.data, aesKey)
+  return decryptAndUnwrap(json.data, aesKey, options)
 }
 
 export { isMock }

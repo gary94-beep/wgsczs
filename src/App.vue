@@ -244,7 +244,6 @@
         <div class="source-strip"><span>产能：系统取数</span><span v-if="!selectedChannelType">目标：市公司导入</span></div>
         <ProductionBoard v-model:period="overviewPeriod" :items="overview" :scope="scopeName" :stat-date="dashboard.statDate" :demo="isMock"
           :show-targets="!selectedChannelType" @open="openProduct" />
-        <OperatingAnalysis :items="overview" :stat-date="dashboard.statDate" :period="overviewPeriod" :demo="isMock" :show-targets="!selectedChannelType" />
 
         <!-- AI 分析结果 -->
         <section v-if="aiAnalysis.loading || aiAnalysis.error || aiAnswerOverview" class="ai-analysis-card">
@@ -254,7 +253,7 @@
           </header>
           <p v-if="aiAnalysis.loading" class="ai-analysis-hint">加载中...</p>
           <p v-else-if="aiAnalysis.error" class="ai-analysis-error">{{ aiAnalysis.error }}</p>
-          <p v-else class="ai-analysis-body">{{ aiAnswerOverview }}</p>
+          <AiAnalysisContent v-else :answer="aiAnswerOverview" :demo="isMock" />
         </section>
 
         <section class="product-section">
@@ -270,7 +269,7 @@
       </template>
 
       <template v-else-if="stage === 'branches'">
-        <header class="drill-page-title">
+        <header class="drill-page-title production-drill-title">
           <h2>{{ selectedProduct?.productName }}产能</h2>
           <p>全市 · 分公司</p>
           <ChannelTypeFilter v-model="selectedChannelType" @update:model-value="selectedChannel = ''" />
@@ -290,7 +289,7 @@
       </template>
 
       <template v-else-if="stage === 'grids'">
-        <header class="drill-page-title">
+        <header class="drill-page-title production-drill-title">
           <h2>{{ selectedProduct?.productName }}产能</h2>
           <p>{{ selectedBranch?.branchName }} · 网格</p>
           <ChannelTypeFilter v-model="selectedChannelType" @update:model-value="selectedChannel = ''" />
@@ -305,7 +304,7 @@
           </header>
           <p v-if="aiAnalysis.loading" class="ai-analysis-hint">加载中...</p>
           <p v-else-if="aiAnalysis.error" class="ai-analysis-error">{{ aiAnalysis.error }}</p>
-          <p v-else class="ai-analysis-body">{{ aiAnswerBranch }}</p>
+          <AiAnalysisContent v-else :answer="aiAnswerBranch" :demo="isMock" />
         </section>
 
         <CapacityCard :show-targets="!selectedChannelType"
@@ -344,7 +343,7 @@
           </header>
           <p v-if="aiAnalysis.loading" class="ai-analysis-hint">加载中...</p>
           <p v-else-if="aiAnalysis.error" class="ai-analysis-error">{{ aiAnalysis.error }}</p>
-          <p v-else class="ai-analysis-body">{{ aiAnswerGrid }}</p>
+          <AiAnalysisContent v-else :answer="aiAnswerGrid" :demo="isMock" />
         </section>
 
         <section class="filter-card">
@@ -466,10 +465,7 @@
       </template>
 
       <template v-else-if="stage === 'campus'">
-        <section class="campus-placeholder"><span>校园生产管理</span>
-          <h2>校园生产通</h2>
-          <p>入口待配置</p>
-        </section>
+        <CampusAnalysis :phone="user.phone" :token="token" />
       </template>
 
       <nav v-if="stage !== 'workbench'" class="bottom-nav" aria-label="主导航"><button type="button"
@@ -524,7 +520,8 @@ import CapacityCard from './components/CapacityCard.vue'
 import SalesScriptPanel from './components/SalesScriptPanel.vue'
 import ProductionBoard from './components/ProductionBoard.vue'
 import BrandHeading from './components/BrandHeading.vue'
-import OperatingAnalysis from './components/OperatingAnalysis.vue'
+import AiAnalysisContent from './components/AiAnalysisContent.vue'
+import CampusAnalysis from './components/CampusAnalysis.vue'
 import { buildAlertExport, createAlertWorkbook } from './utils/alertExport.js'
 import downloadIcon from './assets/action-icons/download.svg'
 import uploadIcon from './assets/action-icons/upload.svg'
@@ -643,7 +640,7 @@ async function loadAiAnalysis(statDate) {
   aiAnalysis.loading = true
   aiAnalysis.error = ''
   try {
-    const data = await fetchAiAnalysis({ statDate }, token.value)
+    const data = await fetchAiAnalysis({ statDate, phone: user.phone }, token.value)
     const map = {}
     for (const row of (data?.rows || [])) {
       map[aiScopeKey(row.scopeType, row.scopeId)] = {

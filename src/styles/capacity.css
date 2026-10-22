@@ -129,20 +129,20 @@ button.capacity-card-heading:focus-visible { outline: 2px solid #287bff; outline
 .brand-lockup { display: flex; align-items: center; justify-content: center; gap: 10px; width: max-content; max-width: 100%; }
 .brand-lockup .brand-accent { display: block; width: 4px; height: 34px; flex: 0 0 4px; border-radius: 3px; background: #0eaa93; }
 .login-page .brand-panel .brand-lockup h1, .top-bar .brand-lockup h1 { margin: 0; color: #12264f; font-family: 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', sans-serif; font-size: 34px; line-height: 1.3; font-weight: 700; font-style: normal; white-space: nowrap; }
-.brand-lockup h1 .brand-production { display: inline-block; color: #2874ee; font-size: inherit; font-weight: inherit; font-style: normal; transform: skewX(-8deg); padding-right: 3px; }
+.brand-lockup h1 .brand-ai { display: inline-block; padding: 0 2px; margin-right: 7px; color: #2874ee; font-size: inherit; font-weight: inherit; font-style: italic; }
 .brand-lockup h1::before, .brand-lockup h1::after { display: none; }
 .top-bar > div { flex: 1; min-width: 0; }
 .top-bar .brand-lockup { justify-content: flex-start; }
 .top-bar .brand-lockup h1 { font-size: 27px; }
 .top-bar .brand-lockup .brand-accent { height: 28px; }
-.login-page .login-card { margin-top: 100px; }
+.login-page .login-card { margin-top: 136px; }
 @media (max-width: 360px) {
-  .login-page .login-card { margin-top: 100px; }
+  .login-page .login-card { margin-top: 136px; }
   .login-page .brand-panel .brand-lockup h1 { font-size: 28px; }
   .top-bar .brand-lockup h1 { font-size: 23px; }
 }
 @media (max-height: 700px) {
-  .login-page .login-card { margin-top: 71px; }
+  .login-page .login-card { margin-top: 95px; }
 }
 @media (max-width: 360px) {
   .login-page .brand-panel h1 { font-size: 28px; }

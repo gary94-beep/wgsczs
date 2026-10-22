@@ -1,5 +1,6 @@
 import { isMock, postHandle2 } from './client.js'
 import { mockFetchChangeAlerts } from './mock.js'
+import { mockFetchAiAnalysis } from './mock.js'
 import { mockFetchDashboard, mockFetchPermission, mockGetMobileByToken, mockFetchAlerts, mockSearchCapacity, mockImportTargets, mockImportCapacity, mockImportRows, mockSaveSalesScript, mockImportSalesScripts } from './mock.js'
 
 const codes = { common: import.meta.env.VITE_COMMON_SERVICE_CODE, biz: import.meta.env.VITE_BIZ_SERVICE_CODE, ai: import.meta.env.VITE_AI_SERVICE_CODE, test: import.meta.env.VITE_TEST_SERVICE_CODE }
@@ -79,6 +80,7 @@ export async function testAiGateway(target, momaKey, token) {
 // AI 分析结果读取
 // ============================================================
 export async function fetchAiAnalysis(params, token) {
+  if (isMock) return mockFetchAiAnalysis(params)
   return gateway('ai', 'wgsc_aiGetAnalysisResult', {
     statDate: params.statDate || '',
     scopeType: params.scopeType || '',

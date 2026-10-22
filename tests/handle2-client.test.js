@@ -49,3 +49,15 @@ test('HTTP, gateway and expired-token failures are explicit without logging decr
   assert.equal(c.event(), 'handle2-auth-expired')
   assert.ok(!source.includes("console.log('bizData'"))
 })
+
+test('campus context overrides do not change grid defaults or expire the grid session', async () => {
+  const c = client({ result: { result: { retCode: '0', data: [] } } })
+  await c.context.postHandle2('ability_customize', {}, { activityId: 'xysct', appId: 'campus-app', isTest: 0 })
+  const campus = JSON.parse(c.sent().data).publicData
+  assert.equal(campus.activityId, 'xysct'); assert.equal(campus.appid, 'campus-app'); assert.equal(campus.isTest, 0)
+  await c.context.postHandle2('ability_customize', {})
+  assert.equal(JSON.parse(c.sent().data).publicData.activityId, 'activity')
+  const expired = client({ result: { result: { retCode: '00008', retMsg: 'campus expired' } } })
+  await assert.rejects(expired.context.postHandle2('S', {}, { dispatchAuthExpired: false }), /campus expired/)
+  assert.equal(expired.event(), undefined)
+})

@@ -16,6 +16,19 @@ const delay = (ms = 180) => new Promise(resolve => setTimeout(resolve, ms))
 const targetStoreKey = 'grid-ai-demo-targets-v1'
 const salesScriptStoreKey = 'grid-ai-demo-sales-scripts-v1'
 
+export async function mockFetchAiAnalysis(params = {}) {
+  const data = await mockFetchDashboard(params)
+  const permission = mockPermissions[params.phone]
+  if (params.statDate && params.statDate !== data.statDate) return { rows: [] }
+  const scopes = [
+    ...(permission.role === 'city' ? [{ scopeType: 'city', scopeId: '全市' }] : []),
+    ...(permission.role !== 'grid' ? data.organization.branches.map(b => ({ scopeType: 'branch', scopeId: b.branchId })) : []),
+    ...data.organization.grids.map(g => ({ scopeType: 'grid', scopeId: g.gridId }))
+  ]
+  return { rows: scopes.map(scope => ({ ...scope, statDate: data.statDate, demo: true, updatedAt: '',
+    answer: '总体情况：演示数据，仅用于查看分析排版，不代表真实经营结论。\n优势：演示内容，优势需以正式分析结果为准。\n短板：演示内容，短板需以正式分析结果为准。' })) }
+}
+
 export async function mockGetMobileByToken(token) {
   await delay()
   if (!token) throw new Error('token不能为空')
