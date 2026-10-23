@@ -266,11 +266,12 @@ function init() {
       seen[key] = true;
       records.push(r);
     }
+    
     var errors = [];
     var success = 0;
 
     if (target === "permission") {
-      // permission 表：先查后写，避免无唯一索引时插重复
+      // permission 表：保留原有的先查后写逻辑（增量更新）
       for (var k = 0; k < records.length; k++) {
         var rec = records[k];
         try {
@@ -286,17 +287,49 @@ function init() {
         }
       }
     } else {
-      for (var k2 = 0; k2 < records.length; k2++) {
+      // ========================================================
+      // 【核心修改】：先全表清空，再批量 INSERT
+      // ========================================================
+      var tableName = tables[config[0]];
+      
+      // 1. 第一步：清空整表
+      try {
+        sql("DELETE FROM " + tableName, {}, false);
+      } catch (delErr) {
+        throw new Error("清空表 " + tableName + " 失败，终止导入。原因：" + delErr.message);
+      }
+
+      // 2. 第二步：分批批量插入 (防止一次性插入过多导致 SQL 过长报错)
+      var fields = config[1];
+      var BATCH_SIZE = 500; 
+      
+      for (var b = 0; b < records.length; b += BATCH_SIZE) {
+        var batch = records.slice(b, b + BATCH_SIZE);
+        var args = {};
+        var valueParts = [];
+
+        for (var bi = 0; bi < batch.length; bi++) {
+          var placeholders = [];
+          for (var fi = 0; fi < fields.length; fi++) {
+            var paramName = "v_" + bi + "_" + fi;
+            args[paramName] = batch[bi][fields[fi]];
+            placeholders.push("#{" + paramName + "}");
+          }
+          valueParts.push("(" + placeholders.join(",") + ")");
+        }
+
+        var insertSql = "INSERT INTO " + tableName + " (" + fields.join(",") + ") VALUES " + valueParts.join(",");
+
         try {
-          upsert(tables[config[0]], config[1], records[k2]);
-          success++;
+          sql(insertSql, args, false);
+          success += batch.length;
         } catch (e) {
-          errors.push("第" + (k2 + 1) + "行写入失败：" + e.message);
+          errors.push("第 " + (b + 1) + "~" + (b + batch.length) + " 行批量写入失败：" + e.message);
         }
       }
     }
 
-    return { total: rows.length, success: success, failed: rows.length - success, errors: errors, mode: capacity ? "replace" : "upsert" };
+    return { total: rows.length, success: success, failed: rows.length - success, errors: errors, mode: capacity ? "replace" : "replace" };
   }
 
   // ============================================================
