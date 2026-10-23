@@ -266,7 +266,6 @@ function init() {
       seen[key] = true;
       records.push(r);
     }
-    
     var errors = [];
     var success = 0;
 
