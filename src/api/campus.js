@@ -1,5 +1,5 @@
 import { isMock, postHandle2 } from './client.js'
-import { fetchDashboard } from './production.js'
+import { fetchSession } from './production.js'
 import { getMockCampusData } from '../data/mockCampusData.js'
 import { normalizeCampusDorms } from '../utils/campusAnalysis.js'
 
@@ -18,7 +18,7 @@ export async function fetchCampusAnalysis({ phone, token, signal }) {
   }
   // The business gateway authenticates SMS tokens via its server session. The
   // campus getMobileByToken endpoint is a one-click-login exchange, not this session.
-  const identity = (await fetchDashboard({}, token)).permission
+  const identity = (await fetchSession(token)).permission
   const mobile = String(identity?.phone || '').trim()
   if (!/^1\d{10}$/.test(mobile)) throw new Error('网格业务接口未返回已认证手机号，请重新登录或联系管理员核对网关版本')
   if (mobile !== phone) throw new Error('校园认证身份与当前登录账号不一致，请重新登录后重试')

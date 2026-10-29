@@ -510,7 +510,7 @@ import lowWarningIcon from './assets/warning-icons/triangle-alert.svg'
 import changeWarningIcon from './assets/warning-icons/chart-no-axes-combined.svg'
 import { isMock } from './api/client'
 import { sendLoginCode, loginWithCode, loginWithOneClick } from './api/auth.js'
-import { fetchChangeAlerts, fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts, fetchAiAnalysis } from './api/production'
+import { fetchChannelOptions, fetchChangeAlerts, fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts, fetchAiAnalysis } from './api/production'
 import ChannelTypeFilter from './components/ChannelTypeFilter.vue'
 import { normalizeChannelType } from './utils/channelTypes.js'
 import CapacityCard from './components/CapacityCard.vue'
@@ -682,12 +682,18 @@ const gridMetrics = computed(() => dashboard.organization.grids.filter(item => i
 const monitorGrids = computed(() => dashboard.organization.grids.filter(item => !monitorBranchId.value || item.branchId === monitorBranchId.value))
 const monitorGridIds = computed(() => monitorGridId.value ? [monitorGridId.value] : monitorGrids.value.map(item => item.gridId))
 const monitorScopeLabel = computed(() => monitorGridId.value ? gridName(monitorGridId.value) : monitorBranchId.value ? dashboard.organization.branches.find(item => item.branchId === monitorBranchId.value)?.branchName : scopeName.value)
-const alertRows = computed(() => {
-  const ids = new Set(stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value])
-  const source = alertPeriod.value === 'day' ? dashboard.dailyRows.filter(item => item.date === dashboard.statDate) : dashboard.rows
-  return source.filter(item => ids.has(item.gridId) && item.productId === activeProduct.value?.productId)
+const channelOptions = ref([])
+let channelOptionsSequence = 0
+watch(() => JSON.stringify([stage.value, activeProduct.value?.productId, alertPeriod.value, stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value], dashboard.statDate]), async () => {
+  const sequence = ++channelOptionsSequence
+  channelOptions.value = []
+  if (!['monitor', 'alerts'].includes(stage.value) || !activeProduct.value || !token.value) return
+  try {
+    const data = await fetchChannelOptions({ productId: activeProduct.value.productId, period: alertPeriod.value,
+      phone: user.phone, gridIds: stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value] }, token.value)
+    if (sequence === channelOptionsSequence) channelOptions.value = (data.channels || []).sort((a, b) => a.localeCompare(b, 'zh-CN'))
+  } catch (error) { if (sequence === channelOptionsSequence) showToast(error.message || '渠道列表读取失败', 'warning') }
 })
-const channelOptions = computed(() => [...new Set(alertRows.value.map(item => item.channel || '未归类'))].sort((a, b) => a.localeCompare(b, 'zh-CN')))
 const lowPeople = computed(() => alertResult.value?.people || [])
 const lowChannels = computed(() => alertResult.value?.channels || [])
 

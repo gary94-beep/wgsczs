@@ -8,7 +8,7 @@ function init() {
     staffCapacity: "app_open_api_c003_wgsc_staff_capacity_1",
     channelInfo: "app_open_api_c002_wgsc_chn_level_1",
     staff: "app_open_api_c002_wgsc_staff_1",
-    targets: "app_open_api_c001_wgsc_target_1",
+    targets: "app_open_api_c002_wgsc_target_1",
     aiAnalysis: "app_open_api_c004_wgsc_ai_analysis_1",
     terminal: "app_open_api_c002_wgsc_staff_terminal_1"
   };
@@ -66,6 +66,8 @@ function init() {
     var scopeType = text(Params.scopeType) || "city";
     var scopeId = text(Params.scopeId);
     var channelType = text(Params.channelType) || "全部类型";
+    if (channelType === "3星+渠道") channelType = "三星+渠道";
+    if (["全部类型", "三星+渠道", "末梢渠道", "直销队伍"].indexOf(channelType) < 0) throw new Error("生产类型无效");
 
     if (["city", "branch", "grid"].indexOf(scopeType) < 0) throw new Error("scopeType 无效");
     if (scopeType !== "city" && !scopeId) throw new Error("scopeType 非 city 时必须传 scopeId");
@@ -86,6 +88,7 @@ function init() {
       regionArgs.scopeId = scopeId;
     } else if (scopeType === "grid") {
       var parts = scopeId.split("::");
+      if (parts.length !== 2 || !parts[0] || !parts[1]) throw new Error("网格标识须为分公司::网格");
       scopeCond = " AND branch_company=#{branch} AND grid_name=#{grid}";
       regionArgs.branch = parts[0];
       regionArgs.grid = parts[1];
@@ -94,60 +97,91 @@ function init() {
     // ---------- 1. 根据类型查询产能并组装 ----------
     var capacityMap = {};
     function addCap(productName, periodType, value) {
+      if (value === null || value === undefined) return;
       var pid = productId(productName);
-      if (!capacityMap[pid]) capacityMap[pid] = { day: 0, mon: 0, week: 0, last_mon: 0 };
+      if (!capacityMap[pid]) capacityMap[pid] = { day: null, mon: null, week: null, last_mon: null };
       if (["day", "mon", "week", "last_mon"].indexOf(periodType) >= 0) {
-        capacityMap[pid][periodType] += num(value);
+        capacityMap[pid][periodType] = (capacityMap[pid][periodType] === null ? 0 : capacityMap[pid][periodType]) + num(value);
       }
     }
 
+    var regionLevelCond = scopeCond;
+    if (scopeType === "city") regionLevelCond += " AND branch_company='全市' AND grid_name='全市'";
+    if (scopeType === "branch") regionLevelCond += " AND grid_name=#{scopeId}";
     if (channelType === "全部类型") {
       // 查区域产能表
-      var rows = sql("SELECT product_name, prod_period_type, SUM(capacity) AS total FROM " + tables.region + " WHERE stat_date=#{cutoff}" + scopeCond + " GROUP BY product_name, prod_period_type", regionArgs, true);
+      var rows = sql("SELECT product_name, prod_period_type, SUM(capacity) AS total FROM " + tables.region + " WHERE stat_date=#{cutoff}" + regionLevelCond + " GROUP BY product_name, prod_period_type", regionArgs, true);
       for (var i = 0; i < rows.length; i++) addCap(rows[i].product_name, rows[i].prod_period_type, rows[i].total);
       
     } else if (channelType === "三星+渠道") {
       // 查渠道产能表联表渠道维度表 (使用别名)
       var cArgs = JSON.parse(JSON.stringify(regionArgs));
       var cCond = scopeCond.replace(/branch_company/g, "c.branch_company").replace(/grid_name/g, "c.grid_name");
-      var rows = sql("SELECT c.product_name, c.prod_period_type, SUM(c.capacity) AS total FROM " + tables.channel + " c INNER JOIN " + tables.channelInfo + " ci ON c.channel_code = ci.chn_code WHERE c.stat_date=#{cutoff} AND ci.star_level = '三星+'" + cCond + " GROUP BY c.product_name, c.prod_period_type", cArgs, true);
+      var rows = sql("SELECT c.product_name, c.prod_period_type, SUM(c.capacity) AS total FROM " + tables.channel + " c INNER JOIN " + "(SELECT d.* FROM " + tables.channelInfo + " d JOIN (SELECT chn_code,MAX(id) AS latest_id FROM " + tables.channelInfo + " GROUP BY chn_code) newest ON d.id=newest.latest_id) ci ON c.channel_code = ci.chn_code AND c.branch_company=ci.branch AND c.grid_name=ci.grid WHERE c.stat_date=#{cutoff} AND ci.star_level = '三星+'" + cCond + " GROUP BY c.product_name, c.prod_period_type", cArgs, true);
       for (var i = 0; i < rows.length; i++) addCap(rows[i].product_name, rows[i].prod_period_type, rows[i].total);
 
     } else if (channelType === "末梢渠道") {
       // 查工号产能表联表末梢维度表
       var sArgs = JSON.parse(JSON.stringify(regionArgs));
       var sCond = scopeCond.replace(/branch_company/g, "c.branch_company").replace(/grid_name/g, "c.grid_name");
-      var rows = sql("SELECT c.product_name, c.prod_period_type, SUM(c.capacity) AS total FROM " + tables.staffCapacity + " c INNER JOIN " + tables.terminal + " t ON c.staff_no = t.staff_no WHERE c.stat_date=#{cutoff}" + sCond + " GROUP BY c.product_name, c.prod_period_type", sArgs, true);
+      var rows = sql("SELECT c.product_name, c.prod_period_type, SUM(c.capacity) AS total FROM " + tables.staffCapacity + " c INNER JOIN " + "(SELECT d.* FROM " + tables.terminal + " d JOIN (SELECT staff_no,MAX(id) AS latest_id FROM " + tables.terminal + " GROUP BY staff_no) newest ON d.id=newest.latest_id) t ON c.staff_no = t.staff_no AND c.branch_company=t.branch AND c.grid_name=t.grid WHERE c.stat_date=#{cutoff}" + sCond + " GROUP BY c.product_name, c.prod_period_type", sArgs, true);
       for (var i = 0; i < rows.length; i++) addCap(rows[i].product_name, rows[i].prod_period_type, rows[i].total);
 
     } else if (channelType === "直销队伍") {
       // 查工号产能表联表员工维度表
       var stArgs = JSON.parse(JSON.stringify(regionArgs));
       var stCond = scopeCond.replace(/branch_company/g, "c.branch_company").replace(/grid_name/g, "c.grid_name");
-      var rows = sql("SELECT c.product_name, c.prod_period_type, SUM(c.capacity) AS total FROM " + tables.staffCapacity + " c INNER JOIN " + tables.staff + " st ON c.staff_no = st.staff_no WHERE c.stat_date=#{cutoff}" + stCond + " GROUP BY c.product_name, c.prod_period_type", stArgs, true);
+      var rows = sql("SELECT c.product_name, c.prod_period_type, SUM(c.capacity) AS total FROM " + tables.staffCapacity + " c INNER JOIN " + "(SELECT d.* FROM " + tables.staff + " d JOIN (SELECT staff_no,MAX(id) AS latest_id FROM " + tables.staff + " GROUP BY staff_no) newest ON d.id=newest.latest_id) st ON c.staff_no = st.staff_no AND c.branch_company=st.branch AND c.grid_name=st.grid WHERE c.stat_date=#{cutoff}" + stCond + " GROUP BY c.product_name, c.prod_period_type", stArgs, true);
       for (var i = 0; i < rows.length; i++) addCap(rows[i].product_name, rows[i].prod_period_type, rows[i].total);
     }
 
-    // ---------- 2. 查询目标 ----------
-    var targetScope = "";
-    var targetArgs = { month: statDate.slice(0, 7) };
-    if (scopeType === "branch") {
-      targetScope = " AND branch=#{scopeId}";
-      targetArgs.scopeId = scopeId;
-    } else if (scopeType === "grid") {
-      var p2 = scopeId.split("::");
-      targetScope = " AND branch=#{branch} AND grid=#{grid}";
-      targetArgs.branch = p2[0];
-      targetArgs.grid = p2[1];
-    }
-    var targetRows = sql("SELECT product_id, SUM(month_target) AS month_target, SUM(day_target) AS day_target FROM " + tables.targets + " WHERE target_month=#{month}" + targetScope + " GROUP BY product_id", targetArgs, true);
+    // 类型专属目标尚未维护时不使用区域总体目标。
     var targetMap = {};
-    for (var i = 0; i < targetRows.length; i++) {
-      var t = targetRows[i];
-      targetMap[t.product_id] = {
-        monthTarget: t.month_target !== null ? num(t.month_target) : null,
-        dayTarget:   t.day_target   !== null ? num(t.day_target) : null
-      };
+    if (channelType === "全部类型") {
+      var targetArgs = { month: statDate.slice(0, 7) }, targetScope = "";
+      if (scopeType === "branch") { targetArgs.branch = scopeId; targetScope = " AND branch=#{branch}"; }
+      if (scopeType === "grid") { var targetParts = scopeId.split("::"); targetArgs.branch = targetParts[0]; targetArgs.grid = targetParts[1]; targetScope = " AND branch=#{branch} AND grid=#{grid}"; }
+      var targetRows = [], pageSize = 1000;
+      for (var offset = 0; ; offset += pageSize) {
+        var page = sql("SELECT id,branch,grid,product_id,month_base_target,month_challenge_target,day_base_target,day_challenge_target,target_date FROM " + tables.targets +
+          " WHERE target_month=#{month}" + targetScope + " ORDER BY id LIMIT 1000 OFFSET " + offset, targetArgs, true);
+        targetRows = targetRows.concat(page);
+        if (page.length < pageSize) break;
+        if (offset >= 999000) throw new Error("目标结果过多，请缩小范围");
+      }
+      var expectedGrids = sql("SELECT DISTINCT branch_company,grid_name FROM " + tables.region + " WHERE stat_date=#{cutoff}" + scopeCond +
+        " AND branch_company<>'全市' AND (grid_name<>branch_company OR grid_name IN ('未知','市统筹'))", regionArgs, true);
+      function validTarget(v) { return v === null || v === undefined || text(v) === "" ? null : num(v); }
+      function targetSum(pid, field, daily) {
+        var chosen = [], summaryBranch = scopeType === "city" ? "全市" : scopeId;
+        if (scopeType !== "grid") for (var ti = 0; ti < targetRows.length; ti++) {
+          var candidate = targetRows[ti];
+          if (candidate.product_id === pid && candidate.branch === summaryBranch && candidate.grid === summaryBranch) chosen.push(candidate);
+        }
+        if (!chosen.length) {
+          var expected = scopeType === "grid" ? [{ branch_company: regionArgs.branch, grid_name: regionArgs.grid }] : expectedGrids;
+          if (!expected.length) return null;
+          for (var gi = 0; gi < expected.length; gi++) {
+            var matches = [];
+            for (var ri = 0; ri < targetRows.length; ri++) if (targetRows[ri].product_id === pid && targetRows[ri].branch === expected[gi].branch_company && targetRows[ri].grid === expected[gi].grid_name) matches.push(targetRows[ri]);
+            if (matches.length !== 1) return null;
+            chosen.push(matches[0]);
+          }
+        } else if (chosen.length !== 1) return null;
+        var total = 0;
+        for (var ci = 0; ci < chosen.length; ci++) {
+          if (daily && (!chosen[ci].target_date || date(chosen[ci].target_date) !== statDate)) return null;
+          var value = validTarget(chosen[ci][field]);
+          if (value === null) return null;
+          total += value;
+        }
+        return total;
+      }
+      for (var pi = 0; pi < products.length; pi++) {
+        var pid = products[pi].productId;
+        targetMap[pid] = { monthTarget: targetSum(pid, "month_base_target", false), dayTarget: targetSum(pid, "day_base_target", true),
+          monthChallengeTarget: targetSum(pid, "month_challenge_target", false), dayChallengeTarget: targetSum(pid, "day_challenge_target", true) };
+      }
     }
 
     // ---------- 3. 组装产品数据 ----------
@@ -155,44 +189,34 @@ function init() {
     var productData = [];
     for (var i = 0; i < products.length; i++) {
       var p = products[i];
-      var c = capacityMap[p.productId] || { day: 0, mon: 0, week: 0, last_mon: 0 };
+      var c = capacityMap[p.productId] || { day: null, mon: null, week: null, last_mon: null };
       var tg = targetMap[p.productId] || { monthTarget: null, dayTarget: null };
-      var monthAverage = c.mon === 0 ? undefined : Math.round(c.mon / elapsed * 100) / 100;
-      var weekAverage  = c.week === 0 ? undefined : Math.round(c.week / 7 * 100) / 100;
+      var monthAverage = c.mon === null ? null : Math.round(c.mon / elapsed * 100) / 100;
+      var weekAverage  = c.week === null ? null : Math.round(c.week / 7 * 100) / 100;
       productData.push({
         productId: p.productId, productName: p.productName, unit: p.unit,
         dayProduction: c.day, monthProduction: c.mon, weekProduction: c.week, lastMonthProduction: c.last_mon,
         monthTarget: tg.monthTarget, dayTarget: tg.dayTarget,
-        monthCompletionRate: tg.monthTarget ? Math.round(c.mon / tg.monthTarget * 1000) / 10 : null,
-        dayCompletionRate:   tg.dayTarget   ? Math.round(c.day / tg.dayTarget   * 1000) / 10 : null,
+        monthChallengeTarget: tg.monthChallengeTarget === undefined ? null : tg.monthChallengeTarget,
+        dayChallengeTarget: tg.dayChallengeTarget === undefined ? null : tg.dayChallengeTarget,
+        monthCompletionRate: c.mon !== null && tg.monthTarget ? Math.round(c.mon / tg.monthTarget * 1000) / 10 : null,
+        dayCompletionRate:   c.day !== null && tg.dayTarget   ? Math.round(c.day / tg.dayTarget   * 1000) / 10 : null,
         monthAverage: monthAverage, weekAverage: weekAverage
       });
     }
 
-    // ---------- 4. 极简查预警（给大模型看足够了） ----------
-    // 避免复杂的 JOIN 导致报错，这里只取产能最差的工号和渠道
-    var lowPeople = [];
-    var lowChannels = [];
-    try {
-      var lpSql = "SELECT staff_no AS id, branch_company AS b, grid_name AS g, channel_name AS c, SUM(capacity) AS v FROM " + tables.staffCapacity + " WHERE stat_date=#{cutoff} AND prod_period_type='day'" + scopeCond + " GROUP BY staff_no, branch_company, grid_name, channel_name ORDER BY v ASC LIMIT 10";
-      var lpRows = sql(lpSql, regionArgs, true);
-      for (var i = 0; i < lpRows.length; i++) {
-        lowPeople.push({ staffNo: lpRows[i].id, branchName: lpRows[i].b, gridName: lpRows[i].g, channelName: lpRows[i].c, production: num(lpRows[i].v) });
-      }
-
-      var lcSql = "SELECT channel_code AS id, branch_company AS b, grid_name AS g, channel_name AS c, SUM(capacity) AS v FROM " + tables.channel + " WHERE stat_date=#{cutoff} AND prod_period_type='day'" + scopeCond + " GROUP BY channel_code, branch_company, grid_name, channel_name ORDER BY v ASC LIMIT 10";
-      var lcRows = sql(lcSql, regionArgs, true);
-      for (var i = 0; i < lcRows.length; i++) {
-        lowChannels.push({ channelCode: lcRows[i].id, branchName: lcRows[i].b, gridName: lcRows[i].g, channelName: lcRows[i].c, production: num(lcRows[i].v) });
-      }
-    } catch (e) {}
-
+    // 逐产品摘要，禁止把不同产品/不同单位的产能混加成综合低产榜。
     var alerts = [];
-    if (lowPeople.length > 0 || lowChannels.length > 0) {
-      alerts.push({
-        productId: "all", productName: "综合预警",
-        lowPeople: lowPeople, lowChannels: lowChannels
-      });
+    var cutoffDate = new Date(statDate + "T00:00:00Z");
+    var daysInMonth = new Date(Date.UTC(cutoffDate.getUTCFullYear(), cutoffDate.getUTCMonth() + 1, 0)).getUTCDate();
+    var timeProgress = elapsed / daysInMonth * 100;
+    for (var ai = 0; ai < productData.length; ai++) {
+      var item = productData[ai];
+      if (item.monthCompletionRate !== null && item.monthCompletionRate < timeProgress) alerts.push({
+        productId: item.productId, productName: item.productName, unit: item.unit,
+        completionRate: item.monthCompletionRate, timeProgress: timeProgress,
+        progressGapPercentagePoints: item.monthCompletionRate - timeProgress,
+        targetGap: Math.max(item.monthTarget - item.monthProduction, 0) });
     }
 
     // ---------- 5. 查组织架构（前端/跑批通用） ----------
@@ -208,6 +232,8 @@ function init() {
       scopeId: scopeId, 
       scopeName: scopeType === "city" ? "全市" : scopeId,
       channelType: channelType,
+      dataQuality: { sourceDates: { region: statDate }, timeProgress: timeProgress,
+        warnings: channelType === "全部类型" ? [] : ["类型专属目标未配置，完成率及目标缺口未知，不套用区域总体目标"] },
       products: productData, 
       alerts: alerts,
       organization: { cityName: "中山市", branches: branches, grids: grids }, 
@@ -222,7 +248,9 @@ function init() {
     var scopeType = text(Params.scopeType);
     var scopeId = text(Params.scopeId);
     var answer = text(Params.answer);
-    var channelType = text(Params.channelType) || "全部类型"; 
+    var channelType = text(Params.channelType) || "全部类型";
+    if (channelType === "3星+渠道") channelType = "三星+渠道";
+    if (["全部类型", "三星+渠道", "末梢渠道", "直销队伍"].indexOf(channelType) < 0) throw new Error("生产类型无效"); 
 
     if (["city", "branch", "grid"].indexOf(scopeType) < 0) throw new Error("scopeType 无效");
     if (!scopeId) throw new Error("scopeId 不能为空");

@@ -22,14 +22,44 @@ export async function getMobileByToken(token) {
 export async function fetchDashboard(params, token) {
   return isMock ? mockFetchDashboard(params) : gateway('biz', 'wgsc_fetchDashboard', {}, token)
 }
+export async function fetchSession(token) {
+  return isMock ? { permission: await mockFetchPermission('13800000009') } : gateway('biz', 'wgsc_fetchSession', {}, token)
+}
+export async function fetchChannelOptions(params, token) {
+  if (isMock) {
+    const data = await mockFetchDashboard(params)
+    const ids = new Set(params.gridIds || [])
+    const rows = params.period === 'day' ? data.dailyRows : data.rows
+    return { channels: [...new Set(rows.filter(row => (!ids.size || ids.has(row.gridId)) && row.productId === params.productId).map(row => row.channel).filter(Boolean))] }
+  }
+  return gateway('biz', 'wgsc_fetchChannelOptions', { ...params, gridIds: JSON.stringify(params.gridIds || []) }, token)
+}
+// Only matching, already aggregated records are downloaded. Paging also keeps
+// exports complete; no source-table data is loaded for client-side calculation.
+async function matchingPages(funCode, params, token) {
+  let result = null
+  for (let page = 1; ; page++) {
+    const data = await gateway('biz', funCode, { ...params, page, pageSize: 500 }, token)
+    if (!result) result = { ...data, people: [], channels: [], results: [] }
+    if (data.statDate !== result.statDate) throw new Error('翻页期间数据日期已变化，请重新查询')
+    if (result.pagination?.total !== data.pagination?.total) throw new Error('翻页期间匹配数量已变化，请重新查询')
+    result.people.push(...(data.people || []))
+    result.channels.push(...(data.channels || []))
+    result.results.push(...(data.results || []))
+    result.pagination = data.pagination
+    if (!data.pagination?.hasMore) return result
+    if (data.pagination.page !== page || !(data.people?.length || data.channels?.length || data.results?.length)) throw new Error('网关分页响应异常，请重新查询')
+    if (page >= 2000) throw new Error('匹配记录过多，请缩小查询范围')
+  }
+}
 export async function fetchAlerts(params, token) {
-  return isMock ? mockFetchAlerts(params) : gateway('biz', 'wgsc_fetchAlerts', { ...params, gridIds: JSON.stringify(params.gridIds || []) }, token)
+  return isMock ? mockFetchAlerts(params) : matchingPages('wgsc_fetchAlerts', { ...params, gridIds: JSON.stringify(params.gridIds || []) }, token)
 }
 export async function queryCapacity(params, token) {
-  return isMock ? mockSearchCapacity(params) : gateway('biz', 'wgsc_searchCapacity', { ...params, gridIds: JSON.stringify(params.gridIds || []) }, token)
+  return isMock ? mockSearchCapacity(params) : matchingPages('wgsc_searchCapacity', { ...params, gridIds: JSON.stringify(params.gridIds || []) }, token)
 }
 export async function fetchChangeAlerts(params, token) {
-  return isMock ? mockFetchChangeAlerts(params) : gateway('biz', 'wgsc_fetchChangeAlerts', { ...params, gridIds: JSON.stringify(params.gridIds || []) }, token)
+  return isMock ? mockFetchChangeAlerts(params) : matchingPages('wgsc_fetchChangeAlerts', { ...params, gridIds: JSON.stringify(params.gridIds || []) }, token)
 }
 function checkAdmin(permission) {
   if (permission?.isSuperAdmin !== true) throw new Error('仅超级管理员可导入或维护')

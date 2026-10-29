@@ -175,17 +175,7 @@ function init() {
     }
     return s;
   }
-  function readTable(table, dimension, cutoff) {
-    var args = {};
-    var clause = scope(dimension ? "branch" : "branch_company", dimension ? "grid" : "grid_name", args);
-    if (cutoff) {
-      args.cutoff = cutoff;
-      clause += " AND stat_date=#{cutoff}";
-    }
-    var a = sql("SELECT * FROM " + table + " WHERE 1=1" + clause + " ORDER BY id LIMIT 20001", args, true);
-    if (a.length > 20000) throw new Error("超过20000条，需配置分页；禁止静默截断");
-    return a;
-  }
+
   function latest(table) {
     var args = {};
     var a = sql("SELECT MAX(stat_date) AS stat_date FROM " + table + " WHERE 1=1" + scope("branch_company", "grid_name", args), args, true);
@@ -337,230 +327,7 @@ function init() {
   // ============================================================
   // dashboard
   // ============================================================
-  function dashboard() {
-    // ========== 1. 读取区域产能表最新日期（作为基准） ==========
-    var cutoff = latest(tables.region);
 
-    // 区域表完全没数据 → 返回空结构，让前端能进页面
-    if (!cutoff) {
-      return {
-        organization: { cityName: "中山市", branches: [], grids: [] },
-        statDate: "",
-        products: products,
-        targets: [],
-        rows: [],
-        dailyRows: [],
-        periodRows: [],
-        regionRows: [],
-        salesScripts: [],
-        warnings: ["当前范围没有区域产能数据"],
-        weekBasis: "rolling7",
-        permission: user
-      };
-    }
-
-    // ========== 2. 读三张产能表（按区域表日期） ==========
-    var region = readTable(tables.region, false, cutoff);
-    var channels = readTable(tables.channel, false, cutoff);
-    var staff = readTable(tables.staffCapacity, false, cutoff);
-
-    // 日期不一致 → 只警告，不报错
-    var cutoffChannel = latest(tables.channel);
-    var cutoffStaff = latest(tables.staffCapacity);
-    var warnings = [];
-    if (cutoffChannel !== cutoff) warnings.push("渠道产能表最新日期（" + (cutoffChannel || "无") + "）与区域产能表（" + cutoff + "）不一致，本次按区域表日期读取");
-    if (cutoffStaff !== cutoff) warnings.push("工号产能表最新日期（" + (cutoffStaff || "无") + "）与区域产能表（" + cutoff + "）不一致，本次按区域表日期读取");
-
-    // ========== 3. 读三张维度表 ==========
-    var dc = readTable(tables.channelInfo, true);
-    var dt = readTable(tables.terminal, true);
-    var ds = readTable(tables.staff, true);
-
-    // ========== 4. 初始化聚合容器 ==========
-    var branches = {};
-    var grids = {};
-    var cm = {};
-    var tm = {};
-    var sm = {};
-    var records = {};
-    var regionRows = [];
-
-    function org(b, g) {
-      if (b === "全市") return;
-      branches[b] = { branchId: b, branchName: b };
-      if (b !== g || ["未知", "市统筹"].indexOf(g) >= 0) {
-        grids[gridId(b, g)] = { gridId: gridId(b, g), gridName: g, branchId: b };
-      }
-    }
-
-    for (var i = 0; i < region.length; i++) {
-      var r = region[i];
-      org(r.branch_company, r.grid_name);
-      var production = num(r.capacity);
-      var productId = product(r.product_name).productId;
-      regionRows.push({
-        branchId: r.branch_company,
-        gridId: gridId(r.branch_company, r.grid_name),
-        level: r.branch_company === "全市" ? "city"
-          : (r.branch_company === r.grid_name && ["未知", "市统筹"].indexOf(r.grid_name) < 0 ? "branch" : "grid"),
-        productId: productId,
-        period: r.prod_period_type,
-        production: production,
-        snapshotTime: r.snapshot_time
-      });
-    }
-
-    for (i = 0; i < dc.length; i++) {
-      r = dc[i];
-      org(r.branch, r.grid);
-      cm[r.chn_code] = r;
-    }
-
-    for (i = 0; i < dt.length; i++) {
-      r = dt[i];
-      org(r.branch, r.grid);
-      tm[r.staff_no] = r;
-    }
-
-    for (i = 0; i < ds.length; i++) {
-      r = ds[i];
-      org(r.branch, r.grid);
-      sm[r.staff_no] = r;
-    }
-
-    function add(row, info, type) {
-      var b = row.branch_company;
-      var g = row.grid_name;
-      if (info.branch !== b || info.grid !== g) {
-        warnings.push("归属冲突，已排除：" + (row.staff_no || row.channel_code));
-        return;
-      }
-      org(b, g);
-      var p = product(row.product_name).productId;
-      var identity = type === "三星+渠道" ? row.channel_code
-        : (type === "末梢渠道" ? JSON.stringify([info.agent, info.chn_name || row.channel_name]) : row.staff_no);
-      var key = JSON.stringify([b, g, p, row.prod_period_type, type, identity]);
-      var e = records[key];
-      if (!e) {
-        var star = String(info.star || "").match(/([0-9三四五])\s*星/);
-        var stars = { "三": 3, "四": 4, "五": 5 };
-        e = records[key] = {
-          branchId: b,
-          gridId: gridId(b, g),
-          productId: p,
-          period: row.prod_period_type,
-          production: 0,
-          channelType: type,
-          staffId: type === "直销队伍" ? row.staff_no : "",
-          staffName: info.staff_name || "",
-          staffRole: info.team_type || "",
-          channel: type === "三星+渠道" ? info.chn_name : row.channel_name,
-          channelCode: type === "末梢渠道" ? "tail:" + identity : row.channel_code,
-          channelStar: star ? (stars[star[1]] || Number(star[1])) : null,
-          microChannelName: type === "末梢渠道" ? info.chn_name : "",
-          serviceProvider: info.agent || "",
-          staffCount: type === "三星+渠道" ? null : 0
-        };
-      }
-      e.production += num(row.capacity);
-      if (e.staffCount !== null) e.staffCount++;
-    }
-
-    for (i = 0; i < channels.length; i++) {
-      r = channels[i];
-      if (cm[r.channel_code] && cm[r.channel_code].star_level === "三星+") {
-        add(r, cm[r.channel_code], "三星+渠道");
-      }
-    }
-
-    for (i = 0; i < staff.length; i++) {
-      r = staff[i];
-      if (sm[r.staff_no] && tm[r.staff_no]) throw new Error("工号同时出现在员工与末梢维度：" + r.staff_no);
-      if (sm[r.staff_no]) add(r, sm[r.staff_no], "直销队伍");
-      else if (tm[r.staff_no]) add(r, tm[r.staff_no], "末梢渠道");
-      else if (warnings.length < 20) warnings.push("未匹配员工/末梢维度，已排除：" + r.staff_no);
-    }
-
-    // Population is based on authorized dimension tables, not low-production rows.
-    alertRoster = [];
-    for (i = 0; i < ds.length; i++) {
-      r = ds[i];
-      alertRoster.push({ gridId: gridId(r.branch, r.grid), kind: "people", identity: r.staff_no || null });
-    }
-    for (i = 0; i < dc.length; i++) {
-      r = dc[i];
-      if (r.star_level === "三星+") alertRoster.push({ gridId: gridId(r.branch, r.grid), kind: "stars", identity: r.chn_code || null });
-    }
-    for (i = 0; i < dt.length; i++) {
-      r = dt[i];
-      alertRoster.push({ gridId: gridId(r.branch, r.grid), kind: "tail", identity: r.chn_name ? "tail:" + JSON.stringify([r.agent, r.chn_name]) : null });
-    }
-
-    var month = [];
-    var day = [];
-    var periodRows = [];
-    for (var key in records) {
-      if (Object.prototype.hasOwnProperty.call(records, key)) {
-        var e2 = records[key];
-        periodRows.push(e2);
-        if (e2.period === "mon") month.push(e2);
-        if (e2.period === "day") { e2.date = cutoff; day.push(e2); }
-      }
-    }
-
-    var args = { month: cutoff.slice(0, 7) };
-    var targets = sql("SELECT * FROM " + tables.targets + " WHERE target_month=#{month}" + scope("branch", "grid", args), args, true);
-    for (i = 0; i < targets.length; i++) {
-      r = targets[i];
-      var monthTarget = optionalTarget(r.month_base_target === undefined ? r.month_target : r.month_base_target);
-      var dailyTarget = optionalTarget(r.day_base_target === undefined ? r.day_target : r.day_base_target);
-      var targetDate = "";
-      if (r.target_date) targetDate = date(r.target_date);
-      targets[i] = {
-        gridId: gridId(r.branch, r.grid),
-        productId: r.product_id,
-        target: monthTarget,
-        dailyTarget: dailyTarget,
-        monthBaseTarget: monthTarget,
-        monthChallengeTarget: optionalTarget(r.month_challenge_target),
-        dayBaseTarget: dailyTarget,
-        dayChallengeTarget: optionalTarget(r.day_challenge_target),
-        targetMonth: text(r.target_month),
-        targetDate: targetDate
-      };
-    }
-
-    var scripts = sql("SELECT product_id,content,updated_at FROM " + tables.scripts + " ORDER BY product_id", {}, true);
-    for (i = 0; i < scripts.length; i++) {
-      r = scripts[i];
-      scripts[i] = {
-        productId: r.product_id,
-        content: r.content,
-        updatedAt: r.updated_at,
-        status: "maintained",
-        source: "超级管理员维护"
-      };
-    }
-
-    return {
-      organization: {
-        cityName: "中山市",
-        branches: Object.keys(branches).map(function (k) { return branches[k]; }),
-        grids: Object.keys(grids).map(function (k) { return grids[k]; })
-      },
-      statDate: cutoff,
-      products: products,
-      targets: targets,
-      rows: month,
-      dailyRows: day,
-      periodRows: periodRows,
-      regionRows: regionRows,
-      salesScripts: scripts,
-      warnings: warnings,
-      weekBasis: "rolling7",
-      permission: user
-    };
-  }
 
   // ============================================================
   // importTargets
@@ -750,27 +517,7 @@ function init() {
   // ============================================================
   // alerts
   // ============================================================
-  function populationTotals(data) {
-    var ids = parse(Params.gridIds || "[]");
-    var counts = { people: 0, stars: 0, tail: 0 }, seen = {}, matches = {};
-    if (!alertRoster) return { people: null, stars: null, tail: null };
-    if (Params.channel) for (var i = 0; i < data.periodRows.length; i++) {
-      var row = data.periodRows[i];
-      if (row.productId !== Params.productId || row.channel !== Params.channel) continue;
-      var kind = { "直销队伍": "people", "三星+渠道": "stars", "末梢渠道": "tail" }[row.channelType];
-      matches[JSON.stringify([row.gridId, kind, kind === "people" ? row.staffId : row.channelCode])] = true;
-    }
-    for (var j = 0; j < alertRoster.length; j++) {
-      var member = alertRoster[j];
-      if (ids.length && ids.indexOf(member.gridId) < 0) continue;
-      if (!member.identity) { counts[member.kind] = null; continue; }
-      var key = JSON.stringify([member.gridId, member.kind, member.identity]);
-      if ((Params.channel && !matches[key]) || seen[key]) continue;
-      seen[key] = true;
-      if (counts[member.kind] !== null) counts[member.kind]++;
-    }
-    return counts;
-  }
+
 
   function alerts() {
     if (["month", "day"].indexOf(Params.period) < 0) throw new Error("预警周期无效");
@@ -893,59 +640,318 @@ function init() {
       summary.period = Params.period; summary.threshold = num(Params.threshold);
       summary.scope = ids.length === 1 ? "选定网格" : "选定网格范围";
       summary.alerts = [{ category: "直销人员", count: 0 }, { category: "3星+渠道", count: 0 }, { category: "末梢渠道", count: 0 }];
-      var list = Params.period === "day" ? data.dailyRows : data.rows;
-      for (j = 0; j < list.length; j++) {
-        r = list[j];
-        if (!chosen[r.gridId] || r.productId !== selectedProducts[0].productId || r.production > summary.threshold || (Params.channel && r.channel !== Params.channel)) continue;
-        var categoryIndex = ["直销队伍", "三星+渠道", "末梢渠道"].indexOf(r.channelType);
-        if (categoryIndex >= 0) summary.alerts[categoryIndex].count++;
+      var alertCounts = aiAlertCounts(data);
+      for (j = 0; j < alertCounts.length; j++) {
+        var categoryIndex = ["直销队伍", "三星+渠道", "末梢渠道"].indexOf(alertCounts[j].channelType);
+        if (categoryIndex >= 0) summary.alerts[categoryIndex].count = Number(alertCounts[j].total);
       }
     }
     return summary;
   }
 
+
+
+  // SQL aggregation boundary: never select raw capacity tables into JavaScript.
+  var dashboardMemo = null;
+  function pagedSql(query, args, order) {
+    var result = [], size = 1000;
+    // Aggregate result sets are paged as well; do not rely on platform row limits.
+    for (var offset = 0; ; offset += size) {
+      var page = sql(query + " ORDER BY " + order + " LIMIT " + size + " OFFSET " + offset, args, true);
+      if (page.length > size) throw new Error("SQL分页未生效，请检查网关SQL配置");
+      result = result.concat(page);
+      if (page.length < size) return result;
+      if (offset >= 999000) throw new Error("聚合结果超过100万条，请缩小查询范围");
+    }
+  }
+  function latestDimension(table, key) {
+    return "(SELECT d.* FROM " + table + " d INNER JOIN (SELECT " + key +
+      ",MAX(id) AS latest_id FROM " + table + " GROUP BY " + key + ") newest ON d.id=newest.latest_id)";
+  }
+  function selectedGridClause(args, data, alias) {
+    var ids = parse(Params.gridIds || "[]"), allowed = {}, terms = [];
+    if (Object.prototype.toString.call(ids) !== "[object Array]" || ids.length > 2000) throw new Error("gridIds须为不超过2000项的数组");
+    for (var i = 0; i < data.organization.grids.length; i++) allowed[data.organization.grids[i].gridId] = true;
+    for (i = 0; i < ids.length; i++) {
+      if (!Object.prototype.hasOwnProperty.call(allowed, ids[i])) throw new Error("无权访问该网格");
+      var parts = ids[i].split("::");
+      args["selectedBranch" + i] = parts[0]; args["selectedGrid" + i] = parts.slice(1).join("::");
+      terms.push("(" + alias + ".branch_company=#{selectedBranch" + i + "} AND " + alias + ".grid_name=#{selectedGrid" + i + "})");
+    }
+    return terms.length ? " AND (" + terms.join(" OR ") + ")" : "";
+  }
+  function capacityQuery(data, detail, args, periods) {
+    args.cutoff = data.statDate;
+    var clause = " WHERE c.stat_date=#{cutoff}" + scope("c.branch_company", "c.grid_name", args);
+    if (detail) clause += selectedGridClause(args, data, "c");
+    if (detail && Params.productId) { args.selectedProduct = product(Params.productId).productName; clause += " AND c.product_name=#{selectedProduct}"; }
+    if (periods) {
+      clause += " AND c.prod_period_type IN (" + periods.map(function (p) { return "'" + p + "'"; }).join(",") + ")";
+    } else if (detail) {
+      if (Params.funCode === "wgsc_fetchChangeAlerts") clause += " AND c.prod_period_type IN ('mon','last_mon')";
+      else if (Params.funCode === "wgsc_searchCapacity") clause += " AND c.prod_period_type IN ('mon','day')";
+      else if (Params.funCode === "wgsc_fetchAlerts" || Params.funCode === "wgsc_fetchChannelOptions") {
+        args.selectedPeriod = Params.period === "day" ? "day" : "mon";
+        clause += " AND c.prod_period_type=#{selectedPeriod}";
+      }
+    }
+    var channelType = text(Params.channelType), selectedTypes = ["三星+渠道", "直销队伍", "末梢渠道"];
+    if (channelType === "3星+渠道") channelType = "三星+渠道";
+    if (channelType === "全部类型") channelType = "";
+    if (channelType && selectedTypes.indexOf(channelType) < 0) throw new Error("生产类型无效");
+    // A dashboard always includes every type so switching the selector is local.
+    if (detail && channelType) selectedTypes = [channelType];
+    if (detail && Params.funCode === "wgsc_searchCapacity" && Params.kind === "people") selectedTypes = selectedTypes.filter(function (v) { return v === "直销队伍"; });
+    if (detail && Params.funCode === "wgsc_searchCapacity" && Params.kind === "channels") selectedTypes = selectedTypes.filter(function (v) { return v !== "直销队伍"; });
+    var blocks = [];
+    for (var i = 0; i < selectedTypes.length; i++) {
+      var type = selectedTypes[i], stars = type === "三星+渠道", tail = type === "末梢渠道";
+      var table = stars ? tables.channel : tables.staffCapacity;
+      var dimension = stars ? tables.channelInfo : tail ? tables.terminal : tables.staff;
+      var key = stars ? "chn_code" : "staff_no";
+      var join = " INNER JOIN " + latestDimension(dimension, key) + " d ON c." + (stars ? "channel_code" : "staff_no") + "=d." + key;
+      join += " AND c.branch_company=d.branch AND c.grid_name=d.grid";
+      var condition = clause + (stars ? " AND d.star_level='三星+'" : "");
+      if (!stars) condition += " AND NOT EXISTS (SELECT 1 FROM " + (tail ? tables.staff : tables.terminal) + " conflict WHERE conflict.staff_no=c.staff_no)";
+      var identity = stars ? "d.chn_code" : tail ? "JSON_ARRAY(d.agent,d.chn_name)" : "d.staff_no";
+      var label = stars || tail ? "d.chn_name" : "c.channel_name";
+      if (detail && Params.funCode === "wgsc_searchCapacity") {
+        args.searchQuery = text(Params.query).toLowerCase();
+        if (!args.searchQuery || args.searchQuery.length > 100 || ["people", "channels"].indexOf(Params.kind) < 0) throw new Error("查询参数无效");
+        var name = stars || tail ? "d.chn_name" : "d.staff_name";
+        condition += " AND LOCATE(#{searchQuery},LOWER(CONCAT(COALESCE(" + name + ",''),' ',COALESCE(" + identity + ",''))))>0";
+      }
+      var cols = "c.branch_company AS branchId,CONCAT(c.branch_company,'::',c.grid_name) AS gridId," +
+        "c.product_name AS productName,c.prod_period_type AS period,'" + type + "' AS channelType," +
+        "SUM(c.capacity) AS production,SUM(CASE WHEN c.capacity IS NULL OR c.capacity<0 THEN 1 ELSE 0 END) AS invalidCount,";
+      if (detail) cols += (stars || tail ? "''" : "MAX(d.staff_no)") + " AS staffId," +
+        (stars || tail ? "''" : "MAX(d.staff_name)") + " AS staffName," +
+        (stars || tail ? "''" : "MAX(d.team_type)") + " AS staffRole," +
+        "MIN(" + label + ") AS channel," + (stars ? "MAX(d.chn_code)" : "''") + " AS channelCode," +
+        (stars ? "MAX(d.star)" : "''") + " AS star," +
+        (tail ? "MAX(d.chn_name)" : "''") + " AS microChannelName," +
+        (tail ? "MAX(d.agent)" : "''") + " AS serviceProvider," +
+        (stars ? "NULL" : "COUNT(*)") + " AS staffCount";
+      else cols += "'' AS staffId,'' AS staffName,'' AS staffRole,'' AS channel,'' AS channelCode,'' AS star,'' AS microChannelName,'' AS serviceProvider,NULL AS staffCount";
+      blocks.push("SELECT " + cols + " FROM " + table + " c" + join + condition +
+        " GROUP BY c.branch_company,c.grid_name,c.product_name,c.prod_period_type" + (detail ? "," + identity : ""));
+    }
+    if (!blocks.length) return "SELECT '' AS branchId,'' AS gridId,'' AS productName,'' AS period,'' AS channelType,0 AS production,0 AS invalidCount,'' AS staffId,'' AS staffName,'' AS staffRole,'' AS channel,'' AS channelCode,'' AS star,'' AS microChannelName,'' AS serviceProvider,NULL AS staffCount WHERE 1=0";
+    return blocks.join(" UNION ALL ");
+  }
+  function mapCapacity(r, statDate) {
+    if (Number(r.invalidCount) > 0) throw new Error("产能包含空值或负数，不能作为零聚合，请修正源数据");
+    var star = String(r.star || "").match(/([0-9三四五])\s*星/), stars = { "三": 3, "四": 4, "五": 5 };
+    var out = { branchId: r.branchId, gridId: r.gridId, productId: product(r.productName).productId,
+      period: r.period, production: num(r.production), channelType: r.channelType,
+      staffId: r.staffId || "", staffName: r.staffName || "", staffRole: r.staffRole || "",
+      channel: r.channel || "", channelCode: r.channelType === "末梢渠道" ? "tail:" + JSON.stringify([r.serviceProvider || "", r.microChannelName || ""]) : r.channelCode || "",
+      channelStar: star ? stars[star[1]] || Number(star[1]) : null,
+      microChannelName: r.microChannelName || "", serviceProvider: r.serviceProvider || "",
+      staffCount: r.staffCount === null ? null : Number(r.staffCount) };
+    if (r.monthProduction !== undefined) {
+      var d = new Date(statDate + "T00:00:00Z"), days = d.getUTCDate();
+      var previousDays = Math.min(days, new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 0)).getUTCDate());
+      out.monthAverage = r.monthProduction === null ? null : Number(r.monthProduction) / days;
+      out.previousAverage = r.previousProduction === null ? null : Number(r.previousProduction) / previousDays;
+    }
+    return out;
+  }
+  function metadata() {
+    var cutoff = latest(tables.region);
+    var data = { organization: { cityName: "中山市", branches: [], grids: [] }, statDate: cutoff,
+      products: products, targets: [], rows: [], dailyRows: [], periodRows: [], regionRows: [],
+      salesScripts: [], warnings: [], weekBasis: "rolling7", permission: user, aggregated: true };
+    if (!cutoff) { data.warnings.push("当前范围没有区域产能数据"); return data; }
+    var args = { cutoff: cutoff }, regionClause = scope("branch_company", "grid_name", args);
+    var region = pagedSql("SELECT branch_company,grid_name,product_name,prod_period_type,SUM(capacity) AS capacity," +
+      "SUM(CASE WHEN capacity IS NULL OR capacity<0 THEN 1 ELSE 0 END) AS invalid_count,MAX(snapshot_time) AS snapshot_time FROM " +
+      tables.region + " WHERE stat_date=#{cutoff}" + regionClause + " GROUP BY branch_company,grid_name,product_name,prod_period_type", args,
+      "branch_company,grid_name,product_name,prod_period_type");
+    var branches = {}, grids = {};
+    function org(b, g) {
+      if (!b || !g || b === "全市") return;
+      branches[b] = { branchId: b, branchName: b };
+      if (b !== g || ["未知", "市统筹"].indexOf(g) >= 0) grids[gridId(b, g)] = { gridId: gridId(b, g), gridName: g, branchId: b };
+    }
+    for (var i = 0; i < region.length; i++) {
+      var r = region[i];
+      if (Number(r.invalid_count) > 0) throw new Error("区域产能包含空值或负数");
+      org(r.branch_company, r.grid_name);
+      data.regionRows.push({ branchId: r.branch_company, gridId: gridId(r.branch_company, r.grid_name),
+        level: r.branch_company === "全市" ? "city" : r.branch_company === r.grid_name && ["未知", "市统筹"].indexOf(r.grid_name) < 0 ? "branch" : "grid",
+        productId: product(r.product_name).productId, period: r.prod_period_type, production: num(r.capacity), snapshotTime: r.snapshot_time });
+    }
+    // Distinct organization pairs, never the full personnel/channel dimensions.
+    var dimensions = [tables.channelInfo, tables.terminal, tables.staff], orgParts = [], orgArgs = {};
+    for (i = 0; i < dimensions.length; i++) orgParts.push("SELECT DISTINCT branch,grid FROM " + dimensions[i] + " WHERE 1=1" + scope("branch", "grid", orgArgs));
+    var orgs = pagedSql("SELECT branch,grid FROM (" + orgParts.join(" UNION ") + ") orgs", orgArgs, "branch,grid");
+    for (i = 0; i < orgs.length; i++) org(orgs[i].branch, orgs[i].grid);
+    data.organization.branches = Object.keys(branches).sort().map(function (k) { return branches[k]; });
+    data.organization.grids = Object.keys(grids).sort().map(function (k) { return grids[k]; });
+    if (Params.funCode === "wgsc_importTargets") return data;
+    var targetArgs = { month: cutoff.slice(0, 7) };
+    var goals = pagedSql("SELECT * FROM " + tables.targets + " WHERE target_month=#{month}" + scope("branch", "grid", targetArgs), targetArgs, "id");
+    for (i = 0; i < goals.length; i++) {
+      r = goals[i]; var base = optionalTarget(r.month_base_target), daily = optionalTarget(r.day_base_target);
+      data.targets.push({ gridId: gridId(r.branch, r.grid), productId: r.product_id,
+        target: base, dailyTarget: daily, monthBaseTarget: base, monthChallengeTarget: optionalTarget(r.month_challenge_target),
+        dayBaseTarget: daily, dayChallengeTarget: optionalTarget(r.day_challenge_target),
+        targetMonth: text(r.target_month), targetDate: r.target_date ? date(r.target_date) : "" });
+    }
+    var scripts = pagedSql("SELECT product_id,content,updated_at FROM " + tables.scripts, {}, "product_id,id");
+    for (i = 0; i < scripts.length; i++) data.salesScripts.push({ productId: scripts[i].product_id, content: scripts[i].content, updatedAt: scripts[i].updated_at, status: "maintained", source: "超级管理员维护" });
+    var channelDate = latest(tables.channel), staffDate = latest(tables.staffCapacity);
+    if (channelDate !== cutoff) data.warnings.push("渠道产能表最新日期（" + (channelDate || "无") + "）与区域产能表（" + cutoff + "）不一致，本次按区域表日期读取");
+    if (staffDate !== cutoff) data.warnings.push("工号产能表最新日期（" + (staffDate || "无") + "）与区域产能表（" + cutoff + "）不一致，本次按区域表日期读取");
+    return data;
+  }
+  function dashboard() {
+    if (dashboardMemo) return dashboardMemo;
+    var data = metadata();
+    if (!data.statDate || Params.funCode === "wgsc_importTargets") { dashboardMemo = data; return data; }
+    var args = {}, detail = ["wgsc_fetchAlerts", "wgsc_fetchChangeAlerts", "wgsc_searchCapacity", "wgsc_fetchChannelOptions"].indexOf(Params.funCode) >= 0;
+    var conflictArgs = { cutoff: data.statDate };
+    var conflicts = sql("SELECT 1 AS found FROM " + tables.staffCapacity + " c WHERE c.stat_date=#{cutoff}" +
+      scope("c.branch_company", "c.grid_name", conflictArgs) +
+      " AND EXISTS (SELECT 1 FROM " + tables.staff + " s WHERE s.staff_no=c.staff_no)" +
+      " AND EXISTS (SELECT 1 FROM " + tables.terminal + " t WHERE t.staff_no=c.staff_no) LIMIT 1", conflictArgs, true);
+    if (conflicts.length) throw new Error("工号同时出现在员工与末梢维度，请先修正归属");
+    var relation = capacityQuery(data, detail, args);
+    var condition = " WHERE 1=1";
+    if (detail && text(Params.channel)) { args.selectedChannel = text(Params.channel); condition += " AND channel=#{selectedChannel}"; }
+    if (Params.funCode === "wgsc_fetchAlerts") { args.threshold = num(Params.threshold); condition += " AND production<=#{threshold}"; }
+    var selectedQuery = "SELECT * FROM (" + relation + ") capacity_groups" + condition;
+    if (Params.funCode === "wgsc_fetchAlerts") {
+      // Export comparisons accompany only matched identities. The browser no
+      // longer needs all identities' current/previous capacity records.
+      var history = capacityQuery(data, true, args, ["mon", "last_mon"]);
+      var keys = ["branchId", "gridId", "productName", "channelType", "staffId", "channelCode", "microChannelName", "serviceProvider"];
+      var pivot = "SELECT " + keys.join(",") + "," +
+        "CASE WHEN SUM(CASE WHEN period='mon' THEN 1 ELSE 0 END)>0 THEN SUM(CASE WHEN period='mon' THEN production ELSE 0 END) ELSE NULL END AS monthProduction," +
+        "CASE WHEN SUM(CASE WHEN period='last_mon' THEN 1 ELSE 0 END)>0 THEN SUM(CASE WHEN period='last_mon' THEN production ELSE 0 END) ELSE NULL END AS previousProduction" +
+        " FROM (" + history + ") history_groups GROUP BY " + keys.join(",");
+      selectedQuery = "SELECT selected.*,h.monthProduction,h.previousProduction FROM (" + selectedQuery + ") selected LEFT JOIN (" + pivot +
+        ") h ON " + keys.map(function (key) { return "selected." + key + "=h." + key; }).join(" AND ");
+    }
+    var selected = pagedSql(selectedQuery, args,
+      "branchId,gridId,productName,period,channelType,staffId,channelCode,microChannelName,serviceProvider");
+    for (var i = 0; i < selected.length; i++) {
+      var row = mapCapacity(selected[i], data.statDate); data.periodRows.push(row);
+      if (row.period === "mon") data.rows.push(row);
+      if (row.period === "day") { row.date = data.statDate; data.dailyRows.push(row); }
+    }
+    dashboardMemo = data;
+    return data;
+  }
+  function populationTotals(data) {
+    var args = {}, chosen = selectedGridClause(args, data, "c");
+    // The roster includes registered entities with no capacity records.
+    function roster(table, key, kind, extra) {
+      return "SELECT d.branch AS branchId,CONCAT(d.branch,'::',d.grid) AS gridId,'" + kind + "' AS kind," + key +
+        " AS identity FROM " + latestDimension(table, kind === "stars" ? "chn_code" : "staff_no") +
+        " d WHERE 1=1" + scope("d.branch", "d.grid", args) + extra;
+    }
+    var relation = roster(tables.staff, "d.staff_no", "people", "") + " UNION ALL " +
+      roster(tables.channelInfo, "d.chn_code", "stars", " AND d.star_level='三星+'") + " UNION ALL " +
+      roster(tables.terminal, "JSON_ARRAY(d.agent,d.chn_name)", "tail", "");
+    var ids = parse(Params.gridIds || "[]"), where = " WHERE 1=1";
+    if (ids.length) {
+      var placeholders = [];
+      for (var i = 0; i < ids.length; i++) { args["rosterGrid" + i] = ids[i]; placeholders.push("#{rosterGrid" + i + "}"); }
+      where += " AND gridId IN (" + placeholders.join(",") + ")";
+    }
+    if (text(Params.channel)) {
+      // Resolve membership with SQL; do not reuse the already threshold-filtered alert list.
+      var matchArgs = {}, matchQuery = capacityQuery(data, true, matchArgs);
+      for (var key in matchArgs) if (Object.prototype.hasOwnProperty.call(matchArgs, key)) args[key] = matchArgs[key];
+      args.selectedChannel = text(Params.channel);
+      where += " AND EXISTS (SELECT 1 FROM (" + matchQuery + ") m WHERE m.gridId=roster.gridId AND m.channel=#{selectedChannel} AND " +
+        "((roster.kind='people' AND m.channelType='直销队伍' AND m.staffId=roster.identity) OR " +
+        "(roster.kind='stars' AND m.channelType='三星+渠道' AND m.channelCode=roster.identity) OR " +
+        "(roster.kind='tail' AND m.channelType='末梢渠道' AND JSON_ARRAY(m.serviceProvider,m.microChannelName)=roster.identity)))";
+    }
+    var counts = sql("SELECT kind,COUNT(DISTINCT CONCAT(gridId,CHAR(31),identity)) AS total FROM (" + relation + ") roster" + where + " GROUP BY kind", args, true);
+    var result = { people: 0, stars: 0, tail: 0 };
+    for (var j = 0; j < counts.length; j++) result[counts[j].kind] = Number(counts[j].total);
+    return result;
+  }
+  function channelOptions() {
+    var data = metadata(), args = {};
+    if (!data.statDate) return { channels: [], statDate: "" };
+    var query = capacityQuery(data, true, args);
+    var rows = pagedSql("SELECT DISTINCT channel FROM (" + query + ") channel_groups WHERE channel IS NOT NULL AND channel<>''", args, "channel");
+    return { channels: rows.map(function (r) { return r.channel; }), statDate: data.statDate };
+  }
+  function aiAlertCounts(data) {
+    var args = {}, relation = capacityQuery(data, true, args, [Params.period === "day" ? "day" : "mon"]);
+    args.aiThreshold = num(Params.threshold);
+    var condition = " WHERE production<=#{aiThreshold}";
+    if (text(Params.channel)) { args.aiChannel = text(Params.channel); condition += " AND channel=#{aiChannel}"; }
+    return sql("SELECT channelType,COUNT(*) AS total FROM (" + relation + ") qualified" + condition + " GROUP BY channelType", args, true);
+  }
   function changeAlerts() {
     product(Params.productId);
     var rate = num(Params.declineRate === undefined ? 30 : Params.declineRate);
-    var value = num(Params.declineValue === undefined ? 5 : Params.declineValue);
+    var decrease = num(Params.declineValue === undefined ? 5 : Params.declineValue);
     if (rate > 100) throw new Error("日均减少率须为0至100");
-    var data = dashboard();
-    filtered(data, "month");
-    var ids = parse(Params.gridIds || "[]"), groups = {};
-    var cutoff = new Date(data.statDate + "T00:00:00Z"), days = cutoff.getUTCDate();
-    var previousDays = Math.min(days, new Date(Date.UTC(cutoff.getUTCFullYear(), cutoff.getUTCMonth(), 0)).getUTCDate());
-    for (var i = 0; i < data.periodRows.length; i++) {
-      var row = data.periodRows[i];
-      if (row.productId !== Params.productId || (ids.length && ids.indexOf(row.gridId) < 0) ||
-          (Params.channel && row.channel !== Params.channel) || ["mon", "last_mon"].indexOf(row.period) < 0) continue;
-      var identity = row.channelType === "直销队伍" ? row.staffId : row.channelCode;
-      if (!identity || ["直销队伍", "三星+渠道", "末梢渠道"].indexOf(row.channelType) < 0) continue;
-      var key = JSON.stringify([row.gridId, row.channelType, identity]);
-      if (!groups[key]) groups[key] = { row: row, current: null, previous: null, invalid: false };
-      var group = groups[key], field = row.period === "mon" ? "current" : "previous";
-      if (typeof row.production !== "number" || !isFinite(row.production) || row.production < 0) group.invalid = true;
-      else group[field] = (group[field] === null ? 0 : group[field]) + row.production;
-    }
+    var data = metadata(), args = {};
+    selectedGridClause(args, data, "c");
+    if (!data.statDate) return { people: [], channels: [], statDate: "", totals: { people: 0, stars: 0, tail: 0 }, totalSource: "dimension" };
+    var d = new Date(data.statDate + "T00:00:00Z");
+    args.elapsed = d.getUTCDate();
+    args.previousDays = Math.min(args.elapsed, new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 0)).getUTCDate());
+    args.declineValue = decrease; args.declineRate = rate;
+    var relation = capacityQuery(data, true, args);
+    var pivot = "SELECT branchId,gridId,productName,channelType,staffId,channelCode,microChannelName,serviceProvider," +
+      "MAX(staffName) AS staffName,MAX(staffRole) AS staffRole,MAX(channel) AS channel,MAX(star) AS star,MAX(staffCount) AS staffCount," +
+      "SUM(invalidCount) AS invalidCount,SUM(CASE WHEN period='mon' THEN production ELSE 0 END) AS currentProduction," +
+      "SUM(CASE WHEN period='last_mon' THEN production ELSE 0 END) AS previousProduction," +
+      "SUM(CASE WHEN period='mon' THEN 1 ELSE 0 END) AS currentCount,SUM(CASE WHEN period='last_mon' THEN 1 ELSE 0 END) AS previousCount" +
+      " FROM (" + relation + ") detail_groups GROUP BY branchId,gridId,productName,channelType,staffId,channelCode,microChannelName,serviceProvider";
+    var delta = "(previousProduction/#{previousDays}-currentProduction/#{elapsed})";
+    var ratio = "(" + delta + "/(previousProduction/#{previousDays})*100)";
+    var where = " WHERE currentCount>0 AND previousCount>0 AND previousProduction>0 AND invalidCount=0 AND " +
+      delta + ">0 AND " + delta + "+0.000000001>=#{declineValue} AND " + ratio + "+0.000000001>=#{declineRate}";
+    if (text(Params.channel)) { args.selectedChannel = text(Params.channel); where += " AND channel=#{selectedChannel}"; }
+    var rows = pagedSql("SELECT * FROM (" + pivot + ") comparisons" + where, args,
+      "branchId,gridId,productName,channelType,staffId,channelCode,microChannelName,serviceProvider");
     var people = [], channels = [];
-    for (var k in groups) if (Object.prototype.hasOwnProperty.call(groups, k)) {
-      var g = groups[k];
-      if (g.invalid || g.current === null || g.previous === null || g.previous === 0) continue;
-      var current = g.current / days, previous = g.previous / previousDays;
-      var decrease = previous - current, percentage = decrease / previous * 100;
-      if (decrease <= 0 || decrease + 1e-9 < value || percentage + 1e-9 < rate) continue;
-      var result = {};
-      for (var name in g.row) if (Object.prototype.hasOwnProperty.call(g.row, name)) result[name] = g.row[name];
-      result.production = g.current;
-      result.monthAverage = current; result.previousAverage = previous;
-      result.declineValue = decrease; result.declineRate = percentage;
-      (result.channelType === "直销队伍" ? people : channels).push(result);
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i]; r.period = "mon"; r.production = r.currentProduction;
+      var out = mapCapacity(r);
+      out.monthAverage = Number(r.currentProduction) / args.elapsed;
+      out.previousAverage = Number(r.previousProduction) / args.previousDays;
+      out.declineValue = out.previousAverage - out.monthAverage;
+      out.declineRate = out.declineValue / out.previousAverage * 100;
+      (out.channelType === "直销队伍" ? people : channels).push(out);
     }
-    function order(a, b) { return b.declineRate - a.declineRate || b.declineValue - a.declineValue; }
+    function order(a, b) { return b.declineRate - a.declineRate || b.declineValue - a.declineValue || a.gridId.localeCompare(b.gridId); }
     people.sort(order); channels.sort(order);
     return { people: people, channels: channels, statDate: data.statDate, totals: populationTotals(data), totalSource: "dimension" };
   }
+  function resultPage(result) {
+    if (["wgsc_fetchAlerts", "wgsc_fetchChangeAlerts", "wgsc_searchCapacity"].indexOf(Params.funCode) < 0) return result;
+    var page = Number(Params.page || 1), size = Number(Params.pageSize || 200);
+    if (!isFinite(page) || page < 1 || Math.floor(page) !== page || !isFinite(size) || size < 1 || size > 1000 || Math.floor(size) !== size) throw new Error("分页参数无效");
+    var offset = (page - 1) * size;
+    var list = result.results || result.people.concat(result.channels), total = list.length;
+    if (result.results) result.results = list.slice(offset, offset + size);
+    else {
+      result.counts = { people: result.people.length,
+        stars: result.channels.filter(function (r) { return r.channelType === "三星+渠道"; }).length,
+        tail: result.channels.filter(function (r) { return r.channelType === "末梢渠道"; }).length };
+      var selected = list.slice(offset, offset + size);
+      result.people = selected.filter(function (r) { return r.channelType === "直销队伍"; });
+      result.channels = selected.filter(function (r) { return r.channelType !== "直销队伍"; });
+    }
+    result.pagination = { page: page, pageSize: size, total: total, hasMore: offset + size < total };
+    return result;
+  }
 
   var handlers = {
+    wgsc_fetchSession: function () { return { permission: user }; },
+    wgsc_fetchChannelOptions: channelOptions,
     wgsc_fetchChangeAlerts: changeAlerts,
     wgsc_fetchAiSummary: buildAiSummary,
     wgsc_fetchDashboard: dashboard,
@@ -961,7 +967,7 @@ function init() {
   try {
     if (!Object.prototype.hasOwnProperty.call(handlers, Params.funCode)) throw new Error("非法调用");
     user = authenticate();
-    var result = handlers[Params.funCode]();
+    var result = resultPage(handlers[Params.funCode]());
     JsResult.result = JSON.stringify({
       result: { retCode: "0", retMsg: "成功", data: result }
     });

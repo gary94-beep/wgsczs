@@ -30,8 +30,8 @@ export function buildAlertExport({ data, result, product, filters, demo = false 
   const headers = ['统计日期', '数据性质', '预警类型', '分公司', '网格', '产品', '对象类型', '姓名/渠道名称', '人员岗位', '员工编号', '渠道编码', '渠道星级', '区域服务商', '统计周期', '产能', '单位', '本月日均', '上月同期日均', '日均变化值', '日均变化率', '预警状态', '跟进状态', '负责人', '跟进措施', '备注']
   const rows = records.map(row => {
     const type = normalizeChannelType(row.channelType), total = totals.get(keyOf(row))
-    const monthAverage = filters.kind === 'change' && numeric(row.monthAverage) ? row.monthAverage : total && !total.invalid && total.current !== null ? total.current / days : null
-    const previousAverage = filters.kind === 'change' && numeric(row.previousAverage) ? row.previousAverage : total && !total.invalid && total.previous !== null ? total.previous / previousDays : null
+    const monthAverage = numeric(row.monthAverage) ? row.monthAverage : total && !total.invalid && total.current !== null ? total.current / days : null
+    const previousAverage = numeric(row.previousAverage) ? row.previousAverage : total && !total.invalid && total.previous !== null ? total.previous / previousDays : null
     const difference = monthAverage !== null && previousAverage !== null ? monthAverage - previousAverage : null
     const percent = difference !== null && previousAverage > 0 ? difference / previousAverage : null
     return [data.statDate, demo ? '模拟数据' : '系统数据', filters.kind === 'change' ? '异动预警' : '低产预警',
