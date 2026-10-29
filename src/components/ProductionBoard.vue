@@ -3,18 +3,17 @@
     <header><div><h2>产能总看板</h2><p>{{ scope }} · {{ statDate }}<span v-if="demo"> · 演示数据</span></p></div><div class="board-period" role="group" aria-label="看板统计周期"><button v-for="option in periods" :key="option.id" type="button" :aria-pressed="period === option.id" :class="{ active: period === option.id }" @click="$emit('update:period', option.id)">{{ option.label }}</button></div></header>
     <div class="board-columns"><span>产品</span><span>{{ period === 'day' ? '当日产能' : '本月累计' }}</span><span v-if="showTargets">完成进度</span></div>
     <button v-for="(item, index) in items" :key="item.productId" type="button" class="board-row" :style="{ '--board-color': index % 2 ? '#099d87' : '#2874ed' }" @click="$emit('open', item.productId)">
-      <strong>{{ item.productName }}</strong><span class="board-value">{{ format(value(item).production) }}<small>{{ item.unit }}</small></span><span v-if="showTargets" class="board-completion"><b>{{ rate(value(item)) }}</b><span class="board-track" role="progressbar" :aria-label="`${item.productName}看板完成进度`" :aria-valuenow="progress(value(item))" aria-valuemin="0" aria-valuemax="100" :aria-valuetext="rate(value(item))"><i :style="{ width: `${progress(value(item)) || 0}%` }"></i></span></span>
+      <strong>{{ item.productName }}</strong><span class="board-value">{{ format(value(item).production) }}<small>{{ item.unit }}</small></span><TargetProgress v-if="showTargets" :item="value(item)" :unit="item.unit" :label="item.productName" compact />
     </button>
   </section>
 </template>
 <script setup>
+import TargetProgress from './TargetProgress.vue'
 const props = defineProps({ items: { type: Array, default: () => [] }, scope: String, statDate: String, demo: Boolean, showTargets: { type: Boolean, default: true }, period: { type: String, default: 'month' } })
 defineEmits(['open', 'update:period'])
 const periods = [{ id: 'day', label: '日' }, { id: 'month', label: '月' }]
 const value = item => props.period === 'day' ? item.daily : item
 const format = n => n === null || n === undefined ? '—' : Number(n).toLocaleString('zh-CN', { maximumFractionDigits: 2 })
-const rate = item => !props.showTargets || item.completionRate == null ? '暂无进度' : `${item.completionRate}%`
-const progress = item => !props.showTargets || item.completionRate == null ? undefined : Math.min(100, Math.max(0, item.completionRate))
 </script>
 <style scoped>
 .production-board { padding: 20px; background: #f6fcff; border-bottom: 1px solid #dceafa; color: #163457; }

@@ -39,7 +39,7 @@ test('grid manager only receives one grid', async () => {
 
 test('only superadmin can replace targets in demo data', async () => {
   const original = await mockFetchDashboard({ phone: '13800000000' })
-  const updated = original.targets.map(item => ({ ...item, target: item.target + 1 }))
+  const updated = original.targets.map(item => ({ ...item, target: item.target + 1, monthBaseTarget: item.target + 1 }))
   for (const phone of ['13800000000', '13800000001', '13800000003']) await assert.rejects(mockImportTargets(updated, { ...mockPermissions[phone], isSuperAdmin: true }), /仅超级管理员/)
   await mockImportTargets(updated, mockPermissions['13800000009'])
   const city = await mockFetchDashboard({ phone: '13800000000' })

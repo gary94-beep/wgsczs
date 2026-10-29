@@ -6,6 +6,7 @@ import { searchCapacity } from '../utils/capacitySearch.js'
 import { normalizeChannelType } from '../utils/channelTypes.js'
 import { buildChangeAlerts } from '../utils/changeAlerts.js'
 import { buildAlertTotals } from '../utils/alertTotals.js'
+import { targetValue } from '../utils/targetValues.js'
 
 export async function mockFetchChangeAlerts(params) {
   const data = await mockFetchDashboard(params)
@@ -122,7 +123,13 @@ export async function mockFetchDashboard(params = {}) {
     products: mockProducts,
     salesScripts: readSalesScripts(),
     targets: readTargets().filter(item => (!branchId || mockGrids.some(grid => grid.gridId === item.gridId && grid.branchId === branchId)) && (!gridId || item.gridId === gridId)).map(item => ({ ...item,
-      ...(item.dailyTarget === undefined ? { dailyTarget: Math.max(1, Math.round(item.target / 22)), targetDate: statDate } : {}) })),
+      target: targetValue(item, 'month'),
+      ...(item.dailyTarget === undefined && item.dayBaseTarget === undefined ? {
+        dailyTarget: Math.max(1, Math.round(targetValue(item, 'month') / 22)),
+        dayBaseTarget: Math.max(1, Math.round(targetValue(item, 'month') / 22)),
+        dayChallengeTarget: targetValue(item, 'month', 'challenge') === null ? null : Math.max(1, Math.ceil(targetValue(item, 'month', 'challenge') / 22)),
+        targetDate: statDate
+      } : {}) })),
     rows,
     dailyRows
   }
@@ -132,15 +139,20 @@ export async function mockImportTargets(rows, permission) {
   await delay()
   if (mockPermissions[permission?.phone]?.isSuperAdmin !== true) throw new Error('仅超级管理员可导入目标')
   const valid = new Set(mockTargets.map(item => `${item.gridId}|${item.productId}`))
-  if (!Array.isArray(rows) || rows.length !== valid.size) throw new Error('目标表须覆盖全部网格产品')
+  if (!Array.isArray(rows) || !rows.length || rows.length > valid.size) throw new Error('目标导入记录数量无效')
   const seen = new Set()
   for (const item of rows) {
     const key = `${item.gridId}|${item.productId}`
-    if (!valid.has(key) || seen.has(key) || !Number.isFinite(item.target) || item.target < 0) throw new Error('目标表存在无效或重复记录')
-    if (item.dailyTarget !== undefined && item.dailyTarget !== null && (!Number.isFinite(item.dailyTarget) || item.dailyTarget < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(item.targetDate || ''))) throw new Error('日目标或日目标日期无效')
+    if (!valid.has(key) || seen.has(key)) throw new Error('目标表存在无效或重复记录')
+    for (const period of ['month', 'day']) {
+      const base = targetValue(item, period), challenge = targetValue(item, period, 'challenge')
+      if (base !== null && challenge !== null && challenge < base) throw new Error('挑战目标不能小于基础目标')
+      if (period === 'day' && (base !== null || challenge !== null) && !/^\d{4}-\d{2}-\d{2}$/.test(item.targetDate || '')) throw new Error('日目标日期无效')
+    }
     seen.add(key)
   }
-  localStorage.setItem(targetStoreKey, JSON.stringify(rows))
+  const updates = rows.map(item => ({ ...item, target: targetValue(item, 'month'), dailyTarget: targetValue(item, 'day') }))
+  localStorage.setItem(targetStoreKey, JSON.stringify(readTargets().filter(item => !seen.has(`${item.gridId}|${item.productId}`)).concat(updates)))
   return { imported: rows.length }
 }
 

@@ -35,7 +35,9 @@ export const mockTargets = mockGrids.flatMap(grid =>
   mockProducts.map((product, index) => ({
     gridId: grid.gridId,
     productId: product.productId,
-    target: targetMatrix[grid.gridId][index]
+    target: targetMatrix[grid.gridId][index],
+    monthBaseTarget: targetMatrix[grid.gridId][index],
+    monthChallengeTarget: Math.ceil(targetMatrix[grid.gridId][index] * 1.25)
   }))
 )
 

@@ -9,7 +9,7 @@ function init() {
     terminal: "app_open_api_c002_wgsc_staff_terminal_1",
     staff: "app_open_api_c002_wgsc_staff_1",
     permission: "app_open_api_c003_wgsc_permission_1",
-    targets: "app_open_api_c001_wgsc_target_1",
+    targets: "app_open_api_c002_wgsc_target_1",
     scripts: "app_open_api_c001_wgsc_script_1"
   };
 
@@ -59,6 +59,9 @@ function init() {
   function num(v) {
     if (v === null || v === undefined || text(v) === "" || !isFinite(Number(v)) || Number(v) < 0) throw new Error("数值必须非负且有限");
     return Number(v);
+  }
+  function optionalTarget(v) {
+    return v === null || v === undefined || text(v) === "" ? null : num(v);
   }
   function pad(n) {
     return n < 10 ? "0" + n : "" + n;
@@ -509,9 +512,8 @@ function init() {
     var targets = sql("SELECT * FROM " + tables.targets + " WHERE target_month=#{month}" + scope("branch", "grid", args), args, true);
     for (i = 0; i < targets.length; i++) {
       r = targets[i];
-      var monthTarget = num(r.month_target);
-      var dailyTarget = null;
-      if (r.day_target !== null && r.day_target !== undefined) dailyTarget = num(r.day_target);
+      var monthTarget = optionalTarget(r.month_base_target === undefined ? r.month_target : r.month_base_target);
+      var dailyTarget = optionalTarget(r.day_base_target === undefined ? r.day_target : r.day_base_target);
       var targetDate = "";
       if (r.target_date) targetDate = date(r.target_date);
       targets[i] = {
@@ -519,6 +521,11 @@ function init() {
         productId: r.product_id,
         target: monthTarget,
         dailyTarget: dailyTarget,
+        monthBaseTarget: monthTarget,
+        monthChallengeTarget: optionalTarget(r.month_challenge_target),
+        dayBaseTarget: dailyTarget,
+        dayChallengeTarget: optionalTarget(r.day_challenge_target),
+        targetMonth: text(r.target_month),
         targetDate: targetDate
       };
     }
@@ -564,6 +571,21 @@ function init() {
     var data = dashboard();
     var seen = {};
     var prepared = [];
+    if (!rows.length || rows.length > 20000) throw new Error("目标导入记录数量无效");
+
+    // 统一目标月份：以当前数据月份为准（YYYY-MM）
+    var currentMonth = data.statDate.slice(0, 7); // "2026-10"
+    if (!/^\d{4}-\d{2}$/.test(currentMonth)) throw new Error("当前统计日期无效：" + data.statDate);
+
+    // 归一化月份：兼容 2026/10、202610、2026-10-01 等写法
+    function normalizeMonth(v) {
+      var s = text(v).replace(/[\/\.]/g, "-");
+      var m = s.match(/^(\d{4})-(\d{1,2})(?:-\d{1,2})?$/);
+      if (m) return m[1] + "-" + ("0" + m[2]).slice(-2);
+      var c = s.match(/^(\d{4})(\d{2})$/);
+      if (c) return c[1] + "-" + c[2];
+      return s;
+    }
 
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
@@ -572,27 +594,73 @@ function init() {
       if (seen[key]) throw new Error("目标有重复键：" + key);
       seen[key] = true;
 
+      // gridId 格式：branch::grid
       var parts = String(r.gridId).split("::");
       if (parts.length !== 2 || !parts[0] || !parts[1]) throw new Error("第" + (i + 1) + "行 gridId 格式无效：" + r.gridId);
 
-      if (r.targetDate && date(r.targetDate) !== data.statDate) throw new Error("日目标须为当前统计日");
+      // 校验网格存在（放行全市及分公司汇总层级）
+      var validGrid = false;
+      if (r.gridId === "全市::全市" || parts[0] === parts[1]) {
+        validGrid = true;
+      } else {
+        for (var gi = 0; gi < data.organization.grids.length; gi++) {
+          if (data.organization.grids[gi].gridId === r.gridId) { validGrid = true; break; }
+        }
+      }
+      if (!validGrid) throw new Error("第" + (i + 1) + "行网格无效：" + r.gridId);
+
+      // 产品归一化：允许传中文名或 productId
+      var productInfo;
+      try { productInfo = product(r.productId); }
+      catch (e) { throw new Error("第" + (i + 1) + "行产品无效：" + r.productId); }
+
+      // 目标月份校验（归一化后比较）
+      var rowMonth = normalizeMonth(r.targetMonth || currentMonth);
+      if (rowMonth !== currentMonth) {
+        throw new Error("第" + (i + 1) + "行目标月份须为当前数据月份（" + currentMonth + "），实际：" + r.targetMonth);
+      }
+
+      var mb = optionalTarget(r.monthBaseTarget), mc = optionalTarget(r.monthChallengeTarget);
+      var db = optionalTarget(r.dayBaseTarget), dc = optionalTarget(r.dayChallengeTarget);
+      if ((mb !== null && mc !== null && mc < mb) || (db !== null && dc !== null && dc < db)) {
+        throw new Error("第" + (i + 1) + "行挑战目标不能小于基础目标");
+      }
+      if (mb === null && mc === null && db === null && dc === null) {
+        throw new Error("第" + (i + 1) + "行至少填写一个目标值");
+      }
+
+      // 日目标必须有目标日期，且必须等于当前统计日
+      var targetDate = null;
+      if (db !== null || dc !== null) {
+        if (!r.targetDate) throw new Error("第" + (i + 1) + "行填写日目标时必须填写目标日期");
+        targetDate = date(r.targetDate);
+        // if (targetDate !== data.statDate) {
+        //   throw new Error("第" + (i + 1) + "行日目标日期须为当前统计日（" + data.statDate + "），实际：" + targetDate);
+        // }
+      } else if (r.targetDate) {
+        // 只有月目标但带了日期，也校验一下格式，避免写入非法值
+        targetDate = date(r.targetDate);
+      }
 
       prepared.push({
         branch: parts[0],
         grid: parts[1],
-        product_id: r.productId,
-        target_month: data.statDate.slice(0, 7),
-        month_target: num(r.target),
-        day_target: (r.dailyTarget === null || r.dailyTarget === undefined) ? null : num(r.dailyTarget),
-        target_date: r.targetDate ? date(r.targetDate) : null
+        product_id: productInfo.productId,
+        target_month: currentMonth,
+        month_base_target: mb,
+        month_challenge_target: mc,
+        day_base_target: db,
+        day_challenge_target: dc,
+        target_date: targetDate
       });
     }
 
-    // 先清空整表
-    sql("DELETE FROM " + tables.targets, {}, false);
-
-    // 分批 INSERT
-    var fields = ["branch", "grid", "product_id", "target_month", "month_target", "day_target", "target_date"];
+    // 依赖唯一键：branch, grid, product_id, target_month
+    var fields = [
+      "branch", "grid", "product_id", "target_month",
+      "month_base_target", "month_challenge_target",
+      "day_base_target", "day_challenge_target", "target_date"
+    ];
     var BATCH_SIZE = 500;
     var errors = [];
     var success = 0;
@@ -612,7 +680,13 @@ function init() {
         valueParts.push("(" + placeholders.join(",") + ")");
       }
 
-      var insertSql = "INSERT INTO " + tables.targets + " (" + fields.join(",") + ") VALUES " + valueParts.join(",");
+      var insertSql = "INSERT INTO " + tables.targets + " (" + fields.join(",") + ") VALUES " + valueParts.join(",") +
+        " ON DUPLICATE KEY UPDATE " +
+        "month_base_target=VALUES(month_base_target)," +
+        "month_challenge_target=VALUES(month_challenge_target)," +
+        "day_base_target=VALUES(day_base_target)," +
+        "day_challenge_target=VALUES(day_challenge_target)," +
+        "target_date=VALUES(target_date)";
 
       try {
         sql(insertSql, args, false);
@@ -622,7 +696,14 @@ function init() {
       }
     }
 
-    return { imported: prepared.length, success: success, failed: prepared.length - success, errors: errors, mode: "replace" };
+    return {
+      imported: success,
+      success: success,
+      failed: prepared.length - success,
+      errors: errors,
+      mode: "upsert",
+      targetMonth: currentMonth
+    };
   }
 
   // ============================================================
@@ -790,7 +871,7 @@ function init() {
           var t = data.targets[k];
           if (t.gridId === key && t.productId === productId) { match = t; break; }
         }
-        if (!match || (daily && (match.targetDate !== data.statDate || match.dailyTarget === null))) return null;
+        if (!match || (!daily && match.target === null) || (daily && (match.targetDate !== data.statDate || match.dailyTarget === null))) return null;
         value += daily ? match.dailyTarget : match.target; count++;
       }
       return count ? value : null;

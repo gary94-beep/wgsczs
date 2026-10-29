@@ -1,5 +1,6 @@
 import { buildMonthToDatePeriods } from './reportingPeriod.js'
 import { matchesChannelType } from './channelTypes.js'
+import { targetValue, targetProgress } from './targetValues.js'
 
 export function dateRange(start, end) {
   const result = []
@@ -30,14 +31,25 @@ export function compareCapacity(current, baseline) {
 }
 
 function progress(production, targets, gridIds, field, statDate) {
-  const hasTarget = gridIds.length > 0 && gridIds.every(id => {
-    const records = targets.filter(item => item.gridId === id)
-    return records.length === 1 && typeof records[0][field] === 'number' && Number.isFinite(records[0][field]) && records[0][field] >= 0
-      && (field !== 'dailyTarget' || records[0].targetDate === statDate)
-  })
-  const target = hasTarget ? targets.reduce((sum, item) => sum + item[field], 0) : null
-  return { production, target, hasTarget, gap: hasTarget && production !== null ? Math.max(0, target - production) : null,
-    completionRate: hasTarget && target > 0 && production !== null ? Math.round(production / target * 100) : null }
+  const period = field === 'dailyTarget' ? 'day' : 'month'
+  const sum = kind => {
+    if (!gridIds.length) return null
+    let total = 0
+    for (const id of gridIds) {
+      const records = targets.filter(item => item.gridId === id)
+      if (records.length !== 1) return null
+      const row = records[0], month = row.targetMonth ?? row.target_month
+      if (month && month !== statDate.slice(0, 7)) return null
+      if (period === 'day' && (row.targetDate ?? row.target_date) !== statDate) return null
+      const value = targetValue(row, period, kind)
+      if (value === null) return null
+      const base = targetValue(row, period)
+      if (kind === 'challenge' && base !== null && value < base) return null
+      total += value
+    }
+    return total
+  }
+  return targetProgress(production, sum('base'), sum('challenge'))
 }
 
 export function buildCapacityMetric(dashboard, productId, gridIds, channelType = '', scope = null) {

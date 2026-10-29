@@ -75,9 +75,6 @@
           <button type="button" @click="openMonitor"><span class="menu-icon menu-icon-green"><i
                 class="menu-glyph menu-glyph-alert" aria-hidden="true"></i></span><span
               class="menu-copy"><strong>预警监控</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button type="button" @click="openCampus"><span class="menu-icon menu-icon-blue"><i
-                class="menu-glyph menu-glyph-campus" aria-hidden="true"></i></span><span
-              class="menu-copy"><strong>校园生产管理</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
           <button v-if="user.isSuperAdmin" type="button" @click="openImports"><span class="menu-icon menu-icon-blue"><i class="data-import-icon" :style="dataImportIconStyle" aria-hidden="true"></i></span><span class="menu-copy"><strong>数据导入</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
         </section>
       </template>
@@ -938,9 +935,10 @@ async function handleTargetFile(event) {
     if (user.isSuperAdmin !== true) throw new Error('仅超级管理员可导入目标')
     const rows = await parseTargetFile(file, dashboard)
     loading.value = true
-    await importTargets(rows, user, token.value)
+    const result = await importTargets(rows, user, token.value)
     await loadDashboard()
-    showToast(`已导入 ${rows.length} 条目标`)
+    if (result.failed) throw new Error(`成功 ${result.success || 0} 条，失败 ${result.failed} 条：${(result.errors || []).join('；')}`)
+    showToast(`已导入 ${result.imported ?? rows.length} 条目标`)
   } catch (error) {
     showToast(error.message || '导入失败', 'error')
   } finally {

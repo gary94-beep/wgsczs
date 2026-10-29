@@ -81,6 +81,35 @@ function run(funCode, params = {}, { phone = '13800000009', db = fixture(), sour
   vm.runInNewContext(source, ctx, { timeout: 1000 })
   return { ...JSON.parse(ctx.JsResult.result).result, queries }
 }
+test('new target columns map to independent base/challenge goals', () => {
+  const db = fixture()
+  db[tables.targets] = [{branch:'城区分公司',grid:'东区',product_id:'newNumbers',target_month:'2026-10',month_base_target:30,month_challenge_target:50,day_base_target:2,day_challenge_target:4,target_date:date}]
+  const response = run('wgsc_fetchDashboard', {}, {db,phone:'13800000003'})
+  assert.equal(response.retCode,'0',response.retMsg)
+  const metric = buildCapacityMetric(response.data,'newNumbers',['城区分公司::东区'],'',{level:'grid',id:'城区分公司::东区'})
+  assert.equal(metric.baseTarget,30)
+  assert.equal(metric.challengeTarget,50)
+  assert.equal(metric.daily.baseTarget,2)
+  assert.equal(metric.daily.challengeTarget,4)
+  assert.equal(metric.progressPercent,70)
+})
+test('target imports use four columns, reject invalid goals and do not delete history', () => {
+  const row={gridId:'城区分公司::东区',productId:'newNumbers',targetMonth:'2026-10',monthBaseTarget:30,monthChallengeTarget:50,dayBaseTarget:2,dayChallengeTarget:4,targetDate:date}
+  const result=run('wgsc_importTargets',{rows:JSON.stringify([row])})
+  assert.equal(result.retCode,'0',result.retMsg)
+  const write=result.queries.find(q=>/^INSERT/.test(q.query))
+  assert.ok(write.query.includes('month_challenge_target'))
+  assert.ok(write.query.includes('day_base_target'))
+  assert.ok(write.query.includes('ON DUPLICATE KEY UPDATE'))
+  assert.ok(!result.queries.some(q=>/^DELETE/.test(q.query)))
+  assert.equal(result.data.success,1)
+  const bad=run('wgsc_importTargets',{rows:JSON.stringify([{...row,dayChallengeTarget:1}])})
+  assert.notEqual(bad.retCode,'0')
+  assert.ok(!bad.queries.some(q=>/^INSERT/.test(q.query)))
+  const failed=run('wgsc_importTargets',{rows:JSON.stringify([row])},{failWrites:true})
+  assert.equal(failed.data.failed,1)
+  assert.equal(failed.data.imported,0)
+})
 test('gateway requires token and server-derived superadmin on every mutation', () => {
   assert.equal(run('wgsc_fetchDashboard', { token: '' }).retCode, '00008')
   for (const fun of ['wgsc_importCapacity', 'wgsc_importRows', 'wgsc_importTargets', 'wgsc_importSalesScripts', 'wgsc_saveSalesScript']) {
