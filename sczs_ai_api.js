@@ -220,11 +220,13 @@ function init() {
     }
 
     // ---------- 5. 查组织架构（前端/跑批通用） ----------
+    var branches = [], grids = [];
+    if (String(Params.includeOrganization) !== "0") {
     var branchRows = sql("SELECT DISTINCT branch_company AS branchId, branch_company AS branchName FROM " + tables.region + " WHERE stat_date=#{cutoff} AND branch_company <> '全市' ORDER BY branch_company", { cutoff: statDate }, true);
     var gridRows = sql("SELECT DISTINCT branch_company AS branchId, grid_name AS gridName FROM " + tables.region + " WHERE stat_date=#{cutoff} AND branch_company <> '全市' AND grid_name <> branch_company ORDER BY branch_company, grid_name", { cutoff: statDate }, true);
-    var branches = [], grids = [];
     for (var i = 0; i < branchRows.length; i++) branches.push({ branchId: branchRows[i].branchId, branchName: branchRows[i].branchName });
     for (var i = 0; i < gridRows.length; i++) grids.push({ gridId: gridRows[i].branchId + "::" + gridRows[i].gridName, gridName: gridRows[i].gridName, branchId: gridRows[i].branchId });
+    }
 
     return {
       statDate: statDate, 
@@ -305,7 +307,15 @@ function init() {
       where += " AND channel_type=#{channelType} ";
     }
 
-    var rows = sql("SELECT id, stat_date, scope_type, scope_id, channel_type, answer, created_at, updated_at FROM " + tables.aiAnalysis + where + " ORDER BY stat_date DESC, scope_type, scope_id LIMIT 200", args, true);
+    var rows = [];
+    for (var offset = 0; ; offset += 1000) {
+      var page = sql("SELECT id, stat_date, scope_type, scope_id, channel_type, answer, created_at, updated_at FROM " + tables.aiAnalysis + where +
+        " ORDER BY stat_date DESC, scope_type, scope_id, id LIMIT 1000 OFFSET " + offset, args, true);
+      if (page.length > 1000) throw new Error("分析结果分页未生效");
+      rows = rows.concat(page);
+      if (page.length < 1000) break;
+      if (offset >= 99000) throw new Error("分析结果过多，请指定日期和区域");
+    }
     var out = [];
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
@@ -335,7 +345,45 @@ function init() {
     return { cleaned: true, cutoffDate: cutoffDate };
   }
 
+  // Lightweight job discovery. Only organization pairs are read, no capacity
+  // SUMs, personnel/channel details or MoMA requests are performed here.
+  function fetchBatchManifest() {
+    var statDate = text(Params.statDate);
+    if (statDate) statDate = date(statDate);
+    else {
+      var latestRows = sql("SELECT MAX(stat_date) AS d FROM " + tables.region, {}, true);
+      if (!latestRows[0] || !latestRows[0].d) throw new Error("产能表无数据");
+      statDate = date(latestRows[0].d);
+    }
+    var pairs = [], pageSize = 1000;
+    for (var offset = 0; ; offset += pageSize) {
+      var page = sql("SELECT DISTINCT branch_company AS branchId,grid_name AS gridName FROM " + tables.region +
+        " WHERE stat_date=#{cutoff} ORDER BY branch_company,grid_name LIMIT 1000 OFFSET " + offset,
+        { cutoff: statDate }, true);
+      if (page.length > pageSize) throw new Error("组织清单分页未生效");
+      pairs = pairs.concat(page);
+      if (page.length < pageSize) break;
+      if (offset >= 99000) throw new Error("组织清单过大，请缩小范围");
+    }
+    if (!pairs.length) throw new Error("指定日期没有区域产能数据");
+    var branches = [], grids = [], branchSeen = {}, gridSeen = {};
+    for (var i = 0; i < pairs.length; i++) {
+      var b = text(pairs[i].branchId), g = text(pairs[i].gridName);
+      if (!b || !g || b === "全市") continue;
+      var bk = JSON.stringify([b]), gk = JSON.stringify([b, g]);
+      if (!Object.prototype.hasOwnProperty.call(branchSeen, bk)) {
+        branchSeen[bk] = true; branches.push({ branchId: b, branchName: b });
+      }
+      if ((b !== g || ["未知", "市统筹"].indexOf(g) >= 0) && !Object.prototype.hasOwnProperty.call(gridSeen, gk)) {
+        gridSeen[gk] = true; grids.push({ branchId: b, gridId: b + "::" + g, gridName: g });
+      }
+    }
+    return { contractVersion: "1.6", statDate: statDate,
+      organization: { cityName: "中山市", branches: branches, grids: grids } };
+  }
+
   var handlers = {
+    wgsc_aiFetchBatchManifest: fetchBatchManifest,
     wgsc_aiFetchAnalysisInput: fetchAnalysisInput,
     wgsc_aiSaveAnalysisResult: saveAnalysisResult,
     wgsc_aiGetAnalysisResult: getAnalysisResult,
