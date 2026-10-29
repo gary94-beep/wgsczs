@@ -30,9 +30,31 @@ export function compareCapacity(current, baseline) {
   return { difference, percent: baseline === 0 ? (difference === 0 ? 0 : null) : difference / baseline * 100 }
 }
 
-function progress(production, targets, gridIds, field, statDate) {
+function progress(production, targets, gridIds, field, statDate, scope) {
   const period = field === 'dailyTarget' ? 'day' : 'month'
+  
   const sum = kind => {
+    // 1. 优先匹配汇总层级目标（全市 / 分公司）
+    if (scope && ['city', 'branch'].includes(scope.level)) {
+      let summaryId = '';
+      if (scope.level === 'city') summaryId = '全市::全市';
+      else if (scope.level === 'branch' && scope.id) summaryId = `${scope.id}::${scope.id}`;
+      
+      if (summaryId) {
+        const summaryRecords = targets.filter(item => item.gridId === summaryId);
+        if (summaryRecords.length === 1) {
+          const row = summaryRecords[0];
+          const month = row.targetMonth ?? row.target_month;
+          if (month && month !== statDate.slice(0, 7)) return null;
+          if (period === 'day' && (row.targetDate ?? row.target_date) !== statDate) return null;
+          
+          const value = targetValue(row, period, kind);
+          if (value !== null) return value;
+        }
+      }
+    }
+
+    // 2. 如果没有汇总目标，兜底：把旗下网格的目标加起来
     if (!gridIds.length) return null
     let total = 0
     for (const id of gridIds) {
@@ -56,7 +78,15 @@ export function buildCapacityMetric(dashboard, productId, gridIds, channelType =
   const ids = new Set(gridIds)
   const matches = row => row.productId === productId && ids.has(row.gridId) && matchesChannelType(row, channelType)
   const rows = dashboard.rows.filter(matches)
-  const targets = dashboard.targets.filter(item => item.productId === productId && ids.has(item.gridId) && (channelType ? matchesChannelType(item, channelType) : !item.channelType))
+  
+  // 过滤 targets 时，除了匹配当前网格，还要把当前范围的汇总节点（全市::全市 / 分公司::分公司）也放进来
+  const summaryId = scope?.level === 'city' ? '全市::全市' : (scope?.level === 'branch' && scope.id ? `${scope.id}::${scope.id}` : null);
+  const targets = dashboard.targets.filter(item => 
+    item.productId === productId && 
+    (ids.has(item.gridId) || item.gridId === summaryId) && 
+    (channelType ? matchesChannelType(item, channelType) : !item.channelType)
+  )
+
   if (dashboard.regionRows) {
     // Regional summaries are authoritative and must not be mixed with staff/channel records.
     const source = channelType ? (dashboard.periodRows || []).filter(matches) : dashboard.regionRows.filter(row => row.productId === productId &&
@@ -69,36 +99,69 @@ export function buildCapacityMetric(dashboard, productId, gridIds, channelType =
       } else if (selected.length !== 1) return null
       return selected.reduce((total, row) => total + row.production, 0)
     }
-    const monthly = progress(sum('mon'), targets, gridIds, 'target', dashboard.statDate)
-    const daily = progress(sum('day'), targets, gridIds, 'dailyTarget', dashboard.statDate)
+    
+    const monthly = progress(sum('mon'), targets, gridIds, 'target', dashboard.statDate, scope)
+    const daily = progress(sum('day'), targets, gridIds, 'dailyTarget', dashboard.statDate, scope)
+    
     const periods = buildMonthToDatePeriods(dashboard.statDate)
     const days = dateRange(periods.current.startDate, periods.current.endDate).length
     const previousDays = dateRange(periods.previous.startDate, periods.previous.endDate).length
     const previous = sum('last_mon'), week = sum('week')
-    return { ...monthly, daily, weekSeries: [], monthSeries: [], previousSeries: [],
+    
+    return { 
+      ...monthly, 
+      daily, 
+      weekSeries: [], 
+      monthSeries: [], 
+      previousSeries: [],
       weeklyAverage: week === null ? null : week / 7,
       monthAverage: monthly.production === null ? null : monthly.production / days,
-      previousAverage: previous === null ? null : previous / previousDays, weekBasis: 'rolling7' }
+      previousAverage: previous === null ? null : previous / previousDays, 
+      weekBasis: 'rolling7' 
+    }
   }
-  const monthly = progress(rows.reduce((sum, row) => sum + Number(row.production || 0), 0), targets, gridIds, 'target', dashboard.statDate)
-  if (!dashboard.statDate) return { ...monthly, daily: progress(null, [], gridIds, 'dailyTarget', ''), weekSeries: [], monthSeries: [], previousSeries: [], weeklyAverage: null, monthAverage: null, previousAverage: null }
+  
+  const monthly = progress(rows.reduce((sum, row) => sum + Number(row.production || 0), 0), targets, gridIds, 'target', dashboard.statDate, scope)
+  if (!dashboard.statDate) {
+    return { 
+      ...monthly, 
+      daily: progress(null, [], gridIds, 'dailyTarget', '', scope), 
+      weekSeries: [], 
+      monthSeries: [], 
+      previousSeries: [], 
+      weeklyAverage: null, 
+      monthAverage: null, 
+      previousAverage: null 
+    }
+  }
 
   const periods = buildMonthToDatePeriods(dashboard.statDate)
-  const daily = new Map()
+  const dailyMap = new Map()
   for (const row of (dashboard.dailyRows || []).filter(matches)) {
-    const entry = daily.get(row.date) || { total: 0, grids: new Set() }
+    const entry = dailyMap.get(row.date) || { total: 0, grids: new Set() }
     if (typeof row.production !== 'number' || !Number.isFinite(row.production)) continue
     entry.total += row.production
     entry.grids.add(row.gridId)
-    daily.set(row.date, entry)
+    dailyMap.set(row.date, entry)
   }
+  
   const series = (start, end) => dateRange(start, end).map(date => {
-    const entry = daily.get(date)
+    const entry = dailyMap.get(date)
     return { date, value: entry && gridIds.every(id => entry.grids.has(id)) ? entry.total : null }
   })
+  
   const weekSeries = series(weekStart(dashboard.statDate), dashboard.statDate)
   const monthSeries = series(periods.current.startDate, dashboard.statDate)
   const previousSeries = series(periods.previous.startDate, periods.previous.endDate)
-  return { ...monthly, daily: progress(weekSeries.at(-1)?.value ?? null, targets, gridIds, 'dailyTarget', dashboard.statDate),
-    weekSeries, monthSeries, previousSeries, weeklyAverage: mean(weekSeries), monthAverage: mean(monthSeries), previousAverage: mean(previousSeries) }
+  
+  return { 
+    ...monthly, 
+    daily: progress(weekSeries.at(-1)?.value ?? null, targets, gridIds, 'dailyTarget', dashboard.statDate, scope),
+    weekSeries, 
+    monthSeries, 
+    previousSeries, 
+    weeklyAverage: mean(weekSeries), 
+    monthAverage: mean(monthSeries), 
+    previousAverage: mean(previousSeries) 
+  }
 }
