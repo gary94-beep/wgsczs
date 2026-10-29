@@ -94,14 +94,23 @@ export function buildCapacityMetric(dashboard, productId, gridIds, channelType =
     const sum = period => {
       const selected = source.filter(row => row.period === period)
       if (!selected.length || selected.some(row => typeof row.production !== 'number' || !Number.isFinite(row.production))) return null
-      if (!scope || channelType) {
-        if (gridIds.some(id => !selected.some(row => row.gridId === id))) return null
-      } else if (selected.length !== 1) return null
+      if (!channelType) {
+        if (!scope && gridIds.some(id => !selected.some(row => row.gridId === id))) return null
+        if (scope && selected.length !== 1) return null
+      }
       return selected.reduce((total, row) => total + row.production, 0)
     }
+    const covered = period => [...new Set(source.filter(row => row.period === period && typeof row.production === 'number' && Number.isFinite(row.production)).map(row => row.gridId))].sort()
+    const coverage = period => ({ coveredGridCount: covered(period).length, selectedGridCount: ids.size,
+      partial: covered(period).length > 0 && covered(period).length < ids.size })
+    const sameCoverage = (a, b) => !channelType || JSON.stringify(covered(a)) === JSON.stringify(covered(b))
     
     const monthly = progress(sum('mon'), targets, gridIds, 'target', dashboard.statDate, scope)
     const daily = progress(sum('day'), targets, gridIds, 'dailyTarget', dashboard.statDate, scope)
+    if (channelType) {
+      monthly.dataCoverage = coverage('mon')
+      daily.dataCoverage = coverage('day')
+    }
     
     const periods = buildMonthToDatePeriods(dashboard.statDate)
     const days = dateRange(periods.current.startDate, periods.current.endDate).length
@@ -114,9 +123,9 @@ export function buildCapacityMetric(dashboard, productId, gridIds, channelType =
       weekSeries: [], 
       monthSeries: [], 
       previousSeries: [],
-      weeklyAverage: week === null ? null : week / 7,
+      weeklyAverage: week === null || !sameCoverage('day', 'week') ? null : week / 7,
       monthAverage: monthly.production === null ? null : monthly.production / days,
-      previousAverage: previous === null ? null : previous / previousDays, 
+      previousAverage: previous === null || !sameCoverage('mon', 'last_mon') ? null : previous / previousDays,
       weekBasis: 'rolling7' 
     }
   }

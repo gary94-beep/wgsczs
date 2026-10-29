@@ -3,7 +3,7 @@
     <header><div><h2>产能总看板</h2><p>{{ scope }} · {{ statDate }}<span v-if="demo"> · 演示数据</span></p></div><div class="board-period" role="group" aria-label="看板统计周期"><button v-for="option in periods" :key="option.id" type="button" :aria-pressed="period === option.id" :class="{ active: period === option.id }" @click="$emit('update:period', option.id)">{{ option.label }}</button></div></header>
     <div class="board-columns"><span>产品</span><span>{{ period === 'day' ? '当日产能' : '本月累计' }}</span><span v-if="showTargets">完成进度</span></div>
     <button v-for="(item, index) in items" :key="item.productId" type="button" class="board-row" :style="{ '--board-color': index % 2 ? '#099d87' : '#2874ed' }" @click="$emit('open', item.productId)">
-      <strong>{{ item.productName }}</strong><span class="board-value">{{ format(value(item).production) }}<small>{{ item.unit }}</small></span><TargetProgress v-if="showTargets" :item="value(item)" :unit="item.unit" :label="item.productName" compact />
+      <strong>{{ item.productName }}</strong><span class="board-value">{{ format(value(item).production) }}<small>{{ item.unit }}</small><small v-if="value(item).dataCoverage?.partial" class="coverage-note">已统计 {{ value(item).dataCoverage.coveredGridCount }}/{{ value(item).dataCoverage.selectedGridCount }} 个网格</small></span><TargetProgress v-if="showTargets" :item="value(item)" :unit="item.unit" :label="item.productName" compact />
     </button>
   </section>
 </template>
@@ -25,5 +25,6 @@ header { display: flex; align-items: center; justify-content: space-between; gap
 .board-row { width: 100%; padding: 15px 0; border: 0; border-top: 1px solid #e0edf6; background: transparent; text-align: left; font: inherit; cursor: pointer; } .board-row:hover { background: #eaf5ff; } .board-row:focus-visible { outline: 2px solid #2874ed; outline-offset: 2px; }
 .board-row strong { color: #243d5a; font-size: 14px; overflow-wrap: anywhere; } .board-value { color: var(--board-color); font-size: 20px; font-weight: 700; text-align: right; overflow-wrap: anywhere; } small { font-size: 10px; font-weight: 400; margin-left: 3px; color: #72869e; }
 .board-completion { min-width: 0; display: grid; gap: 7px; text-align: right; } b { color: var(--board-color); font-size: 13px; } .board-track { height: 5px; background: #dfeaf6; border-radius: 3px; overflow: hidden; } .board-track i { display: block; height: 100%; background: var(--board-color); border-radius: inherit; }
+.coverage-note { display: block; margin-top: 4px; line-height: 1.5; }
 @media (max-width: 360px) { .production-board { padding: 16px; } .board-row strong { font-size: 12px; } .board-value { font-size: 17px; } }
 </style>

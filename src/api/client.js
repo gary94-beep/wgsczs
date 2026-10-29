@@ -1,3 +1,5 @@
+import { resolveHandle2References } from './handle2References.js'
+
 const isMock = import.meta.env.VITE_USE_MOCK === 'true'
 const apiBase = import.meta.env.VITE_API_BASE || ''
 const appId = import.meta.env.VITE_APP_ID || ''
@@ -172,7 +174,7 @@ export function decryptAndUnwrap(resultData, aesKey, options = {}) {
   }
 
   const decryptedJson = window.decryptAES(resultData, aesKey)
-  const bizData = JSON.parse(decryptedJson)
+  const bizData = resolveHandle2References(JSON.parse(decryptedJson))
 
   // 两层 result
   const business = bizData?.result?.result

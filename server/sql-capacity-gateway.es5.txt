@@ -149,6 +149,7 @@
     var scripts = pagedSql("SELECT product_id,content,updated_at FROM " + tables.scripts, {}, "product_id,id");
     for (i = 0; i < scripts.length; i++) data.salesScripts.push({ productId: scripts[i].product_id, content: scripts[i].content, updatedAt: scripts[i].updated_at, status: "maintained", source: "超级管理员维护" });
     var channelDate = latest(tables.channel), staffDate = latest(tables.staffCapacity);
+    data.sourceDates = { region: cutoff, channel: channelDate, staff: staffDate };
     if (channelDate !== cutoff) data.warnings.push("渠道产能表最新日期（" + (channelDate || "无") + "）与区域产能表（" + cutoff + "）不一致，本次按区域表日期读取");
     if (staffDate !== cutoff) data.warnings.push("工号产能表最新日期（" + (staffDate || "无") + "）与区域产能表（" + cutoff + "）不一致，本次按区域表日期读取");
     return data;
@@ -183,13 +184,58 @@
     }
     var selected = pagedSql(selectedQuery, args,
       "branchId,gridId,productName,period,channelType,staffId,channelCode,microChannelName,serviceProvider");
+    function copyRow(row) {
+      var out = {};
+      for (var key in row) if (Object.prototype.hasOwnProperty.call(row, key)) out[key] = row[key];
+      return out;
+    }
     for (var i = 0; i < selected.length; i++) {
-      var row = mapCapacity(selected[i], data.statDate); data.periodRows.push(row);
-      if (row.period === "mon") data.rows.push(row);
-      if (row.period === "day") { row.date = data.statDate; data.dailyRows.push(row); }
+      var mapped = mapCapacity(selected[i], data.statDate);
+      // Summary rows need no empty identity or nullable dimension fields.
+      var row = detail ? mapped : { branchId: mapped.branchId, gridId: mapped.gridId,
+        productId: mapped.productId, period: mapped.period, production: mapped.production, channelType: mapped.channelType };
+      data.periodRows.push(copyRow(row));
+      if (row.period === "mon") data.rows.push(copyRow(row));
+      if (row.period === "day") { var dailyRow = copyRow(row); dailyRow.date = data.statDate; data.dailyRows.push(dailyRow); }
+    }
+    if (Params.funCode === "wgsc_fetchDashboard") {
+      data.capacityDiagnostics = categoryDiagnostics(data);
+      for (var di = 0; di < data.capacityDiagnostics.types.length; di++) {
+        var diagnostic = data.capacityDiagnostics.types[di];
+        if (!diagnostic.aggregateRows) data.warnings.push(diagnostic.channelType + "在当前截止日没有可用分类记录，请核对产能日期及维度关联");
+      }
     }
     dashboardMemo = data;
     return data;
+  }
+  function categoryDiagnostics(data) {
+    var types = ["三星+渠道", "直销队伍", "末梢渠道"], diagnostics = [], rawCounts = {};
+    for (var i = 0; i < types.length; i++) {
+      var type = types[i], rows = data.periodRows.filter(function (r) { return r.channelType === type; }), grids = {};
+      for (var j = 0; j < rows.length; j++) grids[rows[j].gridId] = true;
+      var item = { channelType: type, aggregateRows: rows.length, coveredGrids: Object.keys(grids).length };
+      if (!rows.length) {
+        var star = type === "三星+渠道", table = star ? tables.channel : tables.staffCapacity;
+        var dimension = star ? tables.channelInfo : type === "直销队伍" ? tables.staff : tables.terminal;
+        var key = star ? "chn_code" : "staff_no", capacityKey = star ? "channel_code" : "staff_no";
+        var args = { cutoff: data.statDate }, condition = " WHERE c.stat_date=#{cutoff}" + scope("c.branch_company", "c.grid_name", args);
+        if (rawCounts[table] === undefined) {
+          var raw = sql("SELECT COUNT(*) AS total FROM " + table + " c" + condition, args, true);
+          rawCounts[table] = Number(raw[0] && raw[0].total || 0);
+        }
+        item.sourceRowsOnDate = rawCounts[table];
+        var join = " INNER JOIN " + latestDimension(dimension, key) + " d ON c." + capacityKey + "=d." + key;
+        var match = sql("SELECT COUNT(*) AS code_matches,SUM(CASE WHEN c.branch_company=d.branch AND c.grid_name=d.grid THEN 1 ELSE 0 END) AS organization_matches" +
+          (star ? ",SUM(CASE WHEN c.branch_company=d.branch AND c.grid_name=d.grid AND d.star_level='三星+' THEN 1 ELSE 0 END) AS star_matches" : "") +
+          " FROM " + table + " c" + join + condition, args, true);
+        item.codeMatchedRows = Number(match[0] && match[0].code_matches || 0);
+        item.organizationMatchedRows = Number(match[0] && match[0].organization_matches || 0);
+        if (star) item.starQualifiedRows = Number(match[0] && match[0].star_matches || 0);
+      }
+      diagnostics.push(item);
+    }
+    return { statDate: data.statDate, sourceDates: { region: data.sourceDates.region,
+      channel: data.sourceDates.channel, staff: data.sourceDates.staff }, types: diagnostics };
   }
   function populationTotals(data) {
     var args = {}, chosen = selectedGridClause(args, data, "c");
