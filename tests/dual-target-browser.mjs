@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import { createRequire } from 'node:module'
 const {chromium}=createRequire(process.execPath)('playwright')
-const base=process.env.BASE_URL || 'http://127.0.0.1:5193/apph5_test/wgsczs/'
+const base=process.env.BASE_URL || 'http://127.0.0.1:5192/apph5_test/wgsczs/'
 const browser=await chromium.launch({channel:'msedge',headless:true})
 await fs.mkdir('qa',{recursive:true})
 try {
@@ -12,6 +12,9 @@ try {
     await page.goto(base+'tests/dual-target-preview.html')
     await page.locator('.capacity-actual').first().waitFor()
     assert.equal(await page.locator('.dual-track').count(),2)
+    assert.equal(await page.locator('.dual-min-marker').count(),2)
+    assert.match(await page.locator('.capacity-day .target-rates').innerText(),/112.5%[\s\S]*90%[\s\S]*75%/)
+    assert.match(await page.locator('.capacity-month .target-rates').innerText(),/150%[\s\S]*112.5%[\s\S]*90%/)
     assert.match(await page.locator('.capacity-day .target-rates').innerText(),/90%[\s\S]*75%/)
     assert.match(await page.locator('.capacity-month .target-rates').innerText(),/112.5%[\s\S]*90%/)
     const check=async()=>{
@@ -29,7 +32,7 @@ try {
     }
     await check()
     if(width===390) await page.screenshot({path:'qa/dual-target-card-390.png',fullPage:true})
-    for(const values of [[0,0,0],[null,null,null],[500,300,null],[500,null,600],[999999999,1000000000,1000000001]]) {
+    for(const values of [[0,0,0,0],[null,null,null,null],[500,300,null,200],[500,null,600,200],[500,null,null,200],[999999999,1000000000,1000000001,999999998],[300,300,300,300]]) {
       await page.evaluate(v=>window.setTargetCase(...v),values)
       await check()
       assert.ok(!/NaN|Infinity/.test(await page.locator('.capacity-card').innerText()))
@@ -47,8 +50,9 @@ try {
     await page.locator('.workbench-menu').waitFor()
     await page.locator('.workbench-menu button').first().click()
     await page.locator('.production-board').waitFor()
-    assert.equal(await page.locator('.capacity-card').count(),5)
-    assert.equal(await page.locator('.capacity-card .dual-track').count(),10)
+    assert.equal(await page.locator('.capacity-card').count(),4)
+    assert.equal(await page.locator('.capacity-card .dual-track').count(),8)
+    assert.equal(await page.getByText('千兆运营',{exact:true}).count(),0)
     await page.locator('.capacity-card').first().scrollIntoViewIfNeeded()
     if(phone.endsWith('09')) await page.screenshot({path:'qa/dual-target-overview-390.png',fullPage:true})
     await page.locator('.channel-type-filter select').first().selectOption({label:'三星+渠道'})
@@ -69,11 +73,11 @@ try {
       const stream=await (await download).createReadStream(),chunks=[]
       for await(const chunk of stream) chunks.push(chunk)
       const csv=Buffer.concat(chunks).toString('utf8')
-      assert.ok(csv.replace(/^\ufeff/,'').startsWith('id,branch,grid,product_id,target_month,month_base_target,month_challenge_target,day_base_target,day_challenge_target,target_date'))
+      assert.ok(csv.replace(/^\ufeff/,'').startsWith('id,branch,grid,product_id,target_month,month_min_target,month_base_target,month_challenge_target,day_min_target,day_base_target,day_challenge_target,target_date'))
       const choose=page.waitForEvent('filechooser')
       await row.getByRole('button',{name:'导入数据',exact:true}).click()
       await (await choose).setFiles({name:'targets.csv',mimeType:'text/csv',buffer:Buffer.from(csv)})
-      await page.getByText('已导入 15 条目标',{exact:true}).waitFor()
+      await page.getByText('已导入 12 条目标',{exact:true}).waitFor()
       console.log('Admin template download -> CSV import -> dashboard refresh passed')
     }
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))

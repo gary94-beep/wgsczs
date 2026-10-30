@@ -9,7 +9,7 @@ function init() {
     terminal: "app_open_api_c002_wgsc_staff_terminal_1",
     staff: "app_open_api_c002_wgsc_staff_1",
     permission: "app_open_api_c003_wgsc_permission_1",
-    targets: "app_open_api_c002_wgsc_target_1",
+    targets: "app_open_api_c003_wgsc_target_1",
     scripts: "app_open_api_c001_wgsc_script_1"
   };
 
@@ -389,16 +389,18 @@ function init() {
 
       var mb = optionalTarget(r.monthBaseTarget), mc = optionalTarget(r.monthChallengeTarget);
       var db = optionalTarget(r.dayBaseTarget), dc = optionalTarget(r.dayChallengeTarget);
+      var mm = optionalTarget(r.monthMinTarget), dm = optionalTarget(r.dayMinTarget);
+      if ((mm !== null && ((mb !== null && mm > mb) || (mc !== null && mm > mc))) || (dm !== null && ((db !== null && dm > db) || (dc !== null && dm > dc)))) throw new Error("第" + (i + 1) + "行底线目标不能大于基础或挑战目标");
       if ((mb !== null && mc !== null && mc < mb) || (db !== null && dc !== null && dc < db)) {
         throw new Error("第" + (i + 1) + "行挑战目标不能小于基础目标");
       }
-      if (mb === null && mc === null && db === null && dc === null) {
+      if (mm === null && mb === null && mc === null && dm === null && db === null && dc === null) {
         throw new Error("第" + (i + 1) + "行至少填写一个目标值");
       }
 
       // 日目标必须有目标日期，且必须等于当前统计日
       var targetDate = null;
-      if (db !== null || dc !== null) {
+      if (dm !== null || db !== null || dc !== null) {
         if (!r.targetDate) throw new Error("第" + (i + 1) + "行填写日目标时必须填写目标日期");
         targetDate = date(r.targetDate);
         // if (targetDate !== data.statDate) {
@@ -414,8 +416,10 @@ function init() {
         grid: parts[1],
         product_id: productInfo.productId,
         target_month: currentMonth,
+        month_min_target: mm,
         month_base_target: mb,
         month_challenge_target: mc,
+        day_min_target: dm,
         day_base_target: db,
         day_challenge_target: dc,
         target_date: targetDate
@@ -425,8 +429,8 @@ function init() {
     // 依赖唯一键：branch, grid, product_id, target_month
     var fields = [
       "branch", "grid", "product_id", "target_month",
-      "month_base_target", "month_challenge_target",
-      "day_base_target", "day_challenge_target", "target_date"
+      "month_min_target", "month_base_target", "month_challenge_target",
+      "day_min_target", "day_base_target", "day_challenge_target", "target_date"
     ];
     var BATCH_SIZE = 500;
     var errors = [];
@@ -449,8 +453,10 @@ function init() {
 
       var insertSql = "INSERT INTO " + tables.targets + " (" + fields.join(",") + ") VALUES " + valueParts.join(",") +
         " ON DUPLICATE KEY UPDATE " +
+        "month_min_target=VALUES(month_min_target)," +
         "month_base_target=VALUES(month_base_target)," +
         "month_challenge_target=VALUES(month_challenge_target)," +
+        "day_min_target=VALUES(day_min_target)," +
         "day_base_target=VALUES(day_base_target)," +
         "day_challenge_target=VALUES(day_challenge_target)," +
         "target_date=VALUES(target_date)";
@@ -796,6 +802,7 @@ function init() {
       r = goals[i]; var base = optionalTarget(r.month_base_target), daily = optionalTarget(r.day_base_target);
       data.targets.push({ gridId: gridId(r.branch, r.grid), productId: r.product_id,
         target: base, dailyTarget: daily, monthBaseTarget: base, monthChallengeTarget: optionalTarget(r.month_challenge_target),
+        monthMinTarget: optionalTarget(r.month_min_target), dayMinTarget: optionalTarget(r.day_min_target),
         dayBaseTarget: daily, dayChallengeTarget: optionalTarget(r.day_challenge_target),
         targetMonth: text(r.target_month), targetDate: r.target_date ? date(r.target_date) : "" });
     }

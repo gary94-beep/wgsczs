@@ -7,8 +7,10 @@ export const targetColumns = [
   'grid', 
   'product_id', 
   'target_month', 
+  'month_min_target',
   'month_base_target', 
   'month_challenge_target', 
+  'day_min_target',
   'day_base_target', 
   'day_challenge_target', 
   'target_date'
@@ -112,25 +114,28 @@ export async function parseTargetFile(file, dashboard) {
     const key = `${gridId}|${productId}`
     const values = {}
     for (const period of ['month', 'day']) {
-      for (const kind of ['base', 'challenge']) {
+      for (const kind of ['min', 'base', 'challenge']) {
         const raw = record[`${period}_${kind}_target`]
         if (raw !== '' && (!Number.isFinite(Number(raw)) || Number(raw) < 0)) {
           throw new Error(`第 ${index + 2} 行目标须为非负数或留空`)
         }
-        values[`${period}${kind === 'base' ? 'Base' : 'Challenge'}Target`] = raw === '' ? null : Number(raw)
+        values[`${period}${{min:'Min',base:'Base',challenge:'Challenge'}[kind]}Target`] = raw === '' ? null : Number(raw)
       }
       if (values[`${period}BaseTarget`] !== null && values[`${period}ChallengeTarget`] !== null && values[`${period}ChallengeTarget`] < values[`${period}BaseTarget`]) {
         throw new Error(`第 ${index + 2} 行挑战目标不能小于基础目标`)
       }
+      const min = values[`${period}MinTarget`], base = values[`${period}BaseTarget`], challenge = values[`${period}ChallengeTarget`]
+      if (min !== null && ((base !== null && min > base) || (challenge !== null && min > challenge))) throw new Error(`第 ${index + 2} 行底线目标不能大于基础或挑战目标`)
     }
 
     if (imported.has(key)) throw new Error(`第 ${index + 2} 行目标重复`)
-    if (Object.values(values).every(v => v === null)) throw new Error(`第 ${index + 2} 行至少填写一个目标值`)
+    // Empty template rows are not updates and must not erase existing targets.
+    if (Object.values(values).every(v => v === null)) continue
 
     // 5. 校验日期
     const targetDate = record.target_date ? normalizeDate(record.target_date) : ''
     if (record.target_date && !targetDate) throw new Error(`第 ${index + 2} 行目标日期无效`)
-    if ((values.dayBaseTarget !== null || values.dayChallengeTarget !== null) && !targetDate) {
+    if ((values.dayMinTarget !== null || values.dayBaseTarget !== null || values.dayChallengeTarget !== null) && !targetDate) {
       throw new Error(`第 ${index + 2} 行填写日目标时必须填写 target_date`)
     }
     // if (targetDate && targetDate !== statDateStr) {
@@ -187,8 +192,10 @@ export function targetTemplateCsv(dashboard) {
         grid.gridName, 
         product.productId, 
         month,
+        targetValue(item || {}, 'month', 'min'),
         targetValue(item || {}, 'month'), 
         targetValue(item || {}, 'month', 'challenge'), 
+        current ? targetValue(item, 'day', 'min') : '',
         current ? targetValue(item, 'day') : '',
         current ? targetValue(item, 'day', 'challenge') : '', 
         dashboard.statDate

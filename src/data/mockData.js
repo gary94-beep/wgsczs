@@ -19,7 +19,7 @@ export const mockPermissions = {
 
 export const mockProducts = [
   { productId: 'newNumbers', productName: '放号', unit: '户' },
-  { productId: 'plan119', productName: '119+套餐', unit: '户' },
+  { productId: 'plan119', productName: '129+高套', unit: '户' },
   { productId: 'terminal', productName: '终端合约', unit: '单' },
   { productId: 'homeBroadband', productName: '手宽新增', unit: '户' },
   { productId: 'gigabit', productName: '千兆运营', unit: '户' }
@@ -37,6 +37,7 @@ export const mockTargets = mockGrids.flatMap(grid =>
     productId: product.productId,
     target: targetMatrix[grid.gridId][index],
     monthBaseTarget: targetMatrix[grid.gridId][index],
+    monthMinTarget: Math.floor(targetMatrix[grid.gridId][index] * 0.8),
     monthChallengeTarget: Math.ceil(targetMatrix[grid.gridId][index] * 1.25)
   }))
 )

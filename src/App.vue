@@ -197,7 +197,7 @@
             </div>
           </div>
 
-          <h3>目标与话术</h3>
+          <h3>目标管理</h3>
 
           <div class="import-nav-item">
             <div class="import-nav-label">
@@ -214,7 +214,7 @@
             </div>
           </div>
 
-          <div class="import-nav-item">
+          <div v-if="showSalesScriptLibrary" class="import-nav-item">
             <div class="import-nav-label">
               <span class="menu-icon menu-icon-yellow">经</span>
               <span class="menu-copy"><strong>经典话术表</strong></span>
@@ -347,8 +347,8 @@
           <div class="monitor-filters">
             <label v-if="stage === 'monitor' && user.role === 'city'" class="monitor-filter">分公司<select
                 v-model="monitorBranchId" @change="onMonitorBranchChange">
-                <option value="">全部分公司</option>
-                <option v-for="branch in dashboard.organization.branches" :key="branch.branchId"
+                <option value="">全市</option>
+                <option v-for="branch in monitorBranches" :key="branch.branchId"
                   :value="branch.branchId">{{ branch.branchName }}</option>
               </select></label>
             <label v-if="stage === 'monitor'" class="monitor-filter">网格<select v-model="monitorGridId"
@@ -418,27 +418,27 @@
           </section>
           <section v-else class="list-section">
             <article v-for="item in displayedChannels"
-              :key="`${item.gridId}-${item.channelCode || item.channel}-${item.channelType}`" class="channel-card"
-              :data-category="item.channelType">
-              <div class="channel-head"><strong>{{ tab === 'tail' ? item.microChannelName || item.channel : item.channel
-              }}</strong><span>{{ isChangeAlert ? '异动' : item.production === 0 ? '零产' : '低产' }}</span></div>
-              <div class="channel-category">{{ tab === 'stars' ? `${item.channelStar ? item.channelStar + '星' : '星级未提供'}
-                · ${item.channelCode || '渠道编码未提供'}` : item.serviceProvider || '区域服务商未提供' }}</div>
-              <div class="alert-organization">{{ branchName(item.branchId) }} · {{ gridName(item.gridId) || '网格未提供' }}
+              :key="`${item.gridId}-${item.channelCode || item.channel}-${item.channelType}`" class="person-card channel-warning-card"
+              :data-category="item.channelType" :class="{ zero: item.production === 0 }">
+              <span class="channel-warning-avatar" :style="channelWarningIconStyle" aria-hidden="true"></span>
+              <div class="person-main"><strong>{{ tab === 'tail' ? item.microChannelName || item.channel : item.channel }}</strong>
+                <span class="person-category">{{ tab === 'stars' ? (item.channelStar ? item.channelStar + '星' : '星级未提供') : item.serviceProvider || '区域服务商未提供' }} · {{ item.channelCode || '渠道编码未提供' }}</span>
+                <span class="alert-organization">{{ branchName(item.branchId) }} · {{ gridName(item.gridId) || '网格未提供' }}</span>
+                <span v-if="item.staffCount != null" class="channel-member-count">人员规模 {{ item.staffCount }} 人</span>
               </div>
-              <div class="channel-meta"><span>{{ displayNumber(item.production) }} {{ activeProduct?.unit
-              }}</span><span>{{ item.staffCount }} 人</span></div>
+              <div class="person-score"><strong>{{ displayNumber(item.production) }}</strong><span>{{ activeProduct?.unit }}</span></div>
+              <p>{{ isChangeAlert ? '异动' : item.production === 0 ? '零产' : '低产' }}</p>
               <div v-if="isChangeAlert" class="change-comparison"><span>上月同期日均 {{ displayNumber(item.previousAverage) }} · 本月日均 {{ displayNumber(item.monthAverage) }} {{ activeProduct?.unit }}/日</span><strong>-{{ displayNumber(item.declineValue) }} {{ activeProduct?.unit }}/日（-{{ displayNumber(item.declineRate) }}%）</strong></div>
             </article>
             <p v-if="!displayedChannels.length" class="empty-state">当前条件下暂无{{ isChangeAlert ? '异动' : '低产' }}渠道</p>
           </section>
         </template>
-        <button class="script-library-entry" type="button" @click="openScriptLibrary"><span class="script-library-icon"
+        <button v-if="showSalesScriptLibrary" class="script-library-entry" type="button" @click="openScriptLibrary"><span class="script-library-icon"
             aria-hidden="true"></span><span><strong>经典话术库</strong><small>产品话术 · 沟通参考</small></span><i
             class="menu-chevron" aria-hidden="true"></i></button>
       </template>
 
-      <template v-else-if="stage === 'scripts'">
+      <template v-else-if="stage === 'scripts' && showSalesScriptLibrary">
         <header class="drill-page-title">
           <h2>经典话术库</h2>
           <p>{{ scopeName }}</p>
@@ -453,10 +453,6 @@
       </template>
 
       <template v-else-if="stage === 'search'">
-        <header class="drill-page-title">
-          <h2>产能速查</h2>
-          <p>个人 / 渠道产能查询</p>
-        </header>
         <CapacitySearch :dashboard="dashboard" :grid-ids="scopeGridIds" :scope="scopeName" :demo="isMock"
           :query-api="searchQuery" />
       </template>
@@ -511,6 +507,7 @@ import changeWarningIcon from './assets/warning-icons/chart-no-axes-combined.svg
 import { isMock } from './api/client'
 import { sendLoginCode, loginWithCode, loginWithOneClick } from './api/auth.js'
 import { fetchChannelOptions, fetchChangeAlerts, fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts, fetchAiAnalysis } from './api/production'
+import { monitorBranchOptions } from './utils/monitorBranches.js'
 import ChannelTypeFilter from './components/ChannelTypeFilter.vue'
 import { normalizeChannelType } from './utils/channelTypes.js'
 import CapacityCard from './components/CapacityCard.vue'
@@ -522,6 +519,7 @@ import CampusAnalysis from './components/CampusAnalysis.vue'
 import { buildAlertExport, createAlertWorkbook } from './utils/alertExport.js'
 import downloadIcon from './assets/action-icons/download.svg'
 import uploadIcon from './assets/action-icons/upload.svg'
+import channelWarningIcon from './assets/ui-icons/store.svg'
 import CapacitySearch from './components/CapacitySearch.vue'
 import { buildCapacityMetric } from './utils/capacityMetrics.js'
 import { parseCsv, parseExcelFile, normalizeCapacityRows, downloadCsv, ensureXlsx } from './utils/imports/helpers.js'
@@ -540,6 +538,7 @@ const warningIcons = {
   change: { '--warning-icon': `url(${JSON.stringify(changeWarningIcon)})` }
 }
 const exportIconStyle = { '--export-icon': `url(${JSON.stringify(downloadIcon)})` }
+const channelWarningIconStyle = { '--channel-warning-icon': `url("${channelWarningIcon}")` }
 const dataImportIconStyle = { '--import-icon': `url(${JSON.stringify(uploadIcon)})` }
 const exportBusy = ref(false)
 const alertSnapshot = ref(null)
@@ -679,6 +678,8 @@ const cityMetric = computed(() => metric(selectedProductId.value, scopeGridIds.v
 const branchMetric = computed(() => metric(selectedProductId.value, gridsOf(selectedBranchId.value), { level: 'branch', id: selectedBranchId.value }))
 const branchMetrics = computed(() => dashboard.organization.branches.map(item => ({ ...item, ...metric(selectedProductId.value, gridsOf(item.branchId), { level: ['未知', '市统筹'].includes(item.branchId) ? 'grid' : 'branch', id: ['未知', '市统筹'].includes(item.branchId) ? `${item.branchId}::${item.branchId}` : item.branchId }) })))
 const gridMetrics = computed(() => dashboard.organization.grids.filter(item => item.branchId === selectedBranchId.value).map(item => ({ ...item, ...metric(selectedProductId.value, [item.gridId], { level: 'grid', id: item.gridId }) })))
+const showSalesScriptLibrary = false
+const monitorBranches = computed(() => monitorBranchOptions(dashboard.organization.branches))
 const monitorGrids = computed(() => dashboard.organization.grids.filter(item => !monitorBranchId.value || item.branchId === monitorBranchId.value))
 const monitorGridIds = computed(() => monitorGridId.value ? [monitorGridId.value] : monitorGrids.value.map(item => item.gridId))
 const monitorScopeLabel = computed(() => monitorGridId.value ? gridName(monitorGridId.value) : monitorBranchId.value ? dashboard.organization.branches.find(item => item.branchId === monitorBranchId.value)?.branchName : scopeName.value)

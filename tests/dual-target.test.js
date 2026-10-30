@@ -10,7 +10,7 @@ const fixture = () => ({statDate:day, products:[{productId:'p',productName:'放�
   rows:[{gridId:'G',productId:'p',production:9000}], dailyRows:[{gridId:'G',productId:'p',date:day,production:270}],
   targets:[{gridId:'G',productId:'p',targetMonth:'2026-10',monthBaseTarget:8000,monthChallengeTarget:10000,dayBaseTarget:300,dayChallengeTarget:360,targetDate:day}]})
 const file = row => ({text: async()=>targetColumns.join(',')+'\n'+row.join(',')})
-const row = ['', '城区分公司','东区网格','p','2026-10',8000,10000,300,360,day]
+const row = ['', '城区分公司','东区网格','p','2026-10',6000,8000,10000,240,300,360,day]
 
 test('single track uses challenge denominator, independent rates and capped visual fill',()=>{
   const metric=buildCapacityMetric(fixture(),'p',['G'])
@@ -46,7 +46,7 @@ test('partial grid targets, duplicate rows, stale month and daily dates are unav
   data.targets.push({...data.targets[0]})
   assert.equal(buildCapacityMetric(data,'p',['G']).challengeTarget,null)
 })
-test('new ten-column template round-trips IDs and four targets',async()=>{
+test('new twelve-column template round-trips IDs and target values',async()=>{
   const data=fixture()
   const csv=targetTemplateCsv(data)
   assert.equal(csv.replace(/^\ufeff/,'').split('\r\n')[0],targetColumns.join(','))
@@ -57,13 +57,13 @@ test('new ten-column template round-trips IDs and four targets',async()=>{
   assert.equal(records[0].targetMonth,'2026-10')
 })
 test('CSV supports quoted names, product names, normalized dates and null targets',async()=>{
-  const source=[...row]; source[3]='放号';source[6]='';source[9]='20261027'
+  const source=[...row]; source[3]='放号';source[7]='';source[11]='20261027'
   const records=await parseTargetFile(file(source),fixture())
   assert.equal(records[0].targetDate,day)
   assert.equal(records[0].monthChallengeTarget,null)
 })
 test('target import rejects invalid month, dates, unknown scopes, negatives, duplicates and inverted goals',async()=>{
-  for (const [index,value,expected] of [[4,'2026-09',/月份/],[9,'2026-02-30',/日期/],[9,'',/target_date/],[1,'其他分公司',/不匹配/],[5,-1,/非负/],[6,7000,/挑战目标/],[8,200,/挑战目标/]]) {
+  for (const [index,value,expected] of [[4,'2026-09',/月份/],[11,'2026-02-30',/日期/],[11,'',/target_date/],[1,'其他分公司',/不匹配/],[5,-1,/非负/],[7,7000,/挑战目标/],[10,200,/挑战目标/]]) {
     const values=[...row];values[index]=value
     await assert.rejects(parseTargetFile(file(values),fixture()),expected)
   }

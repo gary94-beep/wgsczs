@@ -3,8 +3,8 @@ import { fetchPermission, getMobileByToken } from './production.js'
 
 const sdkScripts = [
   'https://gd.10086.cn/apph5/openapi/static/js/jquery.min.js',
-  'https://gd.10086.cn/apph5/openapi/static/js/acquire/ydrz_min.js',
-  'https://gd.10086.cn/apph5/openapi/static/js/acquire/easylogin_min.js'
+  'https://gd.10086.cn/apph5/openapi/static/js/acquire/acquire_min.js',
+  'https://gd.10086.cn/apph5/openapi/static/js/acquire/ydrz_min.js'
 ]
 let sdkReady
 function parse(value) {
@@ -59,8 +59,14 @@ export async function loginWithCode(phone, code) {
 }
 async function getMsgidKey() {
   if (!sdkReady) sdkReady = sdkScripts.reduce((p, src) => p.then(() => loadExternalScript(src)), Promise.resolve())
-    .then(() => { if (typeof window.Login?.YdLogin !== 'function') throw new Error('一键登录组件不可用') })
+    .then(() => { 
+      // 检查 Richinfo.Acquire.init 是否存在
+      if (typeof window.Richinfo?.YDRZ?.init !== 'function') {
+        throw new Error('新版一键登录组件不可用') 
+      }
+    })
     .catch(error => { sdkReady = undefined; throw error })
+    
   await sdkReady
   return new Promise((resolve, reject) => {
     let settled = false
@@ -71,11 +77,21 @@ async function getMsgidKey() {
       else resolve(value)
     }
     const timer = setTimeout(() => finish('一键登录取号超时，请使用短信登录'), 30000)
+    
     try {
-      window.Login.YdLogin(value => {
-        const key = typeof value === 'string' ? value : findAuthValue(value, ['msgidKey'])
-        key ? finish(null, key) : finish('未获取到一键登录授权凭据')
-      }, error => finish(error || '一键登录授权失败'))
+      // 使用 Richinfo.Acquire.init 初始化
+      window.Richinfo.YDRZ.init(
+        {}, // 初始化参数，一般传空对象即可
+        (successRes) => {
+          // 成功回调，successRes 应该就是 msgidKey
+          const key = typeof successRes === 'string' ? successRes : (successRes?.msgidKey || successRes)
+          key ? finish(null, key) : finish('未获取到一键登录授权凭据')
+        },
+        (error) => {
+          // 失败回调
+          finish(error || '一键登录授权失败')
+        }
+      )
     } catch (error) { finish(error) }
   })
 }

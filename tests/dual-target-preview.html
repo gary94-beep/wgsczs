@@ -6,7 +6,7 @@ import '../src/styles/global.css'
 import '../src/styles/refined.css'
 import '../src/styles/concept.css'
 import '../src/styles/capacity.css'
-const state=reactive({item:{...targetProgress(9000,8000,10000),daily:targetProgress(270,300,360),weeklyAverage:250,previousAverage:300,monthAverage:333.33,weekBasis:'rolling7'},showTargets:true})
-window.setTargetCase=(production,base,challenge)=>{Object.assign(state.item,targetProgress(production,base,challenge));state.item.daily=targetProgress(production,base,challenge)}
+const state=reactive({item:{...targetProgress(9000,8000,10000,6000),daily:targetProgress(270,300,360,240),weeklyAverage:250,previousAverage:300,monthAverage:333.33,weekBasis:'rolling7'},showTargets:true})
+window.setTargetCase=(production,base,challenge,min=null)=>{Object.assign(state.item,targetProgress(production,base,challenge,min));state.item.daily=targetProgress(production,base,challenge,min)}
 createApp({render:()=>h(CapacityCard,{title:'放号',icon:'contact',unit:'户',statDate:'2026-10-27',item:state.item,showTargets:state.showTargets})}).mount('#fixture')
 </script><style>body{margin:0;background:#f1fbff}#fixture{width:min(560px,100%);margin:auto;padding:16px;box-sizing:border-box}</style></body></html>

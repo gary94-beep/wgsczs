@@ -24,4 +24,4 @@ CREATE INDEX idx_wgsc_terminal_latest
 ON app_open_api_c002_wgsc_staff_terminal_1 (staff_no, id);
 
 CREATE INDEX idx_wgsc_target_month_scope
-ON app_open_api_c002_wgsc_target_1 (target_month, branch, grid, product_id);
+ON app_open_api_c003_wgsc_target (target_month, branch, grid, product_id);

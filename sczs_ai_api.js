@@ -8,7 +8,7 @@ function init() {
     staffCapacity: "app_open_api_c003_wgsc_staff_capacity_1",
     channelInfo: "app_open_api_c002_wgsc_chn_level_1",
     staff: "app_open_api_c002_wgsc_staff_1",
-    targets: "app_open_api_c002_wgsc_target_1",
+    targets: "app_open_api_c003_wgsc_target_1",
     aiAnalysis: "app_open_api_c004_wgsc_ai_analysis_1",
     terminal: "app_open_api_c002_wgsc_staff_terminal_1"
   };
@@ -143,7 +143,7 @@ function init() {
       if (scopeType === "grid") { var targetParts = scopeId.split("::"); targetArgs.branch = targetParts[0]; targetArgs.grid = targetParts[1]; targetScope = " AND branch=#{branch} AND grid=#{grid}"; }
       var targetRows = [], pageSize = 1000;
       for (var offset = 0; ; offset += pageSize) {
-        var page = sql("SELECT id,branch,grid,product_id,month_base_target,month_challenge_target,day_base_target,day_challenge_target,target_date FROM " + tables.targets +
+        var page = sql("SELECT id,branch,grid,product_id,month_min_target,month_base_target,month_challenge_target,day_min_target,day_base_target,day_challenge_target,target_date FROM " + tables.targets +
           " WHERE target_month=#{month}" + targetScope + " ORDER BY id LIMIT 1000 OFFSET " + offset, targetArgs, true);
         targetRows = targetRows.concat(page);
         if (page.length < pageSize) break;
@@ -180,6 +180,7 @@ function init() {
       for (var pi = 0; pi < products.length; pi++) {
         var pid = products[pi].productId;
         targetMap[pid] = { monthTarget: targetSum(pid, "month_base_target", false), dayTarget: targetSum(pid, "day_base_target", true),
+          monthMinTarget: targetSum(pid, "month_min_target", false), dayMinTarget: targetSum(pid, "day_min_target", true),
           monthChallengeTarget: targetSum(pid, "month_challenge_target", false), dayChallengeTarget: targetSum(pid, "day_challenge_target", true) };
       }
     }
@@ -197,6 +198,8 @@ function init() {
         productId: p.productId, productName: p.productName, unit: p.unit,
         dayProduction: c.day, monthProduction: c.mon, weekProduction: c.week, lastMonthProduction: c.last_mon,
         monthTarget: tg.monthTarget, dayTarget: tg.dayTarget,
+        monthMinTarget: tg.monthMinTarget === undefined ? null : tg.monthMinTarget,
+        dayMinTarget: tg.dayMinTarget === undefined ? null : tg.dayMinTarget,
         monthChallengeTarget: tg.monthChallengeTarget === undefined ? null : tg.monthChallengeTarget,
         dayChallengeTarget: tg.dayChallengeTarget === undefined ? null : tg.dayChallengeTarget,
         monthCompletionRate: c.mon !== null && tg.monthTarget ? Math.round(c.mon / tg.monthTarget * 1000) / 10 : null,

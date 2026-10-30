@@ -71,7 +71,7 @@ function progress(production, targets, gridIds, field, statDate, scope) {
     }
     return total
   }
-  return targetProgress(production, sum('base'), sum('challenge'))
+  return targetProgress(production, sum('base'), sum('challenge'), sum('min'))
 }
 
 export function buildCapacityMetric(dashboard, productId, gridIds, channelType = '', scope = null) {

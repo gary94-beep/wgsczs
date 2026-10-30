@@ -127,6 +127,7 @@ export async function mockFetchDashboard(params = {}) {
       ...(item.dailyTarget === undefined && item.dayBaseTarget === undefined ? {
         dailyTarget: Math.max(1, Math.round(targetValue(item, 'month') / 22)),
         dayBaseTarget: Math.max(1, Math.round(targetValue(item, 'month') / 22)),
+        dayMinTarget: targetValue(item, 'month', 'min') === null ? null : Math.min(Math.floor(targetValue(item, 'month', 'min') / 22), Math.max(1, Math.round(targetValue(item, 'month') / 22))),
         dayChallengeTarget: targetValue(item, 'month', 'challenge') === null ? null : Math.max(1, Math.ceil(targetValue(item, 'month', 'challenge') / 22)),
         targetDate: statDate
       } : {}) })),
@@ -146,8 +147,10 @@ export async function mockImportTargets(rows, permission) {
     if (!valid.has(key) || seen.has(key)) throw new Error('目标表存在无效或重复记录')
     for (const period of ['month', 'day']) {
       const base = targetValue(item, period), challenge = targetValue(item, period, 'challenge')
+      const min = targetValue(item, period, 'min')
+      if (min !== null && ((base !== null && min > base) || (challenge !== null && min > challenge))) throw new Error('底线目标不能大于基础或挑战目标')
       if (base !== null && challenge !== null && challenge < base) throw new Error('挑战目标不能小于基础目标')
-      if (period === 'day' && (base !== null || challenge !== null) && !/^\d{4}-\d{2}-\d{2}$/.test(item.targetDate || '')) throw new Error('日目标日期无效')
+      if (period === 'day' && (min !== null || base !== null || challenge !== null) && !/^\d{4}-\d{2}-\d{2}$/.test(item.targetDate || '')) throw new Error('日目标日期无效')
     }
     seen.add(key)
   }

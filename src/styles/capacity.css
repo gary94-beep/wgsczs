@@ -85,6 +85,10 @@ button.capacity-card-heading:focus-visible { outline: 2px solid #287bff; outline
 .monitor-filter input { width: 100%; box-sizing: border-box; min-height: 44px; padding: 10px 12px; border: 1px solid #c5dcff; border-radius: 6px; background: #fff; color: #173457; font: inherit; }
 .change-comparison { flex: 0 0 100%; grid-column: 1 / -1; display: grid; gap: 6px; padding-top: 12px; font-size: 14px; overflow-wrap: anywhere; color: #607998; }
 .change-comparison strong { color: #cb7540; font-size: 15px; }
+.channel-warning-avatar { display: grid; place-items: center; width: 45px; height: 45px; border-radius: 50%; background: #e8f3ff; color: #1672fa; }
+.channel-warning-avatar::before { content: ''; width: 28px; height: 28px; background: currentColor; mask: var(--channel-warning-icon) center / contain no-repeat; -webkit-mask: var(--channel-warning-icon) center / contain no-repeat; }
+.channel-warning-card .person-main strong { overflow-wrap: anywhere; }
+.channel-warning-card .channel-member-count { font-size: 12px; color: #7188a0; }
 .warning-menu { padding: 0 20px 24px; }
 .workbench-menu .data-import-icon { display: block; width: 30px; height: 30px; background: currentColor; mask: var(--import-icon) center / contain no-repeat; -webkit-mask: var(--import-icon) center / contain no-repeat; }
 .operating-analysis { padding: 18px 20px; border-bottom: 1px solid #dceafa; background: #f6fcff; color: #244663; }

@@ -1,4 +1,5 @@
 import { isMock, postHandle2 } from './client.js'
+import { visibleDashboard, visibleSearchResults, visibleAnalysis } from '../utils/productVisibility.js'
 import { mockFetchChangeAlerts } from './mock.js'
 import { mockFetchAiAnalysis } from './mock.js'
 import { mockFetchDashboard, mockFetchPermission, mockGetMobileByToken, mockFetchAlerts, mockSearchCapacity, mockImportTargets, mockImportCapacity, mockImportRows, mockSaveSalesScript, mockImportSalesScripts } from './mock.js'
@@ -20,7 +21,8 @@ export async function getMobileByToken(token) {
   return isMock ? mockGetMobileByToken(token) : gateway('common', 'wgsc_getMobileByToken', {}, token)
 }
 export async function fetchDashboard(params, token) {
-  return isMock ? mockFetchDashboard(params) : gateway('biz', 'wgsc_fetchDashboard', {}, token)
+  const data = await (isMock ? mockFetchDashboard(params) : gateway('biz', 'wgsc_fetchDashboard', {}, token))
+  return visibleDashboard(data)
 }
 export async function fetchSession(token) {
   return isMock ? { permission: await mockFetchPermission('13800000009') } : gateway('biz', 'wgsc_fetchSession', {}, token)
@@ -56,7 +58,8 @@ export async function fetchAlerts(params, token) {
   return isMock ? mockFetchAlerts(params) : matchingPages('wgsc_fetchAlerts', { ...params, gridIds: JSON.stringify(params.gridIds || []) }, token)
 }
 export async function queryCapacity(params, token) {
-  return isMock ? mockSearchCapacity(params) : matchingPages('wgsc_searchCapacity', { ...params, gridIds: JSON.stringify(params.gridIds || []) }, token)
+  const data = await (isMock ? mockSearchCapacity(params) : matchingPages('wgsc_searchCapacity', { ...params, gridIds: JSON.stringify(params.gridIds || []) }, token))
+  return visibleSearchResults(data)
 }
 export async function fetchChangeAlerts(params, token) {
   return isMock ? mockFetchChangeAlerts(params) : matchingPages('wgsc_fetchChangeAlerts', { ...params, gridIds: JSON.stringify(params.gridIds || []) }, token)
@@ -110,11 +113,12 @@ export async function testAiGateway(target, momaKey, token) {
 // AI 分析结果读取
 // ============================================================
 export async function fetchAiAnalysis(params, token) {
-  if (isMock) return mockFetchAiAnalysis(params)
-  return gateway('ai', 'wgsc_aiGetAnalysisResult', {
+  if (isMock) return visibleAnalysis(await mockFetchAiAnalysis(params))
+  const data = await gateway('ai', 'wgsc_aiGetAnalysisResult', {
     statDate: params.statDate || '',
     scopeType: params.scopeType || '',
     scopeId: params.scopeId || '',
     channelType: params.channelType || ''
   }, token)
+  return visibleAnalysis(data)
 }
