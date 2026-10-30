@@ -150,7 +150,7 @@ export async function mockImportTargets(rows, permission) {
       const min = targetValue(item, period, 'min')
       if (min !== null && ((base !== null && min > base) || (challenge !== null && min > challenge))) throw new Error('底线目标不能大于基础或挑战目标')
       if (base !== null && challenge !== null && challenge < base) throw new Error('挑战目标不能小于基础目标')
-      if (period === 'day' && (min !== null || base !== null || challenge !== null) && !/^\d{4}-\d{2}-\d{2}$/.test(item.targetDate || '')) throw new Error('日目标日期无效')
+      if (period === 'day' && item.targetDate && !/^\d{4}-\d{2}-\d{2}$/.test(item.targetDate)) throw new Error('日目标日期无效')
     }
     seen.add(key)
   }

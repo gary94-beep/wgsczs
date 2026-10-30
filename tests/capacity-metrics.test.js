@@ -23,14 +23,14 @@ test('comparison reports absolute change and percentage without treating missing
   assert.equal(compareCapacity(null, 3), null)
 })
 
-test('daily and monthly progress use independent targets and same-unit averages', () => {
+test('daily progress uses monthly target divided by calendar days and same-unit averages', () => {
   const result = buildCapacityMetric(fixture(), 'p', ['G1'])
   assert.equal(result.production, 36)
   assert.equal(result.gap, 4)
   assert.equal(result.completionRate, 90)
   assert.equal(result.daily.production, 8)
-  assert.equal(result.daily.target, 2)
-  assert.equal(result.daily.completionRate, 400)
+  assert.equal(result.daily.target, 40/31)
+  assert.equal(result.daily.completionRate, 620)
   assert.equal(result.daily.gap, 0)
   assert.equal(result.weeklyAverage, 6.5)
   assert.equal(result.monthAverage, 4.5)
@@ -49,7 +49,7 @@ test('category aliases filter history and never borrow overall targets', () => {
   assert.equal(filtered.hasTarget, false)
   assert.equal(filtered.daily.hasTarget, false)
   data.targets.push({ gridId: 'G1', productId: 'p', channelType: '3星+渠道', target: 50, dailyTarget: 10, targetDate: '2026-10-08' })
-  assert.equal(buildCapacityMetric(data, 'p', ['G1'], '三星+渠道').daily.completionRate, 80)
+  assert.equal(buildCapacityMetric(data, 'p', ['G1'], '三星+渠道').daily.completionRate, 496)
 })
 
 test('missing history is unavailable, zero history remains a valid zero', () => {
@@ -61,7 +61,7 @@ test('missing history is unavailable, zero history remains a valid zero', () => 
   assert.equal(missing.monthAverage, null)
   assert.equal(mean([{ value: 0 }, { value: 0 }]), 0)
   data.targets[0].targetDate = '2026-10-07'
-  assert.equal(buildCapacityMetric(data, 'p', ['G1']).daily.hasTarget, false)
+  assert.equal(buildCapacityMetric(data, 'p', ['G1']).daily.hasTarget, true)
 })
 
 test('demo daily history reconciles to monthly totals and is stable across role scopes', () => {

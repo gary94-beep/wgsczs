@@ -14,10 +14,10 @@ const row = ['', '城区分公司','东区网格','p','2026-10',6000,8000,10000,
 
 test('single track uses challenge denominator, independent rates and capped visual fill',()=>{
   const metric=buildCapacityMetric(fixture(),'p',['G'])
-  assert.equal(metric.daily.progressPercent,75)
-  assert.equal(metric.daily.baseCompletionRate,90)
-  assert.equal(metric.daily.challengeCompletionRate,75)
-  assert.ok(Math.abs(metric.daily.basePosition-83.3333333)<.001)
+  assert.ok(Math.abs(metric.daily.progressPercent-83.7)<.001)
+  assert.equal(metric.daily.baseCompletionRate,104.6)
+  assert.equal(metric.daily.challengeCompletionRate,83.7)
+  assert.ok(Math.abs(metric.daily.basePosition-80)<.001)
   assert.equal(metric.baseCompletionRate,112.5)
   assert.equal(metric.challengeCompletionRate,90)
   assert.equal(metric.baseGap,0)
@@ -36,34 +36,34 @@ test('missing, zero and legacy targets are not invented or divided by zero',()=>
   assert.equal(targetProgress(0,300,360).baseCompletionRate,0)
   assert.equal(targetProgress(3,4,2).hasChallengeTarget,false)
 })
-test('partial grid targets, duplicate rows, stale month and daily dates are unavailable',()=>{
+test('partial targets, duplicate rows and stale months are unavailable; same-month dates remain valid',()=>{
   const data=fixture()
   assert.equal(buildCapacityMetric(data,'p',['G','missing']).challengeTarget,null)
   data.targets[0].targetDate='2026-10-26'
-  assert.equal(buildCapacityMetric(data,'p',['G']).daily.challengeTarget,null)
+  assert.equal(buildCapacityMetric(data,'p',['G']).daily.challengeTarget,10000/31)
   data.targets[0].targetMonth='2026-09'
   assert.equal(buildCapacityMetric(data,'p',['G']).baseTarget,null)
   data.targets.push({...data.targets[0]})
   assert.equal(buildCapacityMetric(data,'p',['G']).challengeTarget,null)
 })
-test('new twelve-column template round-trips IDs and target values',async()=>{
+test('monthly-only template round-trips IDs and derives daily targets',async()=>{
   const data=fixture()
   const csv=targetTemplateCsv(data)
   assert.equal(csv.replace(/^\ufeff/,'').split('\r\n')[0],targetColumns.join(','))
   const records=await parseTargetFile({text:async()=>csv},data)
   assert.equal(records[0].gridId,'G')
   assert.equal(records[0].monthChallengeTarget,10000)
-  assert.equal(records[0].dayChallengeTarget,360)
+  assert.equal(records[0].dayChallengeTarget,10000/31)
   assert.equal(records[0].targetMonth,'2026-10')
 })
 test('CSV supports quoted names, product names, normalized dates and null targets',async()=>{
   const source=[...row]; source[3]='放号';source[7]='';source[11]='20261027'
   const records=await parseTargetFile(file(source),fixture())
-  assert.equal(records[0].targetDate,day)
+  assert.equal(records[0].targetDate,'')
   assert.equal(records[0].monthChallengeTarget,null)
 })
 test('target import rejects invalid month, dates, unknown scopes, negatives, duplicates and inverted goals',async()=>{
-  for (const [index,value,expected] of [[4,'2026-09',/月份/],[11,'2026-02-30',/日期/],[11,'',/target_date/],[1,'其他分公司',/不匹配/],[5,-1,/非负/],[7,7000,/挑战目标/],[10,200,/挑战目标/]]) {
+  for (const [index,value,expected] of [[4,'2026-09',/月份/],[1,'其他分公司',/不匹配/],[5,-1,/非负/],[7,7000,/挑战目标/]]) {
     const values=[...row];values[index]=value
     await assert.rejects(parseTargetFile(file(values),fixture()),expected)
   }

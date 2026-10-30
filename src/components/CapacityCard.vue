@@ -8,7 +8,7 @@
         <strong class="capacity-actual">{{ format(metricFor(period).production) }}<small>{{ unit }}</small></strong>
       </div>
       <p v-if="metricFor(period).dataCoverage?.partial" class="capacity-coverage">已统计 {{ metricFor(period).dataCoverage.coveredGridCount }}/{{ metricFor(period).dataCoverage.selectedGridCount }} 个网格，其余网格无该类型记录</p>
-      <TargetProgress v-if="showTargets" :item="metricFor(period)" :unit="unit" :label="`${title}${period === 'day' ? '日' : '月'}产能`" />
+      <TargetProgress v-if="showTargets" :item="metricFor(period)" :unit="unit" :target-digits="period === 'day' ? (productId === 'plan119' ? 1 : 0) : 2" :label="`${title}${period === 'day' ? '日' : '月'}产能`" />
       <div class="capacity-comparison" v-if="period === 'day'"><span>{{ weekLabel }}<b>{{ format(item.weeklyAverage) }} <small>{{ unit }}/日</small></b></span><span>{{ statDate.slice(5).replace('-', '/') }}产能<b>{{ format(item.daily.production) }} <small>{{ unit }}</small></b></span><em :class="{ 'trend-down': dailyChange?.difference < 0 }">{{ comparisonLabel(dailyChange, weekLabel) }}</em></div>
       <div class="capacity-comparison" v-else><span>上月同期日均<b>{{ format(item.previousAverage) }} <small>{{ unit }}/日</small></b></span><span>本月日均<b>{{ format(item.monthAverage) }} <small>{{ unit }}/日</small></b></span><em :class="{ 'trend-down': monthlyChange?.difference < 0 }">{{ comparisonLabel(monthlyChange, '上月同期日均') }}</em></div>
       <!-- <CapacityTrend :points="period === 'day' ? [{ label: weekLabel, value: item.weeklyAverage }, { label: statDate, value: item.daily.production }] : [{ label: '上月同期日均', value: item.previousAverage }, { label: '本月日均', value: item.monthAverage }]" :unit="`${unit}/日`" :label="`${title}${period === 'day' ? '日' : '月同期'}产能对比`" /> -->
@@ -27,7 +27,7 @@ import buildingIcon from '../assets/product-icons/building-2.svg'
 // import CapacityTrend from './CapacityTrend.vue'
 import { compareCapacity } from '../utils/capacityMetrics.js'
 import TargetProgress from './TargetProgress.vue'
-const props = defineProps({ title: String, item: Object, unit: String, statDate: { type: String, default: '' }, icon: { type: String, default: 'building-2' }, clickable: { type: Boolean, default: true }, showTargets: { type: Boolean, default: true } })
+const props = defineProps({ title: String, item: Object, unit: String, productId: String, statDate: { type: String, default: '' }, icon: { type: String, default: 'building-2' }, clickable: { type: Boolean, default: true }, showTargets: { type: Boolean, default: true } })
 defineEmits(['open'])
 const iconUrl = computed(() => ({ contact: contactIcon, gift: giftIcon, smartphone: smartphoneIcon, house: houseIcon, wifi: wifiIcon })[props.icon] || buildingIcon)
 const iconStyle = computed(() => ({ '--capacity-icon': `url(${JSON.stringify(iconUrl.value)})` }))

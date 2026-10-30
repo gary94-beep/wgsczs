@@ -51,7 +51,7 @@ function init() {
     return s;
   }
   function now() { var d = new Date(new Date().getTime() + 8 * 3600000); return formatDate(d) + " " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":" + pad(d.getUTCSeconds()); }
-  function productId(name) { for (var i = 0; i < products.length; i++) { if (products[i].productName === name || products[i].productId === name) return products[i].productId; } throw new Error("未知产品：" + name); }
+  function productId(name) { name = text(name); if (name === "129+高套" || name === "119+套餐") name = "plan119"; for (var i = 0; i < products.length; i++) { if (products[i].productName === name || products[i].productId === name) return products[i].productId; } throw new Error("未知产品：" + name); }
 
   function checkAuth() {
     var secret = text(Params.secret);
@@ -138,13 +138,18 @@ function init() {
     // 类型专属目标尚未维护时不使用区域总体目标。
     var targetMap = {};
     if (channelType === "全部类型") {
-      var targetArgs = { month: statDate.slice(0, 7) }, targetScope = "";
+      var targetArgs = { month: statDate.slice(0, 7), monthSlash: statDate.slice(0, 7).replace("-", "/") }, targetScope = "";
       if (scopeType === "branch") { targetArgs.branch = scopeId; targetScope = " AND branch=#{branch}"; }
       if (scopeType === "grid") { var targetParts = scopeId.split("::"); targetArgs.branch = targetParts[0]; targetArgs.grid = targetParts[1]; targetScope = " AND branch=#{branch} AND grid=#{grid}"; }
       var targetRows = [], pageSize = 1000;
       for (var offset = 0; ; offset += pageSize) {
-        var page = sql("SELECT id,branch,grid,product_id,month_min_target,month_base_target,month_challenge_target,day_min_target,day_base_target,day_challenge_target,target_date FROM " + tables.targets +
-          " WHERE target_month=#{month}" + targetScope + " ORDER BY id LIMIT 1000 OFFSET " + offset, targetArgs, true);
+        var page = sql("SELECT id,branch,grid,product_id,month_min_target,month_base_target,month_challenge_target FROM " + tables.targets +
+          " WHERE target_month IN (#{month},#{monthSlash})" + targetScope + " ORDER BY id LIMIT 1000 OFFSET " + offset, targetArgs, true);
+        for (var pi = 0; pi < page.length; pi++) {
+          page[pi].product_id = productId(page[pi].product_id);
+          page[pi].branch = text(page[pi].branch);
+          page[pi].grid = text(page[pi].grid);
+        }
         targetRows = targetRows.concat(page);
         if (page.length < pageSize) break;
         if (offset >= 999000) throw new Error("目标结果过多，请缩小范围");
@@ -170,10 +175,9 @@ function init() {
         } else if (chosen.length !== 1) return null;
         var total = 0;
         for (var ci = 0; ci < chosen.length; ci++) {
-          if (daily && (!chosen[ci].target_date || date(chosen[ci].target_date) !== statDate)) return null;
-          var value = validTarget(chosen[ci][field]);
+          var value = validTarget(chosen[ci][daily ? field.replace(/^day_/, "month_") : field]);
           if (value === null) return null;
-          total += value;
+          total += daily ? value / new Date(Date.UTC(Number(statDate.slice(0, 4)), Number(statDate.slice(5, 7)), 0)).getUTCDate() : value;
         }
         return total;
       }

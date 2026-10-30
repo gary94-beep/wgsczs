@@ -1,5 +1,5 @@
 import { parseCsv } from './helpers.js'
-import { targetValue } from '../targetValues.js'
+import { targetValue, monthlyDailyTarget } from '../targetValues.js'
 
 export const targetColumns = [
   'id', 
@@ -9,11 +9,7 @@ export const targetColumns = [
   'target_month', 
   'month_min_target',
   'month_base_target', 
-  'month_challenge_target', 
-  'day_min_target',
-  'day_base_target', 
-  'day_challenge_target', 
-  'target_date'
+  'month_challenge_target'
 ]
 
 function normalizeDate(value) {
@@ -113,7 +109,7 @@ export async function parseTargetFile(file, dashboard) {
 
     const key = `${gridId}|${productId}`
     const values = {}
-    for (const period of ['month', 'day']) {
+    for (const period of ['month']) {
       for (const kind of ['min', 'base', 'challenge']) {
         const raw = record[`${period}_${kind}_target`]
         if (raw !== '' && (!Number.isFinite(Number(raw)) || Number(raw) < 0)) {
@@ -132,15 +128,10 @@ export async function parseTargetFile(file, dashboard) {
     // Empty template rows are not updates and must not erase existing targets.
     if (Object.values(values).every(v => v === null)) continue
 
-    // 5. 校验日期
-    const targetDate = record.target_date ? normalizeDate(record.target_date) : ''
-    if (record.target_date && !targetDate) throw new Error(`第 ${index + 2} 行目标日期无效`)
-    if ((values.dayMinTarget !== null || values.dayBaseTarget !== null || values.dayChallengeTarget !== null) && !targetDate) {
-      throw new Error(`第 ${index + 2} 行填写日目标时必须填写 target_date`)
+    // Legacy daily/date columns may be present, but monthly targets are authoritative.
+    for (const kind of ['Min', 'Base', 'Challenge']) {
+      values[`day${kind}Target`] = monthlyDailyTarget({ ...values, targetMonth: statMonth }, statDateStr, kind.toLowerCase())
     }
-    // if (targetDate && targetDate !== statDateStr) {
-    //   throw new Error(`第 ${index + 2} 行日目标日期须为数据截止日 ${statDateStr}`)
-    // }
 
     // 6. 写入 pending 记录
     imported.set(key, {
@@ -153,7 +144,7 @@ export async function parseTargetFile(file, dashboard) {
       targetMonth: statMonth,
       target: values.monthBaseTarget,
       dailyTarget: values.dayBaseTarget,
-      targetDate
+      targetDate: ''
     })
   }
 
@@ -182,7 +173,6 @@ export function targetTemplateCsv(dashboard) {
     dashboard.products.forEach(product => {
       const item = dashboard.targets.find(t => t.gridId === grid.gridId && t.productId === product.productId && !t.channelType)
       const branch = dashboard.organization.branches.find(b => b.branchId === grid.branchId)
-      const current = item?.targetDate === dashboard.statDate
       
       const branchName = grid.isSummary ? '全市' : (branch?.branchName || grid.branchId)
       
@@ -194,11 +184,7 @@ export function targetTemplateCsv(dashboard) {
         month,
         targetValue(item || {}, 'month', 'min'),
         targetValue(item || {}, 'month'), 
-        targetValue(item || {}, 'month', 'challenge'), 
-        current ? targetValue(item, 'day', 'min') : '',
-        current ? targetValue(item, 'day') : '',
-        current ? targetValue(item, 'day', 'challenge') : '', 
-        dashboard.statDate
+        targetValue(item || {}, 'month', 'challenge')
       ].map(cell).join(','))
     })
   })

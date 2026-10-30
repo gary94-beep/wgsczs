@@ -260,7 +260,7 @@
           </div>
           <p class="production-cutoff">数据截止 {{ dashboard.statDate }}<span v-if="isMock"> · 演示数据</span></p>
           <CapacityCard :show-targets="!selectedChannelType" v-for="item in overview" :key="item.productId"
-            :title="item.productName" :item="item" :unit="item.unit" :stat-date="dashboard.statDate"
+            :title="item.productName" :item="item" :unit="item.unit" :product-id="item.productId" :stat-date="dashboard.statDate"
             :icon="productIcon(item.productId)" @open="openProduct(item.productId)" />
         </section>
       </template>
@@ -273,14 +273,14 @@
         </header>
         <p class="production-cutoff">数据截止 {{ dashboard.statDate }}<span v-if="isMock"> · 演示数据</span></p>
         <CapacityCard :show-targets="!selectedChannelType" :title="'全市' + selectedProduct?.productName"
-          :item="cityMetric" :unit="selectedProduct?.unit" :stat-date="dashboard.statDate"
+          :item="cityMetric" :unit="selectedProduct?.unit" :product-id="selectedProductId" :stat-date="dashboard.statDate"
           :icon="productIcon(selectedProductId)" :clickable="false" />
         <section class="drill-list">
           <div class="section-head">
             <h2>分公司产能</h2><span>{{ branchMetrics.length }} 个</span>
           </div>
           <CapacityCard :show-targets="!selectedChannelType" v-for="item in branchMetrics" :key="item.branchId"
-            :title="item.branchName" :item="item" :unit="selectedProduct?.unit" :stat-date="dashboard.statDate"
+            :title="item.branchName" :item="item" :unit="selectedProduct?.unit" :product-id="selectedProductId" :stat-date="dashboard.statDate"
             @open="openBranch(item.branchId)" />
         </section>
       </template>
@@ -306,14 +306,14 @@
 
         <CapacityCard :show-targets="!selectedChannelType"
           :title="selectedBranch?.branchName + selectedProduct?.productName" :item="branchMetric"
-          :unit="selectedProduct?.unit" :stat-date="dashboard.statDate" :icon="productIcon(selectedProductId)"
+          :unit="selectedProduct?.unit" :product-id="selectedProductId" :stat-date="dashboard.statDate" :icon="productIcon(selectedProductId)"
           :clickable="false" />
         <section class="drill-list">
           <div class="section-head">
             <h2>网格产能</h2><span>{{ gridMetrics.length }} 个</span>
           </div>
           <CapacityCard :show-targets="!selectedChannelType" v-for="item in gridMetrics" :key="item.gridId"
-            :title="item.gridName" :item="item" :unit="selectedProduct?.unit" :stat-date="dashboard.statDate"
+            :title="item.gridName" :item="item" :unit="selectedProduct?.unit" :product-id="selectedProductId" :stat-date="dashboard.statDate"
             @open="openGrid(item.gridId)" />
         </section>
       </template>

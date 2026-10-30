@@ -1,3 +1,12 @@
+export function monthlyDailyTarget(row, statDate, kind = 'base') {
+  const month = String(row.targetMonth ?? row.target_month ?? '').replace('/', '-')
+  if (month && month !== String(statDate).slice(0, 7)) return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(statDate || '')) return null
+  const value = targetValue(row, 'month', kind)
+  const days = new Date(Date.UTC(Number(statDate.slice(0, 4)), Number(statDate.slice(5, 7)), 0)).getUTCDate()
+  return value === null ? null : value / days
+}
+
 export function targetValue(row, period, kind = 'base') {
   const prefix = period === 'day' ? 'day' : 'month'
   const names = { min: 'Min', base: 'Base', challenge: 'Challenge' }

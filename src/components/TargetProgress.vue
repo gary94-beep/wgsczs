@@ -1,9 +1,9 @@
 <template>
   <div class="dual-target" :class="{ compact }">
     <div v-if="!compact" class="target-endpoint">
-      <span v-if="metric.hasChallengeTarget">挑战 <b>{{ format(metric.challengeTarget) }}</b> {{ unit }}</span>
-      <span v-else-if="metric.hasTarget">基础 {{ format(metric.baseTarget) }} {{ unit }} <small>（未设挑战）</small></span>
-      <span v-else-if="metric.hasMinTarget">底线 {{ format(metric.minTarget) }} {{ unit }} <small>（未设基础、挑战）</small></span>
+      <span v-if="metric.hasChallengeTarget">挑战 <b>{{ formatTarget(metric.challengeTarget) }}</b> {{ unit }}</span>
+      <span v-else-if="metric.hasTarget">基础 {{ formatTarget(metric.baseTarget) }} {{ unit }} <small>（未设挑战）</small></span>
+      <span v-else-if="metric.hasMinTarget">底线 {{ formatTarget(metric.minTarget) }} {{ unit }} <small>（未设基础、挑战）</small></span>
       <span v-else>未设目标</span>
     </div>
     <div class="dual-track" role="progressbar" :aria-label="`${label}目标进度`" :aria-valuenow="metric.progressPercent ?? undefined" :aria-valuetext="accessibleProgress" aria-valuemin="0" aria-valuemax="100">
@@ -13,8 +13,8 @@
       <i v-if="metric.hasChallengeTarget && metric.challengeTarget > 0 && !compact" class="dual-end-marker"></i>
     </div>
     <div v-if="!compact && (showMinMarker || showMarker)" class="target-marker-label">
-      <span v-if="showMinMarker" class="min-marker-label">底线 {{ format(metric.minTarget) }} {{ unit }}</span>
-      <span v-if="showMarker">基础 {{ format(metric.baseTarget) }} {{ unit }}</span>
+      <span v-if="showMinMarker" class="min-marker-label">底线 {{ formatTarget(metric.minTarget) }} {{ unit }}</span>
+      <span v-if="showMarker">基础 {{ formatTarget(metric.baseTarget) }} {{ unit }}</span>
     </div>
     <div class="target-rates">
       <div v-for="kind in kinds" :key="kind.id" :class="`rate-${kind.id}`"><span>{{ kind.label }}{{ compact ? '' : '完成率' }}</span><b>{{ rate(kind.id) }}</b></div>
@@ -28,12 +28,13 @@
 <script setup>
 import { computed } from 'vue'
 import { targetProgress } from '../utils/targetValues.js'
-const props = defineProps({ item: { type: Object, required: true }, label: { type: String, default: '' }, unit: { type: String, default: '' }, compact: Boolean })
+const props = defineProps({ item: { type: Object, required: true }, label: { type: String, default: '' }, unit: { type: String, default: '' }, compact: Boolean, targetDigits: { type: Number, default: 2 } })
 const kinds = [{ id: 'min', label: '底线' }, { id: 'base', label: '基础' }, { id: 'challenge', label: '挑战' }]
 const metric = computed(() => targetProgress(props.item.production, props.item.baseTarget ?? props.item.target ?? null, props.item.challengeTarget ?? null, props.item.minTarget ?? null))
 const showMarker = computed(() => metric.value.hasChallengeTarget && metric.value.basePosition !== null)
 const showMinMarker = computed(() => metric.value.minPosition !== null && (metric.value.hasTarget || metric.value.hasChallengeTarget))
 const format = value => Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })
+const formatTarget = value => Number(value).toLocaleString('zh-CN', { minimumFractionDigits: props.targetDigits === 1 ? 1 : 0, maximumFractionDigits: props.targetDigits })
 function rate(kind) {
   const target = metric.value[`${kind}Target`]
   const value = metric.value[`${kind}CompletionRate`]

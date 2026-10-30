@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS app_open_api_c003_wgsc_permission_1 (
   KEY idx_enabled (enabled), KEY idx_is_super_admin (super_admin)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS app_open_api_c003_wgsc_target (
+CREATE TABLE IF NOT EXISTS app_open_api_c003_wgsc_target_1 (
   id BIGINT NOT NULL AUTO_INCREMENT,
   branch VARCHAR(64) NOT NULL,
   grid VARCHAR(64) NOT NULL,
@@ -23,10 +23,6 @@ CREATE TABLE IF NOT EXISTS app_open_api_c003_wgsc_target (
   month_min_target DECIMAL(18,2) DEFAULT NULL,
   month_base_target DECIMAL(18,2) DEFAULT NULL,
   month_challenge_target DECIMAL(18,2) DEFAULT NULL,
-  day_min_target DECIMAL(18,2) DEFAULT NULL,
-  day_base_target DECIMAL(18,2) DEFAULT NULL,
-  day_challenge_target DECIMAL(18,2) DEFAULT NULL,
-  target_date DATE DEFAULT NULL,
   PRIMARY KEY (id), UNIQUE KEY uk_target (branch,grid,product_id,target_month)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

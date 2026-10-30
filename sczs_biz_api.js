@@ -106,6 +106,8 @@ function init() {
     return s;
   }
   function product(v) {
+    v = text(v);
+    if (v === "129+高套" || v === "119+套餐") v = "plan119";
     for (var i = 0; i < products.length; i++) {
       if (products[i].productName === v || products[i].productId === v) return products[i];
     }
@@ -388,28 +390,15 @@ function init() {
       }
 
       var mb = optionalTarget(r.monthBaseTarget), mc = optionalTarget(r.monthChallengeTarget);
-      var db = optionalTarget(r.dayBaseTarget), dc = optionalTarget(r.dayChallengeTarget);
-      var mm = optionalTarget(r.monthMinTarget), dm = optionalTarget(r.dayMinTarget);
-      if ((mm !== null && ((mb !== null && mm > mb) || (mc !== null && mm > mc))) || (dm !== null && ((db !== null && dm > db) || (dc !== null && dm > dc)))) throw new Error("第" + (i + 1) + "行底线目标不能大于基础或挑战目标");
-      if ((mb !== null && mc !== null && mc < mb) || (db !== null && dc !== null && dc < db)) {
+      var mm = optionalTarget(r.monthMinTarget);
+      if (mm !== null && ((mb !== null && mm > mb) || (mc !== null && mm > mc))) throw new Error("第" + (i + 1) + "行底线目标不能大于基础或挑战目标");
+      if (mb !== null && mc !== null && mc < mb) {
         throw new Error("第" + (i + 1) + "行挑战目标不能小于基础目标");
       }
-      if (mm === null && mb === null && mc === null && dm === null && db === null && dc === null) {
+      if (mm === null && mb === null && mc === null) {
         throw new Error("第" + (i + 1) + "行至少填写一个目标值");
       }
 
-      // 日目标必须有目标日期，且必须等于当前统计日
-      var targetDate = null;
-      if (dm !== null || db !== null || dc !== null) {
-        if (!r.targetDate) throw new Error("第" + (i + 1) + "行填写日目标时必须填写目标日期");
-        targetDate = date(r.targetDate);
-        // if (targetDate !== data.statDate) {
-        //   throw new Error("第" + (i + 1) + "行日目标日期须为当前统计日（" + data.statDate + "），实际：" + targetDate);
-        // }
-      } else if (r.targetDate) {
-        // 只有月目标但带了日期，也校验一下格式，避免写入非法值
-        targetDate = date(r.targetDate);
-      }
 
       prepared.push({
         branch: parts[0],
@@ -418,19 +407,14 @@ function init() {
         target_month: currentMonth,
         month_min_target: mm,
         month_base_target: mb,
-        month_challenge_target: mc,
-        day_min_target: dm,
-        day_base_target: db,
-        day_challenge_target: dc,
-        target_date: targetDate
+        month_challenge_target: mc
       });
     }
 
     // 依赖唯一键：branch, grid, product_id, target_month
     var fields = [
       "branch", "grid", "product_id", "target_month",
-      "month_min_target", "month_base_target", "month_challenge_target",
-      "day_min_target", "day_base_target", "day_challenge_target", "target_date"
+      "month_min_target", "month_base_target", "month_challenge_target"
     ];
     var BATCH_SIZE = 500;
     var errors = [];
@@ -455,11 +439,7 @@ function init() {
         " ON DUPLICATE KEY UPDATE " +
         "month_min_target=VALUES(month_min_target)," +
         "month_base_target=VALUES(month_base_target)," +
-        "month_challenge_target=VALUES(month_challenge_target)," +
-        "day_min_target=VALUES(day_min_target)," +
-        "day_base_target=VALUES(day_base_target)," +
-        "day_challenge_target=VALUES(day_challenge_target)," +
-        "target_date=VALUES(target_date)";
+        "month_challenge_target=VALUES(month_challenge_target)";
 
       try {
         sql(insertSql, args, false);
@@ -624,7 +604,7 @@ function init() {
           var t = data.targets[k];
           if (t.gridId === key && t.productId === productId) { match = t; break; }
         }
-        if (!match || (!daily && match.target === null) || (daily && (match.targetDate !== data.statDate || match.dailyTarget === null))) return null;
+        if (!match || (!daily && match.target === null) || (daily && match.dailyTarget === null)) return null;
         value += daily ? match.dailyTarget : match.target; count++;
       }
       return count ? value : null;
@@ -796,15 +776,18 @@ function init() {
     data.organization.branches = Object.keys(branches).sort().map(function (k) { return branches[k]; });
     data.organization.grids = Object.keys(grids).sort().map(function (k) { return grids[k]; });
     if (Params.funCode === "wgsc_importTargets") return data;
-    var targetArgs = { month: cutoff.slice(0, 7) };
-    var goals = pagedSql("SELECT * FROM " + tables.targets + " WHERE target_month=#{month}" + scope("branch", "grid", targetArgs), targetArgs, "id");
+    var targetMonth = cutoff.slice(0, 7);
+    var targetArgs = { month: targetMonth, monthSlash: targetMonth.replace("-", "/") };
+    var goals = pagedSql("SELECT * FROM " + tables.targets + " WHERE target_month IN (#{month},#{monthSlash})" + scope("branch", "grid", targetArgs), targetArgs, "id");
+    var targetMonthDays = new Date(Date.UTC(Number(cutoff.slice(0, 4)), Number(cutoff.slice(5, 7)), 0)).getUTCDate();
     for (i = 0; i < goals.length; i++) {
-      r = goals[i]; var base = optionalTarget(r.month_base_target), daily = optionalTarget(r.day_base_target);
-      data.targets.push({ gridId: gridId(r.branch, r.grid), productId: r.product_id,
-        target: base, dailyTarget: daily, monthBaseTarget: base, monthChallengeTarget: optionalTarget(r.month_challenge_target),
-        monthMinTarget: optionalTarget(r.month_min_target), dayMinTarget: optionalTarget(r.day_min_target),
-        dayBaseTarget: daily, dayChallengeTarget: optionalTarget(r.day_challenge_target),
-        targetMonth: text(r.target_month), targetDate: r.target_date ? date(r.target_date) : "" });
+      r = goals[i]; var base = optionalTarget(r.month_base_target), challenge = optionalTarget(r.month_challenge_target), minimum = optionalTarget(r.month_min_target);
+      var daily = base === null ? null : base / targetMonthDays;
+      data.targets.push({ gridId: gridId(text(r.branch), text(r.grid)), productId: product(r.product_id).productId,
+        target: base, dailyTarget: daily, monthBaseTarget: base, monthChallengeTarget: challenge,
+        monthMinTarget: minimum, dayMinTarget: minimum === null ? null : minimum / targetMonthDays,
+        dayBaseTarget: daily, dayChallengeTarget: challenge === null ? null : challenge / targetMonthDays,
+        targetMonth: text(r.target_month).replace("/", "-") });
     }
     var scripts = pagedSql("SELECT product_id,content,updated_at FROM " + tables.scripts, {}, "product_id,id");
     for (i = 0; i < scripts.length; i++) data.salesScripts.push({ productId: scripts[i].product_id, content: scripts[i].content, updatedAt: scripts[i].updated_at, status: "maintained", source: "超级管理员维护" });
