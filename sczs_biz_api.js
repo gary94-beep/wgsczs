@@ -756,9 +756,16 @@ function init() {
       "branch_company,grid_name,product_name,prod_period_type");
     var branches = {}, grids = {};
     function org(b, g) {
-      if (!b || !g || b === "全市") return;
+      // 定义保留字黑名单，遇到这些节点直接拦截，不加入统计
+      var excludeOrgs = ["全市", "中山", "中山市", "市统筹", "未知", "未匹配"];
+      
+      if (!b || excludeOrgs.indexOf(b) >= 0) return;
+      if (!g || excludeOrgs.indexOf(g) >= 0) return;
+
       branches[b] = { branchId: b, branchName: b };
-      if (b !== g || ["未知", "市统筹"].indexOf(g) >= 0) grids[gridId(b, g)] = { gridId: gridId(b, g), gridName: g, branchId: b };
+      if (b !== g) {
+        grids[gridId(b, g)] = { gridId: gridId(b, g), gridName: g, branchId: b };
+      }
     }
     for (var i = 0; i < region.length; i++) {
       var r = region[i];
