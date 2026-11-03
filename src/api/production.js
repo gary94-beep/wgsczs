@@ -1,12 +1,19 @@
 import { isMock, postHandle2 } from './client.js'
+import {mockBroadbandOverview,mockBroadbandRegions,mockBroadbandDetails} from './mockBroadband.js'
 import { visibleDashboard, visibleSearchResults, visibleAnalysis } from '../utils/productVisibility.js'
 import { mockFetchChangeAlerts } from './mock.js'
 import { mockFetchAiAnalysis } from './mock.js'
 import { mockFetchDashboard, mockFetchPermission, mockGetMobileByToken, mockFetchAlerts, mockSearchCapacity, mockImportTargets, mockImportCapacity, mockImportRows, mockSaveSalesScript, mockImportSalesScripts } from './mock.js'
 
-const codes = { common: import.meta.env.VITE_COMMON_SERVICE_CODE, biz: import.meta.env.VITE_BIZ_SERVICE_CODE, ai: import.meta.env.VITE_AI_SERVICE_CODE, test: import.meta.env.VITE_TEST_SERVICE_CODE }
+const codes = { common: import.meta.env.VITE_COMMON_SERVICE_CODE, biz: import.meta.env.VITE_BIZ_SERVICE_CODE, imports: import.meta.env.VITE_IMPORT_SERVICE_CODE, broadband: import.meta.env.VITE_BROADBAND_SERVICE_CODE, ai: import.meta.env.VITE_AI_SERVICE_CODE, test: import.meta.env.VITE_TEST_SERVICE_CODE }
+
+export async function fetchBroadbandOverview(params,token) { return isMock ? mockBroadbandOverview(params) : gateway('broadband','wgsc_bbOverview',params,token) }
+export async function fetchBroadbandRegions(params,token) { return isMock ? mockBroadbandRegions(params) : gateway('broadband','wgsc_bbRegions',params,token) }
+export async function fetchBroadbandDetails(params,token) { return isMock ? mockBroadbandDetails(params) : gateway('broadband','wgsc_bbDetails',params,token) }
 
 function gateway(group, funCode, params, token, anonymous = false) {
+  if (group === 'imports' && !codes.imports) throw new Error('导入网关未配置，请填写VITE_IMPORT_SERVICE_CODE')
+  if (group === 'broadband' && !codes.broadband) throw new Error('宽带专项网关未配置，请填写VITE_BROADBAND_SERVICE_CODE')
   if (!codes[group]) throw new Error(`未配置${group === 'common' ? '通用' : group === 'ai' ? 'AI' : '业务'}网关servicecode`)
   if (!anonymous && !token) throw new Error('登录token缺失，请通过移动认证入口登录')
   return postHandle2('ability_customize', {
@@ -69,22 +76,22 @@ function checkAdmin(permission) {
 }
 export async function importTargets(rows, permission, token) {
   checkAdmin(permission)
-  return isMock ? mockImportTargets(rows, permission) : gateway('biz', 'wgsc_importTargets', { rows: JSON.stringify(rows) }, token)
+  return isMock ? mockImportTargets(rows, permission) : gateway('imports', 'wgsc_importTargets', { rows: JSON.stringify(rows) }, token)
 }
 export async function saveSalesScript(script, permission, token) {
   checkAdmin(permission)
-  return isMock ? mockSaveSalesScript(script, permission) : gateway('biz', 'wgsc_saveSalesScript', { script: JSON.stringify(script) }, token)
+  return isMock ? mockSaveSalesScript(script, permission) : gateway('imports', 'wgsc_saveSalesScript', { script: JSON.stringify(script) }, token)
 }
 export async function importSalesScripts(rows, permission, token) {
   checkAdmin(permission)
-  return isMock ? mockImportSalesScripts(rows, permission) : gateway('biz', 'wgsc_importSalesScripts', { rows: JSON.stringify(rows) }, token)
+  return isMock ? mockImportSalesScripts(rows, permission) : gateway('imports', 'wgsc_importSalesScripts', { rows: JSON.stringify(rows) }, token)
 }
 export async function importCapacity(target, rows, token) {
-  return isMock ? mockImportCapacity(target, rows) : gateway('biz', 'wgsc_importCapacity', { target, rows: JSON.stringify(rows) }, token)
+  return isMock ? mockImportCapacity(target, rows) : gateway('imports', 'wgsc_importCapacity', { target, rows: JSON.stringify(rows) }, token)
 }
 export async function importRows(target, rows, token, permission) {
-  if (target === 'permission') checkAdmin(permission)
-  return isMock ? mockImportRows(target, rows, permission) : gateway('biz', 'wgsc_importRows', { target, rows: JSON.stringify(rows) }, token)
+  checkAdmin(permission)
+  return isMock ? mockImportRows(target, rows, permission) : gateway('imports', 'wgsc_importRows', { target, rows: JSON.stringify(rows) }, token)
 }
 
 export async function analyzeCapacity(params, token) {

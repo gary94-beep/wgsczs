@@ -1,4 +1,5 @@
 import { requireColumns } from './helpers.js'
+import { templateCsv, importComment } from './monthlyTargets.js'
 
 const COLUMN_MAP = {
   staff_no: 'staff_no', staff_name: 'staff_name', agent: 'agent',
@@ -13,6 +14,7 @@ export function terminalInfoRows(data) {
   const rows = []
   for (let i = 1; i < data.length; i++) {
     const line = data[i]
+    if (i === 1 && /^(说明（导入自动跳过）|必填（导入时请删除示例行）)/.test(String(line?.[0] || ''))) continue
     if (!line || !line.some(cell => String(cell || '').trim())) continue
     const record = {}
     Object.keys(COLUMN_MAP).forEach(col => {
@@ -29,6 +31,5 @@ export function terminalInfoRows(data) {
 
 export function terminalInfoTemplateCsv() {
   const header = 'id,staff_no,staff_name,agent,branch,grid,chn_name'
-  const sample = '必填（导入时请删除示例行）,必填,选填,选填,选填,选填,选填'
-  return '\ufeff' + [header, sample].join('\r\n')
+  return templateCsv(header.split(','),[importComment+'：主键自动生成','员工工号（文本，必填）','姓名（必填）','区域服务商','分公司（必填）','网格（必填）','小微渠道名称'])
 }

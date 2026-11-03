@@ -15,7 +15,7 @@ export function buildChangeAlerts(data, params) {
     if (!ids.has(row.gridId) || row.productId !== params.productId || (params.channel && row.channel !== params.channel)) return
     const type = normalizeChannelType(row.channelType)
     const identity = type === '直销队伍' ? row.staffId : row.channelCode || JSON.stringify([row.serviceProvider, row.microChannelName || row.channel])
-    if (!identity || !['直销队伍', '三星+渠道', '末梢渠道'].includes(type)) return
+    if (!identity || !['直销队伍', '三星+渠道', '末梢渠道', '营业厅'].includes(type)) return
     const key = JSON.stringify([row.gridId, type, identity])
     const entry = groups.get(key) || { ...row, channelType: type, current: null, previous: null, invalid: false }
     if (typeof row.production !== 'number' || !Number.isFinite(row.production) || row.production < 0) entry.invalid = true

@@ -7,6 +7,7 @@ import { normalizeChannelType } from '../utils/channelTypes.js'
 import { buildChangeAlerts } from '../utils/changeAlerts.js'
 import { buildAlertTotals } from '../utils/alertTotals.js'
 import { targetValue } from '../utils/targetValues.js'
+import {staffBroadbandRows,staffCategoryRows,areaContractorRows} from '../utils/imports/monthlyTargets.js'
 
 export async function mockFetchChangeAlerts(params) {
   const data = await mockFetchDashboard(params)
@@ -53,7 +54,7 @@ export async function mockFetchAlerts(params) {
     group.production += r.production; group.staffCount++; groups.set(key, group)
   }
   const low = [...groups.values()].filter(r => r.production <= threshold).sort((a, b) => a.production - b.production)
-  return { people: low.filter(r => r.channelType === '直销队伍'), channels: low.filter(r => ['三星+渠道', '末梢渠道'].includes(r.channelType)), statDate: data.statDate, totals: buildAlertTotals(data, params), totalSource: 'mockRecords' }
+  return { people: low.filter(r => r.channelType === '直销队伍'), channels: low.filter(r => ['三星+渠道', '末梢渠道', '营业厅'].includes(r.channelType)), statDate: data.statDate, totals: buildAlertTotals(data, params), totalSource: 'mockRecords' }
 }
 
 export async function mockSearchCapacity(params) {
@@ -229,6 +230,18 @@ export async function mockImportCapacity(target, rows) {
 export async function mockImportRows(target, rows, permission) {
   await delay(300)
   const list = Array.isArray(rows) ? rows : []
+  const monthlyParsers = {staffBroadbandTarget:staffBroadbandRows,staffCategoryTarget:staffCategoryRows,areaContractor:areaContractorRows}
+  if (monthlyParsers[target]) {
+    if (permission?.isSuperAdmin !== true) throw new Error('仅超级管理员可导入')
+    const headers = Object.keys(list[0] || {})
+    const records = monthlyParsers[target]([headers,...list.map(r=>headers.map(h=>r[h]))])
+    const fields = {staffBroadbandTarget:['ngboss_id'],staffCategoryTarget:['target_month','team_type','product_id'],areaContractor:['chn_code','mon']}[target]
+    const key = r=>JSON.stringify(fields.map(f=>r[f]))
+    const storeKey = 'wgsc-import-'+target, saved = JSON.parse(localStorage.getItem(storeKey)||'[]')
+    const merged = new Map(saved.map(r=>[key(r),r])); records.forEach(r=>merged.set(key(r),r))
+    localStorage.setItem(storeKey,JSON.stringify([...merged.values()]))
+    return {total:records.length,success:records.length,failed:0,errors:[],mode:'upsert'}
+  }
   if (target === 'permission') {
     if (mockPermissions[permission?.phone]?.isSuperAdmin !== true) throw new Error('仅超级管理员可导入权限')
     for (const row of list) {

@@ -5,9 +5,9 @@ function init() {
     region: "app_open_api_c003_wgsc_region_capacity_1",
     channel: "app_open_api_c001_wgsc_chn_capacity_1",
     staffCapacity: "app_open_api_c003_wgsc_staff_capacity_1",
-    channelInfo: "app_open_api_c002_wgsc_chn_level_1",
+    channelInfo: "app_open_api_c003_wgsc_chn_level_1",
     terminal: "app_open_api_c002_wgsc_staff_terminal_1",
-    staff: "app_open_api_c002_wgsc_staff_1",
+    staff: "app_open_api_c003_wgsc_staff_1",
     permission: "app_open_api_c003_wgsc_permission_1",
     targets: "app_open_api_c003_wgsc_target_1",
     scripts: "app_open_api_c001_wgsc_script_1"
@@ -90,21 +90,6 @@ function init() {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || isNaN(d2.getTime()) || formatDate(d2) !== s) throw new Error("无效日期：" + v + "（类型：" + typeof v + "）");
     return s;
   }
-  function now() {
-    var d = new Date(new Date().getTime() + 8 * 3600000);
-    return formatDate(d) + " " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":" + pad(d.getUTCSeconds());
-  }
-  function snapshot(v) {
-    if (typeof v === "number" && isFinite(v)) {
-      var d = new Date(v + 8 * 3600000);
-      return d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()) + " " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":" + pad(d.getUTCSeconds());
-    }
-    var s = text(v).replace(/^(\d{4})(\d{2})(\d{2})\s+(\d{2})(\d{2})(\d{2})$/, "$1-$2-$3 $4:$5:$6").replace("T", " ").slice(0, 19);
-    if (!s) return now();
-    date(s);
-    if (!/^\d{4}-\d{2}-\d{2} (?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(s)) throw new Error("无效取数时间");
-    return s;
-  }
   function product(v) {
     v = text(v);
     if (v === "129+高套" || v === "119+套餐") v = "plan119";
@@ -162,9 +147,6 @@ function init() {
   }
   var user;
   var alertRoster = null;
-  function admin() {
-    if (!user.isSuperAdmin) throw new Error("仅超级管理员可导入或维护");
-  }
   function scope(b, g, args) {
     var s = "";
     if (user.role !== "city") {
@@ -189,142 +171,7 @@ function init() {
       throw new Error("latest()失败：table=" + table + " raw=" + JSON.stringify(raw) + " type=" + typeof raw + " message=" + e.message);
     }
   }
-  function array(v) {
-    var a = parse(v);
-    if (Object.prototype.toString.call(a) !== "[object Array]" || !a.length || a.length > 10000) throw new Error("rows须为1至10000条数组");
-    return a;
-  }
-  function upsert(table, fields, record) {
-    var vals = [];
-    var updates = [];
-    for (var i = 0; i < fields.length; i++) {
-      vals.push("#{" + fields[i] + "}");
-      updates.push(fields[i] + "=VALUES(" + fields[i] + ")");
-    }
-    sql("INSERT INTO " + table + " (" + fields.join(",") + ") VALUES (" + vals.join(",") + ") ON DUPLICATE KEY UPDATE " + updates.join(","), record, false);
-  }
 
-  // ============================================================
-  // imports
-  // ============================================================
-  function imports(capacity) {
-    admin();
-    var configs = capacity
-      ? {
-          region: ["region", ["branch_company", "grid_name", "prod_period_type", "product_name", "capacity", "stat_date", "snapshot_time"]],
-          channel: ["channel", ["branch_company", "grid_name", "channel_code", "channel_name", "prod_period_type", "product_name", "capacity", "stat_date", "snapshot_time"]],
-          staff: ["staffCapacity", ["branch_company", "grid_name", "channel_code", "channel_name", "staff_no", "prod_period_type", "product_name", "capacity", "stat_date", "snapshot_time"]]
-        }
-      : {
-          channelInfo: ["channelInfo", ["uni_code", "chn_code", "chn_name", "branch", "grid_code", "grid", "star", "star_level"]],
-          terminal: ["terminal", ["staff_no", "staff_name", "agent", "branch", "grid", "chn_name"]],
-          staff: ["staff", ["staff_no", "branch", "grid", "staff_name", "job", "team_type"]],
-          permission: ["permission", ["name", "phone", "role", "branch", "grid", "super_admin", "enabled"]]
-        };
-    var target = text(Params.target);
-    var config = configs[target];
-    if (!config) throw new Error("无效target");
-    var rows = array(Params.rows);
-    var records = [];
-    var seen = {};
-    for (var i = 0; i < rows.length; i++) {
-      var r = {};
-      var fields = config[1];
-      for (var j = 0; j < fields.length; j++) r[fields[j]] = text(rows[i][fields[j]]);
-      if (target === "permission") r.is_super_admin = text(rows[i].is_super_admin === undefined ? rows[i].super_admin : rows[i].is_super_admin);
-      if (capacity) {
-        r.capacity = num(rows[i].capacity);
-        r.stat_date = date(r.stat_date);
-        r.snapshot_time = snapshot(r.snapshot_time);
-        r.prod_period_type = period(r.prod_period_type);
-        r.product_name = product(r.product_name).productName;
-        if (!r.branch_company || !r.grid_name || (target !== "region" && (!r.channel_code || !r.channel_name)) || (target === "staff" && !r.staff_no)) throw new Error("第" + (i + 1) + "行缺必填字段");
-      } else {
-        if (target === "permission") {
-          if (!r.name || !/^1\d{10}$/.test(r.phone) || ["city", "branch", "grid"].indexOf(r.role) < 0 || !/^[01]$/.test(r.is_super_admin) || !/^[01]$/.test(r.enabled)) throw new Error("权限姓名/手机号/角色/标志无效");
-          if ((r.role !== "city" && !r.branch) || (r.role === "grid" && !r.grid) || (r.role === "city" && (r.branch || r.grid)) || (r.role === "branch" && r.grid)) throw new Error("权限组织范围无效");
-          if (r.phone === user.phone && (r.is_super_admin !== "1" || r.enabled !== "1")) throw new Error("不能禁用或降级当前超级管理员");
-          r.role = { city: 1, branch: 2, grid: 3 }[r.role];
-          r.super_admin = Number(r.is_super_admin);
-          delete r.is_super_admin;
-        } else if (!r.branch || !r.grid || (target === "channelInfo" ? !r.uni_code || !r.chn_code || !r.chn_name : !r.staff_no || !r.staff_name)) throw new Error("第" + (i + 1) + "行缺必填字段");
-        if (target === "channelInfo") {
-          var star = r.star.match(/([0-9三四五六七八九十])\s*星/);
-          r.star_level = star && (Number(star[1]) >= 3 || /[三四五六七八九十]/.test(star[1])) ? "三星+" : "非三星+";
-        }
-        if (target === "staff" && ["行销经理", "商企经理", "装维随销"].indexOf(r.team_type) < 0) throw new Error("队伍类型须为行销经理/商企经理/装维随销");
-      }
-      var key = capacity
-        ? JSON.stringify([r.stat_date, r.branch_company, r.grid_name, r.channel_code, r.staff_no, r.prod_period_type, r.product_name])
-        : (r.phone || r.chn_code || r.staff_no);
-      if (seen[key]) throw new Error("第" + (i + 1) + "行重复唯一键");
-      seen[key] = true;
-      records.push(r);
-    }
-    var errors = [];
-    var success = 0;
-
-    if (target === "permission") {
-      // permission 表：保留原有的先查后写逻辑（增量更新）
-      for (var k = 0; k < records.length; k++) {
-        var rec = records[k];
-        try {
-          var existing = sql("SELECT id FROM " + tables.permission + " WHERE phone=#{phone} LIMIT 1", { phone: rec.phone }, true);
-          if (existing && existing.length) {
-            sql("UPDATE " + tables.permission + " SET name=#{name}, role=#{role}, branch=#{branch}, grid=#{grid}, super_admin=#{super_admin}, enabled=#{enabled} WHERE phone=#{phone}", rec, false);
-          } else {
-            sql("INSERT INTO " + tables.permission + " (name, phone, role, branch, grid, super_admin, enabled) VALUES (#{name}, #{phone}, #{role}, #{branch}, #{grid}, #{super_admin}, #{enabled})", rec, false);
-          }
-          success++;
-        } catch (e) {
-          errors.push("第" + (k + 1) + "行写入失败：" + e.message);
-        }
-      }
-    } else {
-      // ========================================================
-      // 【核心修改】：先全表清空，再批量 INSERT
-      // ========================================================
-      var tableName = tables[config[0]];
-      
-      // 1. 第一步：清空整表
-      try {
-        sql("DELETE FROM " + tableName, {}, false);
-      } catch (delErr) {
-        throw new Error("清空表 " + tableName + " 失败，终止导入。原因：" + delErr.message);
-      }
-
-      // 2. 第二步：分批批量插入 (防止一次性插入过多导致 SQL 过长报错)
-      var fields = config[1];
-      var BATCH_SIZE = 500; 
-      
-      for (var b = 0; b < records.length; b += BATCH_SIZE) {
-        var batch = records.slice(b, b + BATCH_SIZE);
-        var args = {};
-        var valueParts = [];
-
-        for (var bi = 0; bi < batch.length; bi++) {
-          var placeholders = [];
-          for (var fi = 0; fi < fields.length; fi++) {
-            var paramName = "v_" + bi + "_" + fi;
-            args[paramName] = batch[bi][fields[fi]];
-            placeholders.push("#{" + paramName + "}");
-          }
-          valueParts.push("(" + placeholders.join(",") + ")");
-        }
-
-        var insertSql = "INSERT INTO " + tableName + " (" + fields.join(",") + ") VALUES " + valueParts.join(",");
-
-        try {
-          sql(insertSql, args, false);
-          success += batch.length;
-        } catch (e) {
-          errors.push("第 " + (b + 1) + "~" + (b + batch.length) + " 行批量写入失败：" + e.message);
-        }
-      }
-    }
-
-    return { total: rows.length, success: success, failed: rows.length - success, errors: errors, mode: capacity ? "replace" : "replace" };
-  }
 
   // ============================================================
   // dashboard
@@ -334,154 +181,10 @@ function init() {
   // ============================================================
   // importTargets
   // ============================================================
-  function importTargets() {
-    admin();
-    var rows = array(Params.rows);
-    var data = dashboard();
-    var seen = {};
-    var prepared = [];
-    if (!rows.length || rows.length > 20000) throw new Error("目标导入记录数量无效");
-
-    // 统一目标月份：以当前数据月份为准（YYYY-MM）
-    var currentMonth = data.statDate.slice(0, 7); // "2026-10"
-    if (!/^\d{4}-\d{2}$/.test(currentMonth)) throw new Error("当前统计日期无效：" + data.statDate);
-
-    // 归一化月份：兼容 2026/10、202610、2026-10-01 等写法
-    function normalizeMonth(v) {
-      var s = text(v).replace(/[\/\.]/g, "-");
-      var m = s.match(/^(\d{4})-(\d{1,2})(?:-\d{1,2})?$/);
-      if (m) return m[1] + "-" + ("0" + m[2]).slice(-2);
-      var c = s.match(/^(\d{4})(\d{2})$/);
-      if (c) return c[1] + "-" + c[2];
-      return s;
-    }
-
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
-      var key = r.gridId + "|" + r.productId;
-
-      if (seen[key]) throw new Error("目标有重复键：" + key);
-      seen[key] = true;
-
-      // gridId 格式：branch::grid
-      var parts = String(r.gridId).split("::");
-      if (parts.length !== 2 || !parts[0] || !parts[1]) throw new Error("第" + (i + 1) + "行 gridId 格式无效：" + r.gridId);
-
-      // 校验网格存在（放行全市及分公司汇总层级）
-      var validGrid = false;
-      if (r.gridId === "全市::全市" || parts[0] === parts[1]) {
-        validGrid = true;
-      } else {
-        for (var gi = 0; gi < data.organization.grids.length; gi++) {
-          if (data.organization.grids[gi].gridId === r.gridId) { validGrid = true; break; }
-        }
-      }
-      if (!validGrid) throw new Error("第" + (i + 1) + "行网格无效：" + r.gridId);
-
-      // 产品归一化：允许传中文名或 productId
-      var productInfo;
-      try { productInfo = product(r.productId); }
-      catch (e) { throw new Error("第" + (i + 1) + "行产品无效：" + r.productId); }
-
-      // 目标月份校验（归一化后比较）
-      var rowMonth = normalizeMonth(r.targetMonth || currentMonth);
-      if (rowMonth !== currentMonth) {
-        throw new Error("第" + (i + 1) + "行目标月份须为当前数据月份（" + currentMonth + "），实际：" + r.targetMonth);
-      }
-
-      var mb = optionalTarget(r.monthBaseTarget), mc = optionalTarget(r.monthChallengeTarget);
-      var mm = optionalTarget(r.monthMinTarget);
-      if (mm !== null && ((mb !== null && mm > mb) || (mc !== null && mm > mc))) throw new Error("第" + (i + 1) + "行底线目标不能大于基础或挑战目标");
-      if (mb !== null && mc !== null && mc < mb) {
-        throw new Error("第" + (i + 1) + "行挑战目标不能小于基础目标");
-      }
-      if (mm === null && mb === null && mc === null) {
-        throw new Error("第" + (i + 1) + "行至少填写一个目标值");
-      }
-
-
-      prepared.push({
-        branch: parts[0],
-        grid: parts[1],
-        product_id: productInfo.productId,
-        target_month: currentMonth,
-        month_min_target: mm,
-        month_base_target: mb,
-        month_challenge_target: mc
-      });
-    }
-
-    // 依赖唯一键：branch, grid, product_id, target_month
-    var fields = [
-      "branch", "grid", "product_id", "target_month",
-      "month_min_target", "month_base_target", "month_challenge_target"
-    ];
-    var BATCH_SIZE = 500;
-    var errors = [];
-    var success = 0;
-
-    for (var b = 0; b < prepared.length; b += BATCH_SIZE) {
-      var batch = prepared.slice(b, b + BATCH_SIZE);
-      var args = {};
-      var valueParts = [];
-
-      for (var bi = 0; bi < batch.length; bi++) {
-        var placeholders = [];
-        for (var fi = 0; fi < fields.length; fi++) {
-          var paramName = "v_" + bi + "_" + fi;
-          args[paramName] = batch[bi][fields[fi]];
-          placeholders.push("#{" + paramName + "}");
-        }
-        valueParts.push("(" + placeholders.join(",") + ")");
-      }
-
-      var insertSql = "INSERT INTO " + tables.targets + " (" + fields.join(",") + ") VALUES " + valueParts.join(",") +
-        " ON DUPLICATE KEY UPDATE " +
-        "month_min_target=VALUES(month_min_target)," +
-        "month_base_target=VALUES(month_base_target)," +
-        "month_challenge_target=VALUES(month_challenge_target)";
-
-      try {
-        sql(insertSql, args, false);
-        success += batch.length;
-      } catch (e) {
-        errors.push("第 " + (b + 1) + "~" + (b + batch.length) + " 行写入失败：" + e.message);
-      }
-    }
-
-    return {
-      imported: success,
-      success: success,
-      failed: prepared.length - success,
-      errors: errors,
-      mode: "upsert",
-      targetMonth: currentMonth
-    };
-  }
 
   // ============================================================
   // importScripts
   // ============================================================
-  function importScripts(single) {
-    admin();
-    var rows = single ? [parse(Params.script)] : array(Params.rows);
-    var prepared = [];
-    var seen = {};
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
-      var id = product(r.productId).productId;
-      var content = text(r.content);
-      if (seen[id] || !content || content.length > 4000) throw new Error("话术产品重复或内容无效");
-      seen[id] = true;
-      prepared.push({ product_id: id, content: content, updated_at: now(), updated_by: user.phone });
-    }
-    for (i = 0; i < prepared.length; i++) {
-      upsert(tables.scripts, ["product_id", "content", "updated_at", "updated_by"], prepared[i]);
-    }
-    return single
-      ? { productId: prepared[0].product_id, content: prepared[0].content, updatedAt: prepared[0].updated_at, status: "maintained" }
-      : { imported: prepared.length };
-  }
 
   // ============================================================
   // filtered
@@ -533,9 +236,9 @@ function init() {
     var groups = {};
     var result = [];
     if (!q || q.length > 100 || ["people", "channels"].indexOf(Params.kind) < 0) throw new Error("查询参数无效");
-    for (var pi = 0; pi < 2; pi++) {
-      var per = pi ? "day" : "month";
-      var source = filtered(data, per);
+    for (var pi = 0; pi < 3; pi++) {
+      var per = pi === 2 ? "previous" : pi ? "day" : "month";
+      var source = pi === 2 ? data.periodRows.filter(function (r) { return r.period === "last_mon"; }) : filtered(data, per);
       for (var i = 0; i < source.length; i++) {
         var r = source[i];
         if (Params.kind === "people" && r.channelType !== "直销队伍") continue;
@@ -544,6 +247,7 @@ function init() {
         var code = Params.kind === "people" ? r.staffId : r.channelCode;
         if ((String(name) + " " + String(code)).toLowerCase().indexOf(q) < 0) continue;
         var key = JSON.stringify([r.gridId, code, r.channelType]);
+        if (pi === 2 && !groups[key]) continue;
         if (!groups[key]) {
           groups[key] = { key: key, name: name, code: code, role: Params.kind === "people" ? r.staffRole : r.channelType, branchId: r.branchId, gridId: r.gridId, values: [] };
         }
@@ -552,13 +256,24 @@ function init() {
         for (var j = 0; j < g.values.length; j++) if (g.values[j].productId === r.productId) m = g.values[j];
         if (!m) {
           var p = product(r.productId);
-          m = { productId: p.productId, productName: p.productName, unit: p.unit, day: null, month: null };
+          m = { productId: p.productId, productName: p.productName, unit: p.unit, day: null, month: null, previous: null };
           g.values.push(m);
         }
         m[per] = (m[per] === null ? 0 : m[per]) + r.production;
       }
     }
-    for (var key in groups) if (Object.prototype.hasOwnProperty.call(groups, key)) result.push(groups[key]);
+    var currentDate = new Date(data.statDate + "T00:00:00Z"), days = currentDate.getUTCDate();
+    var previousDays = Math.min(days, new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth(), 0)).getUTCDate());
+    for (var key in groups) if (Object.prototype.hasOwnProperty.call(groups, key)) {
+      for (var mi = 0; mi < groups[key].values.length; mi++) {
+        var metric = groups[key].values[mi];
+        metric.monthAverage = metric.month === null ? null : metric.month / days;
+        metric.previousAverage = metric.previous === null ? null : metric.previous / previousDays;
+        metric.changeValue = metric.monthAverage === null || metric.previousAverage === null ? null : metric.monthAverage - metric.previousAverage;
+        metric.changeRate = metric.changeValue === null || metric.previousAverage === 0 ? null : metric.changeValue / metric.previousAverage * 100;
+      }
+      result.push(groups[key]);
+    }
     return { results: result, statDate: data.statDate };
   }
 
@@ -625,10 +340,10 @@ function init() {
       if (["day", "month"].indexOf(Params.period) < 0) throw new Error("预警周期无效");
       summary.period = Params.period; summary.threshold = num(Params.threshold);
       summary.scope = ids.length === 1 ? "选定网格" : "选定网格范围";
-      summary.alerts = [{ category: "直销人员", count: 0 }, { category: "3星+渠道", count: 0 }, { category: "末梢渠道", count: 0 }];
+      summary.alerts = [{ category: "直销人员", count: 0 }, { category: "3星+渠道", count: 0 }, { category: "末梢渠道", count: 0 }, { category: "营业厅", count: 0 }];
       var alertCounts = aiAlertCounts(data);
       for (j = 0; j < alertCounts.length; j++) {
-        var categoryIndex = ["直销队伍", "三星+渠道", "末梢渠道"].indexOf(alertCounts[j].channelType);
+        var categoryIndex = ["直销队伍", "三星+渠道", "末梢渠道", "营业厅"].indexOf(alertCounts[j].channelType);
         if (categoryIndex >= 0) summary.alerts[categoryIndex].count = Number(alertCounts[j].total);
       }
     }
@@ -675,13 +390,13 @@ function init() {
       clause += " AND c.prod_period_type IN (" + periods.map(function (p) { return "'" + p + "'"; }).join(",") + ")";
     } else if (detail) {
       if (Params.funCode === "wgsc_fetchChangeAlerts") clause += " AND c.prod_period_type IN ('mon','last_mon')";
-      else if (Params.funCode === "wgsc_searchCapacity") clause += " AND c.prod_period_type IN ('mon','day')";
+      else if (Params.funCode === "wgsc_searchCapacity") clause += " AND c.prod_period_type IN ('mon','day','last_mon')";
       else if (Params.funCode === "wgsc_fetchAlerts" || Params.funCode === "wgsc_fetchChannelOptions") {
         args.selectedPeriod = Params.period === "day" ? "day" : "mon";
         clause += " AND c.prod_period_type=#{selectedPeriod}";
       }
     }
-    var channelType = text(Params.channelType), selectedTypes = ["三星+渠道", "直销队伍", "末梢渠道"];
+    var channelType = text(Params.channelType), selectedTypes = ["三星+渠道", "直销队伍", "末梢渠道", "营业厅"];
     if (channelType === "3星+渠道") channelType = "三星+渠道";
     if (channelType === "全部类型") channelType = "";
     if (channelType && selectedTypes.indexOf(channelType) < 0) throw new Error("生产类型无效");
@@ -689,15 +404,16 @@ function init() {
     if (detail && channelType) selectedTypes = [channelType];
     if (detail && Params.funCode === "wgsc_searchCapacity" && Params.kind === "people") selectedTypes = selectedTypes.filter(function (v) { return v === "直销队伍"; });
     if (detail && Params.funCode === "wgsc_searchCapacity" && Params.kind === "channels") selectedTypes = selectedTypes.filter(function (v) { return v !== "直销队伍"; });
+    if (detail && Params.funCode === "wgsc_searchCapacity" && Params.kind === "channels" && !channelType) selectedTypes = selectedTypes.filter(function (v) { return v !== "营业厅"; });
     var blocks = [];
     for (var i = 0; i < selectedTypes.length; i++) {
-      var type = selectedTypes[i], stars = type === "三星+渠道", tail = type === "末梢渠道";
+      var type = selectedTypes[i], stars = type === "三星+渠道" || type === "营业厅", tail = type === "末梢渠道";
       var table = stars ? tables.channel : tables.staffCapacity;
       var dimension = stars ? tables.channelInfo : tail ? tables.terminal : tables.staff;
       var key = stars ? "chn_code" : "staff_no";
       var join = " INNER JOIN " + latestDimension(dimension, key) + " d ON c." + (stars ? "channel_code" : "staff_no") + "=d." + key;
       join += " AND c.branch_company=d.branch AND c.grid_name=d.grid";
-      var condition = clause + (stars ? " AND d.star_level='三星+'" : "");
+      var condition = clause + (stars ? (type === "营业厅" ? " AND d.star_level='营业厅'" : " AND d.star_level='三星+'") : "");
       if (!stars) condition += " AND NOT EXISTS (SELECT 1 FROM " + (tail ? tables.staff : tables.terminal) + " conflict WHERE conflict.staff_no=c.staff_no)";
       var identity = stars ? "d.chn_code" : tail ? "JSON_ARRAY(d.agent,d.chn_name)" : "d.staff_no";
       var label = stars || tail ? "d.chn_name" : "c.channel_name";
@@ -756,16 +472,9 @@ function init() {
       "branch_company,grid_name,product_name,prod_period_type");
     var branches = {}, grids = {};
     function org(b, g) {
-      // 定义保留字黑名单，遇到这些节点直接拦截，不加入统计
-      var excludeOrgs = ["全市", "中山", "中山市", "市统筹", "未知", "未匹配"];
-      
-      if (!b || excludeOrgs.indexOf(b) >= 0) return;
-      if (!g || excludeOrgs.indexOf(g) >= 0) return;
-
+      if (!b || !g || b === "全市") return;
       branches[b] = { branchId: b, branchName: b };
-      if (b !== g) {
-        grids[gridId(b, g)] = { gridId: gridId(b, g), gridName: g, branchId: b };
-      }
+      if (b !== g || ["未知", "市统筹"].indexOf(g) >= 0) grids[gridId(b, g)] = { gridId: gridId(b, g), gridName: g, branchId: b };
     }
     for (var i = 0; i < region.length; i++) {
       var r = region[i];
@@ -782,7 +491,6 @@ function init() {
     for (i = 0; i < orgs.length; i++) org(orgs[i].branch, orgs[i].grid);
     data.organization.branches = Object.keys(branches).sort().map(function (k) { return branches[k]; });
     data.organization.grids = Object.keys(grids).sort().map(function (k) { return grids[k]; });
-    if (Params.funCode === "wgsc_importTargets") return data;
     var targetMonth = cutoff.slice(0, 7);
     var targetArgs = { month: targetMonth, monthSlash: targetMonth.replace("-", "/") };
     var goals = pagedSql("SELECT * FROM " + tables.targets + " WHERE target_month IN (#{month},#{monthSlash})" + scope("branch", "grid", targetArgs), targetArgs, "id");
@@ -807,7 +515,7 @@ function init() {
   function dashboard() {
     if (dashboardMemo) return dashboardMemo;
     var data = metadata();
-    if (!data.statDate || Params.funCode === "wgsc_importTargets") { dashboardMemo = data; return data; }
+    if (!data.statDate) { dashboardMemo = data; return data; }
     var args = {}, detail = ["wgsc_fetchAlerts", "wgsc_fetchChangeAlerts", "wgsc_searchCapacity", "wgsc_fetchChannelOptions"].indexOf(Params.funCode) >= 0;
     var conflictArgs = { cutoff: data.statDate };
     var conflicts = sql("SELECT 1 AS found FROM " + tables.staffCapacity + " c WHERE c.stat_date=#{cutoff}" +
@@ -892,11 +600,12 @@ function init() {
     // The roster includes registered entities with no capacity records.
     function roster(table, key, kind, extra) {
       return "SELECT d.branch AS branchId,CONCAT(d.branch,'::',d.grid) AS gridId,'" + kind + "' AS kind," + key +
-        " AS identity FROM " + latestDimension(table, kind === "stars" ? "chn_code" : "staff_no") +
+        " AS identity FROM " + latestDimension(table, kind === "stars" || kind === "halls" ? "chn_code" : "staff_no") +
         " d WHERE 1=1" + scope("d.branch", "d.grid", args) + extra;
     }
     var relation = roster(tables.staff, "d.staff_no", "people", "") + " UNION ALL " +
       roster(tables.channelInfo, "d.chn_code", "stars", " AND d.star_level='三星+'") + " UNION ALL " +
+      roster(tables.channelInfo, "d.chn_code", "halls", " AND d.star_level='营业厅'") + " UNION ALL " +
       roster(tables.terminal, "JSON_ARRAY(d.agent,d.chn_name)", "tail", "");
     var ids = parse(Params.gridIds || "[]"), where = " WHERE 1=1";
     if (ids.length) {
@@ -912,10 +621,11 @@ function init() {
       where += " AND EXISTS (SELECT 1 FROM (" + matchQuery + ") m WHERE m.gridId=roster.gridId AND m.channel=#{selectedChannel} AND " +
         "((roster.kind='people' AND m.channelType='直销队伍' AND m.staffId=roster.identity) OR " +
         "(roster.kind='stars' AND m.channelType='三星+渠道' AND m.channelCode=roster.identity) OR " +
+        "(roster.kind='halls' AND m.channelType='营业厅' AND m.channelCode=roster.identity) OR " +
         "(roster.kind='tail' AND m.channelType='末梢渠道' AND JSON_ARRAY(m.serviceProvider,m.microChannelName)=roster.identity)))";
     }
     var counts = sql("SELECT kind,COUNT(DISTINCT CONCAT(gridId,CHAR(31),identity)) AS total FROM (" + relation + ") roster" + where + " GROUP BY kind", args, true);
-    var result = { people: 0, stars: 0, tail: 0 };
+    var result = { people: 0, stars: 0, tail: 0, halls: 0 };
     for (var j = 0; j < counts.length; j++) result[counts[j].kind] = Number(counts[j].total);
     return result;
   }
@@ -940,7 +650,7 @@ function init() {
     if (rate > 100) throw new Error("日均减少率须为0至100");
     var data = metadata(), args = {};
     selectedGridClause(args, data, "c");
-    if (!data.statDate) return { people: [], channels: [], statDate: "", totals: { people: 0, stars: 0, tail: 0 }, totalSource: "dimension" };
+    if (!data.statDate) return { people: [], channels: [], statDate: "", totals: { people: 0, stars: 0, tail: 0, halls: 0 }, totalSource: "dimension" };
     var d = new Date(data.statDate + "T00:00:00Z");
     args.elapsed = d.getUTCDate();
     args.previousDays = Math.min(args.elapsed, new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 0)).getUTCDate());
@@ -983,6 +693,7 @@ function init() {
     else {
       result.counts = { people: result.people.length,
         stars: result.channels.filter(function (r) { return r.channelType === "三星+渠道"; }).length,
+        halls: result.channels.filter(function (r) { return r.channelType === "营业厅"; }).length,
         tail: result.channels.filter(function (r) { return r.channelType === "末梢渠道"; }).length };
       var selected = list.slice(offset, offset + size);
       result.people = selected.filter(function (r) { return r.channelType === "直销队伍"; });
@@ -999,12 +710,7 @@ function init() {
     wgsc_fetchAiSummary: buildAiSummary,
     wgsc_fetchDashboard: dashboard,
     wgsc_fetchAlerts: alerts,
-    wgsc_searchCapacity: search,
-    wgsc_importCapacity: function () { return imports(true); },
-    wgsc_importRows: function () { return imports(false); },
-    wgsc_importTargets: importTargets,
-    wgsc_importSalesScripts: function () { return importScripts(false); },
-    wgsc_saveSalesScript: function () { return importScripts(true); }
+    wgsc_searchCapacity: search
   };
 
   try {

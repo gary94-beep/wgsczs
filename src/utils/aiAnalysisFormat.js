@@ -17,6 +17,14 @@ function textValue(value) {
   return ''
 }
 
+function finishSections(values) {
+  const headings = { overall: '总体情况|整体情况|总体概况|总体概述|概况|overall|summary', advantage: '主要优势|优势|advantage|strengths', weakness: '主要短板|短板|不足|weakness|weaknesses' }
+  return Object.fromEntries(Object.keys(defaults).map(key => {
+    const prefix = new RegExp(`^(?:(?:\\d+[.、．)）]\\s*)?(?:${headings[key]})\\s*[:：]\\s*)+`, 'i')
+    return [key, (values[key] || '').replace(prefix, '').trim() || defaults[key]]
+  }))
+}
+
 // Only organize supplied text; never infer missing strengths or weaknesses.
 export function parseAiAnalysisSections(answer) {
   const plain = clean(answer)
@@ -29,7 +37,7 @@ export function parseAiAnalysisSections(answer) {
         advantage: textValue(object.advantage || object.strengths || object['优势']),
         weakness: textValue(object.weakness || object.weaknesses || object['短板'])
       }
-      if (Object.values(values).some(Boolean)) return Object.fromEntries(Object.keys(defaults).map(key => [key, values[key] || defaults[key]]))
+      if (Object.values(values).some(Boolean)) return finishSections(values)
     }
   } catch { /* Existing results are normally plain text. */ }
   const aliases = { '总体情况': 'overall', '整体情况': 'overall', '总体概况': 'overall', '总体概述': 'overall', '概况': 'overall', '优势': 'advantage', '主要优势': 'advantage', '短板': 'weakness', '主要短板': 'weakness', '不足': 'weakness' }
@@ -44,5 +52,5 @@ export function parseAiAnalysisSections(answer) {
     const content = plain.slice(heading.end, end).trim().replace(/\s+\d+[.、．)）]\s*$/, '').trim()
     if (content) values[heading.key] = [values[heading.key], content].filter(Boolean).join('\n')
   })
-  return Object.fromEntries(Object.keys(defaults).map(key => [key, values[key] || defaults[key]]))
+  return finishSections(values)
 }

@@ -15,10 +15,10 @@ ON app_open_api_c003_wgsc_staff_capacity_1
 (stat_date, branch_company, grid_name, prod_period_type, product_name);
 
 CREATE INDEX idx_wgsc_channel_latest
-ON app_open_api_c002_wgsc_chn_level_1 (chn_code, id);
+ON app_open_api_c003_wgsc_chn_level_1 (chn_code, id);
 
 CREATE INDEX idx_wgsc_employee_latest
-ON app_open_api_c002_wgsc_staff_1 (staff_no, id);
+ON app_open_api_c003_wgsc_staff_1 (staff_no, id);
 
 CREATE INDEX idx_wgsc_terminal_latest
 ON app_open_api_c002_wgsc_staff_terminal_1 (staff_no, id);

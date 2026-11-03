@@ -1,6 +1,6 @@
 <template>
   <section class="capacity-search" aria-label="人员渠道产能查询">
-    <header class="search-page-heading"><div><h2>产能速查</h2><p>个人 / 渠道产能查询</p></div><div class="search-page-meta"><span class="search-scope"><i class="search-ui-icon" :style="iconStyle('location')" aria-hidden="true"></i>{{ scope }}</span><span v-if="demo" class="search-demo">演示数据</span></div></header>
+    <header class="search-page-heading"><div class="search-heading-copy"><h2>产能速查</h2><p>个人 / 渠道产能查询</p></div><div class="search-page-meta"><span class="search-scope"><i class="search-ui-icon" :style="iconStyle('location')" aria-hidden="true"></i>{{ scope }}</span><span v-if="demo" class="search-demo">演示数据</span></div><div class="search-heading-source"><span><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0M4 18c0 4 16 4 16 0"/></svg>产能 · 系统取数</span></div></header>
     <div class="search-toolbar">
       <div class="search-controls"><div class="search-kinds" role="group" aria-label="搜索对象"><button v-for="item in kinds" :key="item.id" type="button" :aria-pressed="kind === item.id" :class="{ active: kind === item.id }" @click="kind = item.id; limit = 10">{{ item.label }}</button></div><select v-model="productId" aria-label="查询产品"><option value="">全部产品</option><option v-for="item in dashboard.products" :key="item.productId" :value="item.productId">{{ item.productName }}</option></select></div>
       <div class="search-input"><i class="search-ui-icon" :style="iconStyle('search')" aria-hidden="true"></i><input v-model="query" type="search" maxlength="100" :placeholder="kind === 'people' ? '搜索姓名 / 员工工号' : '搜索渠道名称 / 渠道编码'" :aria-label="kind === 'people' ? '搜索姓名或工号' : '搜索渠道名称或编码'" @keydown.esc="query = ''" /><button v-if="query" type="button" title="清空搜索" aria-label="清空搜索" @click="query = ''"><i class="search-ui-icon" :style="iconStyle('clear')" aria-hidden="true"></i></button></div>
@@ -9,7 +9,7 @@
     <template v-if="query.trim()"><div class="search-result-heading" aria-live="polite"><span>{{ busy ? '查询中...' : `共 ${results.length} ${kind === 'people' ? '位人员' : '个渠道'}` }}</span><time>截至 {{ dashboard.statDate }}</time></div><p v-if="!busy && !error && !results.length" class="search-empty">当前可查看范围内暂无匹配结果</p>
       <article v-for="item in results.slice(0, limit)" :key="item.key" class="search-result">
         <header class="search-identity"><span class="search-avatar" :class="`search-avatar-${kind}`" aria-hidden="true"><i class="search-ui-icon" :style="iconStyle(kind === 'people' ? 'person' : 'store')"></i></span><div class="search-identity-copy"><h3>{{ item.name }}</h3><div class="search-identity-meta"><span class="search-role">{{ item.role || '类型未提供' }}</span><span class="search-code">{{ item.code || '编码未提供' }}</span></div><p>{{ branchName(item.branchId) }} · {{ gridName(item.gridId) }}</p></div></header>
-        <div class="search-table-wrap"><table class="search-metrics" :aria-label="`${item.name}产能`"><thead><tr class="search-metric-head"><th scope="col">产品</th><th scope="col">当日</th><th scope="col">本月</th></tr></thead><tbody><tr v-for="metric in item.values" :key="metric.productId"><th scope="row">{{ metric.productName }}</th><td :class="{ 'metric-muted': metric.day == null || metric.day === 0 }">{{ format(metric.day) }}<small v-if="metric.day != null"> {{ metric.unit }}</small></td><td :class="{ 'metric-muted': metric.month == null || metric.month === 0 }">{{ format(metric.month) }}<small v-if="metric.month != null"> {{ metric.unit }}</small></td></tr></tbody></table></div>
+        <div class="search-table-wrap"><table class="search-metrics" :aria-label="`${item.name}产能`"><thead><tr class="search-metric-head"><th scope="col">产品</th><th scope="col">当日</th><th scope="col">本月</th></tr></thead><tbody><template v-for="metric in item.values" :key="metric.productId"><tr><th scope="row">{{ metric.productName }}</th><td :class="{ 'metric-muted': metric.day == null || metric.day === 0 }">{{ format(metric.day) }}<small v-if="metric.day != null"> {{ metric.unit }}</small></td><td :class="{ 'metric-muted': metric.month == null || metric.month === 0 }">{{ format(metric.month) }}<small v-if="metric.month != null"> {{ metric.unit }}</small></td></tr><tr class="search-comparison"><td colspan="3"><span>本月日均 {{ format(metric.monthAverage) }} · 上月同期日均 {{ format(metric.previousAverage) }} {{ metric.unit }}/日</span><strong :class="{ 'comparison-down': metric.changeValue < 0, 'comparison-up': metric.changeValue > 0 }">{{ comparison(metric) }}</strong></td></tr></template></tbody></table></div>
       </article>
       <button v-if="results.length > limit" class="search-more" type="button" @click="limit += 10">查看更多</button>
     </template>
@@ -25,15 +25,17 @@ import storeIcon from '../assets/ui-icons/store.svg'
 import personIcon from '../assets/ui-icons/user-round.svg'
 const props = defineProps({ dashboard: Object, gridIds: Array, scope: String, demo: Boolean, queryApi: Function, channelType: { type: String, default: '' } })
 const query = ref(''), kind = ref('people'), productId = ref(''), limit = ref(10)
-const kinds = [{ id: 'people', label: '人员' }, { id: 'channels', label: '渠道' }]
+const kinds = [{ id: 'people', label: '人员' }, { id: 'channels', label: '渠道' }, { id: 'halls', label: '营业厅' }]
 const remoteResults = ref([]), error = ref(''), busy = ref(false)
-const results = computed(() => props.queryApi ? remoteResults.value : searchCapacity(props.dashboard, { query: query.value, kind: kind.value, productId: productId.value, gridIds: props.gridIds, channelType: props.channelType }))
+const requestKind = () => kind.value === 'halls' ? 'channels' : kind.value
+const requestType = () => kind.value === 'halls' ? '营业厅' : props.channelType
+const results = computed(() => (props.queryApi ? remoteResults.value : searchCapacity(props.dashboard, { query: query.value, kind: requestKind(), productId: productId.value, gridIds: props.gridIds, channelType: requestType() })).filter(item => kind.value !== 'channels' || item.role !== '营业厅'))
 let sequence = 0
 watch([query, kind, productId, () => JSON.stringify(props.gridIds), () => props.channelType], (values, previous, cleanup) => {
   const id = ++sequence
   remoteResults.value = []; error.value = ''; busy.value = false
   if (!props.queryApi || !query.value.trim()) return
-  const params = { query: query.value, kind: kind.value, productId: productId.value, gridIds: props.gridIds, channelType: props.channelType }
+  const params = { query: query.value, kind: requestKind(), productId: productId.value, gridIds: props.gridIds, channelType: requestType() }
   busy.value = true
   const timer = setTimeout(async () => {
     try { const data = await props.queryApi(params); if (id === sequence) remoteResults.value = data.results || [] }
@@ -48,6 +50,11 @@ const branchName = id => props.dashboard.organization.branches.find(item => item
 const gridName = id => props.dashboard.organization.grids.find(item => item.gridId === id)?.gridName || '网格未提供'
 const iconStyle = name => ({ '--search-icon': `url("${({ search: searchIcon, clear: clearIcon, location: locationIcon, store: storeIcon, person: personIcon })[name]}")` })
 const format = value => value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })
+function comparison(metric) {
+  if (metric.changeValue == null) return '较上月同期日均：暂无可比数据'
+  const signed = value => `${value > 0 ? '+' : ''}${format(value)}`
+  return `较上月同期日均 ${signed(metric.changeValue)} ${metric.unit}/日${metric.changeRate == null ? '（上期为0，变化率不适用）' : `（${signed(metric.changeRate)}%）`}`
+}
 </script>
 <style scoped>
 .capacity-search { padding: 20px 14px 30px; color: #142349; }
@@ -64,6 +71,12 @@ const format = value => value == null || !Number.isFinite(Number(value)) ? '—'
 button, input, select { font: inherit; } button { cursor: pointer; }
 .search-kinds { display: flex; flex: 0 0 auto; border-radius: 5px; background: #eaf3ff; }
 .search-kinds button { width: 65px; height: 38px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: #607998; font-size: 15px; font-weight: 700; }
+.search-kinds button { width: auto; min-width: 45px; padding: 0 9px; font-size: 14px; }
+.search-metrics .search-comparison td { text-align: left; background: #f8fbff; }
+.search-comparison span { display: block; color: #71849d; font-size: 11px; line-height: 1.7; white-space: normal; }
+.search-comparison strong { display: block; margin-top: 3px; color: #607998; font-size: 12px; line-height: 1.7; white-space: normal; }
+.search-comparison .comparison-down { color: #c47721; }
+.search-comparison .comparison-up { color: #099d87; }
 .search-kinds .active { color: #fff; background: #1672fa; }
 .search-controls select { min-width: 0; width: 124px; height: 38px; padding: 0 10px; border: 1px solid #bedaff; border-radius: 5px; color: #142349; background: #fff; font-size: 14px; }
 .search-input { display: flex; align-items: center; gap: 8px; padding: 0 10px 0 13px; border: 1px solid #86b5ff; border-radius: 6px; background: #fcfeff; }
@@ -98,4 +111,20 @@ button, input, select { font: inherit; } button { cursor: pointer; }
 .search-metrics tbody tr:last-child > * { border-bottom: 0; }
 .search-more { display: block; min-height: 42px; margin: 16px auto 0; padding: 8px 20px; border: 1px solid #c5dbf9; border-radius: 6px; color: #2674e8; background: #fff; }
 @media (max-width: 360px) { .capacity-search { padding: 18px 10px 24px; } .search-toolbar, .search-result { padding: 14px 12px; } .search-controls { gap: 8px; } .search-kinds button { width: 56px; } .search-controls select { width: 110px; padding: 0 6px; font-size: 13px; } .search-identity { gap: 9px; } .search-avatar { width: 42px; height: 42px; flex-basis: 42px; } .search-identity h3 { font-size: 16px; } .search-metrics th, .search-metrics td { padding: 11px 8px; } .search-metrics { font-size: 13px; } .search-metrics td { font-size: 15px; } }
+@media (max-width: 360px) { .search-kinds button { width: auto; min-width: 40px; padding: 0 7px; font-size: 13px; } .search-controls select { width: 100px; } }
+/* Use the same white introductory card as the production overview. */
+.capacity-search{padding:20px 0 30px;font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif}
+.search-page-heading{align-items:center;gap:16px;margin:0 0 18px;padding:20px;border:1px solid #c5dcff;border-radius:14px;background:linear-gradient(125deg,#fff 30%,#f3f9ff);box-shadow:0 4px 10px #3379c110}
+.search-heading-copy{min-width:0;flex:1}
+.search-page-heading h2{font-size:32px;line-height:1.2;font-weight:900;color:#101f46;letter-spacing:-.5px;-webkit-text-stroke:.2px currentColor}
+.search-page-heading p{font-size:15px;font-weight:600;color:#607998;line-height:1.5;margin-top:9px}
+.search-page-meta{justify-content:flex-end;gap:8px;font-size:14px;max-width:48%}
+.search-page-meta .search-scope{gap:6px;color:#456b9a;font-weight:700;padding:6px 10px;border:1px solid #dae9fc;border-radius:7px;background:#f1f7ff}
+.search-page-meta .search-ui-icon{width:18px;height:18px;flex-basis:18px;color:#1672fa}
+.search-heading-source{flex-basis:100%;display:flex}
+.search-heading-source>span{display:inline-flex;align-items:center;gap:9px;padding:7px 12px;border-radius:8px;background:linear-gradient(100deg,#e5efff,#e0edff);color:#4e6d96;font-size:14px;font-weight:700}
+.search-heading-source svg{width:21px;height:21px;fill:none;stroke:#559aff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.search-toolbar{border-radius:12px}
+@media(max-width:430px){.search-page-heading{padding:16px 14px;gap:13px}.search-page-heading h2{font-size:28px}.search-page-heading p{font-size:13px}.search-page-meta{font-size:12px}.search-page-meta .search-scope{padding:5px 7px}.search-heading-source>span{font-size:13px;padding:6px 10px}}
+@media(max-width:360px){.capacity-search{padding:18px 0 24px}.search-page-heading{padding:14px 12px;gap:11px}.search-page-heading h2{font-size:25px}.search-page-heading p{font-size:12px}.search-page-meta{font-size:11px}}
 </style>

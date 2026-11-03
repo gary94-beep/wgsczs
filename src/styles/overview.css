@@ -1,0 +1,103 @@
+/* Production overview: the approved white information card and matching board. */
+.dashboard-page.broadband-page{background:radial-gradient(ellipse at top right,#fff 0,transparent 60%),#f2f9ff}
+.warning-page-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin:20px 0 18px;padding:20px;border:1px solid #c5dcff;border-radius:14px;background:linear-gradient(125deg,#fff 30%,#f3f9ff);box-shadow:0 4px 10px #3379c110;font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif}
+.warning-page-heading h2{margin:0;font-size:32px;font-weight:900;line-height:1.2;letter-spacing:-.5px;color:#101f46;-webkit-text-stroke:.2px currentColor}
+.warning-page-heading p{margin:9px 0 0;font-size:15px;font-weight:600;color:#607998;line-height:1.5}
+.warning-heading-scope{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #dae9fc;border-radius:7px;color:#456b9a;background:#f1f7ff;font-size:14px;font-weight:700}
+.warning-heading-scope svg{width:18px;height:18px;fill:none;stroke:#1672fa;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.warning-heading-source{flex-basis:100%;display:flex}
+.warning-heading-source>span{display:inline-flex;align-items:center;gap:9px;padding:7px 12px;border-radius:8px;color:#4e6d96;background:linear-gradient(100deg,#e5efff,#e0edff);font-size:14px;font-weight:700}
+.warning-heading-source svg{width:21px;height:21px;fill:none;stroke:#559aff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.dashboard-page .warning-menu{margin:0;padding:0 0 24px}
+@media(max-width:430px){.warning-page-heading{padding:16px 14px;gap:13px}.warning-page-heading h2{font-size:28px}.warning-page-heading p{font-size:13px}.warning-heading-scope{font-size:12px;padding:5px 7px}.warning-heading-source>span{font-size:13px;padding:6px 10px}}
+@media(max-width:360px){.warning-page-heading{padding:14px 12px;gap:11px}.warning-page-heading h2{font-size:25px}.warning-page-heading p{font-size:12px}.warning-heading-scope{font-size:11px}}
+.production-overview-page{font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif;background:radial-gradient(ellipse at top right,#fff 0,transparent 60%),#f2f9ff}
+.production-overview-page .breadcrumbs{margin-bottom:16px;padding-top:15px;padding-bottom:15px;border:0;background:transparent;font-size:clamp(18px,4vw,25px);gap:12px;color:#91a0b4}
+.production-overview-page .breadcrumbs button{font:inherit;font-weight:800;color:#3978c9;padding:0;min-height:32px}
+.production-overview-page .breadcrumbs strong{color:#102148;font-weight:900;-webkit-text-stroke:.15px currentColor}
+.production-overview-page .overview-intro-card{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);align-items:center;gap:18px 24px;margin:0 0 20px;padding:20px;border:1px solid #c5dcff;border-radius:14px;background:linear-gradient(125deg,#fff 30%,#f3f9ff);box-shadow:0 4px 10px #3379c110}
+.production-overview-page .overview-intro-copy{min-width:0}
+.production-overview-page .overview-intro-copy h2{margin:0 0 10px;color:#101f46;font-size:clamp(25px,5.6vw,36px);line-height:1.2;font-weight:900;letter-spacing:-.5px;-webkit-text-stroke:.25px currentColor}
+.production-overview-page .overview-intro-scope{display:flex;align-items:center;gap:7px;color:#526d91;font-size:clamp(14px,3.25vw,21px);font-weight:800;line-height:1.45;white-space:nowrap;letter-spacing:-.5px}
+.production-overview-page .overview-intro-scope svg{flex:0 0 23px;width:23px;height:25px;fill:none;stroke:#0876ff;stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round}
+.production-overview-page .overview-intro-card .channel-type-filter{display:flex;flex-direction:column;align-items:stretch;gap:8px;min-width:0;grid-column:2;grid-row:1;font-size:clamp(14px,3.1vw,20px);font-weight:800;color:#5b7291}
+.production-overview-page .overview-intro-card .channel-type-filter>span{font-size:inherit;font-weight:inherit;color:inherit}
+.production-overview-page .overview-intro-card .channel-type-filter select{flex:none;width:100%;height:48px;min-height:0;padding:0 16px;border-radius:12px;border:1px solid #bfd8ff;background:#fff;color:#0067ff;font-size:clamp(17px,3.65vw,24px);font-weight:800;box-shadow:0 3px 6px #2579ec0a}
+.production-overview-page .overview-source-tags{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;margin-top:1px}
+.production-overview-page .overview-source-tags>span{display:flex;align-items:center;gap:11px;padding:8px 13px;border-radius:9px;background:linear-gradient(100deg,#e5efff,#e0edff);color:#4e6d96;font-size:clamp(13px,3vw,20px);font-weight:800;line-height:1.4;white-space:nowrap}
+.production-overview-page .overview-source-tags .overview-source-target{color:#36858e;background:linear-gradient(100deg,#e1f7f5,#dff5ef)}
+.production-overview-page .overview-source-tags svg{flex:0 0 25px;width:25px;height:25px;fill:none;stroke:#559aff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.production-overview-page .overview-source-target svg{stroke:#32b99f}
+.production-overview-page .production-board{margin:0 0 26px;padding:22px 24px 10px;border:1px solid #cddfff;border-radius:13px;color:#101e44;background:linear-gradient(115deg,#fff,#fefeff)}
+.production-overview-page .production-board>header{margin-bottom:22px;gap:16px}
+.production-overview-page .production-board>header h2{font-size:clamp(24px,5.2vw,34px);font-weight:900;letter-spacing:-.5px;line-height:1.3;-webkit-text-stroke:.2px currentColor}
+.production-overview-page .production-board>header p{font-size:clamp(14px,2.9vw,19px);margin-top:10px;color:#748cab}
+.production-overview-page .production-board .board-period{padding:4px;border-radius:11px;background:#e7eef7}
+.production-overview-page .production-board .board-period button{width:62px;height:53px;font-size:27px;border-radius:9px;font-family:inherit}
+.production-overview-page .production-board .board-period button.active{background:#086bff}
+.production-overview-page .production-board .board-row{grid-template-columns:minmax(0,1fr) auto;padding:20px 0;gap:12px;border-top-color:#dbe8ff}
+.production-overview-page .production-board .board-product{gap:13px}
+.production-overview-page .production-board .board-product strong{color:#090f1b;font-size:clamp(17px,3.9vw,25px);font-weight:800;white-space:nowrap;letter-spacing:-.5px}
+.production-overview-page .production-board .board-product-icon{width:54px;height:54px;flex-basis:54px;border-radius:11px;background:linear-gradient(120deg,#eaf3ff,#e4efff)}
+.production-overview-page .production-board .board-product-icon::before{width:34px;height:34px;background:#0c75ff}
+.production-overview-page .production-board .board-value{font-family:Arial,Helvetica,sans-serif;font-size:clamp(31px,7.2vw,46px);font-weight:900;color:#0968fa;letter-spacing:-.5px;white-space:nowrap;-webkit-text-stroke:.2px currentColor}
+.production-overview-page .production-board .board-value small{font-family:"Microsoft YaHei","PingFang SC",sans-serif;font-size:clamp(13px,2.7vw,18px);color:#617c9e;margin-left:9px;-webkit-text-stroke:0}
+.production-overview-page .production-board .board-targets{gap:9px}
+.production-overview-page .production-board .board-target-chip{padding:9px 8px;gap:4px;min-height:52px;border-radius:7px}
+.production-overview-page .production-board .board-target-chip>span{font-size:clamp(13px,2.9vw,19px);font-weight:500}
+.production-overview-page .production-board .board-target-chip b{font-family:Arial,Helvetica,sans-serif;font-size:clamp(17px,3.9vw,24px);font-weight:800;white-space:nowrap}
+.production-overview-page .production-board .board-target-chip b.board-rate-status{font-family:inherit;font-size:clamp(10px,2.4vw,14px)}
+.production-overview-page .product-section>.section-head{margin-top:10px;align-items:center}
+.production-overview-page .product-section>.section-head h2{font-size:clamp(23px,4.2vw,28px);font-weight:900;color:#14234b}
+.production-overview-page .product-section>.section-head>span{font-size:clamp(13px,2.9vw,19px);font-weight:700;white-space:nowrap}
+@media(max-width:430px){
+ .production-overview-page .overview-intro-card{padding:15px 13px;gap:15px 12px;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr)}
+ .production-overview-page .overview-intro-scope{font-size:13px;gap:4px;letter-spacing:-.6px}
+ .production-overview-page .overview-intro-scope svg{width:18px;height:22px;flex-basis:18px}
+ .production-overview-page .overview-intro-copy h2{font-size:28px;margin-bottom:8px}
+ .production-overview-page .overview-intro-card .channel-type-filter{gap:6px;font-size:14px}
+ .production-overview-page .overview-intro-card .channel-type-filter select{height:41px;font-size:18px;padding:0 10px;border-radius:9px}
+ .production-overview-page .overview-source-tags{gap:12px}
+ .production-overview-page .overview-source-tags>span{padding:7px 8px;gap:6px;font-size:13px;border-radius:7px}
+ .production-overview-page .overview-source-tags svg{width:19px;height:20px;flex-basis:19px}
+ .production-overview-page .production-board{padding:18px 15px 7px}
+ .production-overview-page .production-board>header{margin-bottom:16px}
+ .production-overview-page .production-board>header h2{font-size:25px}
+ .production-overview-page .production-board .board-period button{width:43px;height:41px;font-size:22px}
+ .production-overview-page .production-board .board-row{padding:16px 0;gap:10px}
+ .production-overview-page .production-board .board-product{gap:9px}
+ .production-overview-page .production-board .board-product strong{font-size:18px}
+ .production-overview-page .production-board .board-product-icon{width:39px;height:39px;flex-basis:39px;border-radius:8px}
+ .production-overview-page .production-board .board-product-icon::before{width:26px;height:26px}
+ .production-overview-page .production-board .board-value{font-size:32px}
+ .production-overview-page .production-board .board-targets{gap:6px}
+ .production-overview-page .production-board .board-target-chip{padding:8px 5px;gap:3px;min-height:43px}
+ .production-overview-page .production-board .board-target-chip>span{font-size:12px}
+ .production-overview-page .production-board .board-target-chip b{font-size:17px}
+}
+@media(max-width:360px){
+ .production-overview-page .overview-intro-card{padding:13px 10px;gap:13px 9px}
+ .production-overview-page .overview-intro-copy h2{font-size:25px}
+ .production-overview-page .overview-intro-scope{font-size:11px;letter-spacing:-.5px;gap:3px}
+ .production-overview-page .overview-intro-scope svg{width:15px;flex-basis:15px}
+ .production-overview-page .overview-source-tags{gap:8px}
+ .production-overview-page .overview-source-tags>span{font-size:11px;padding:7px 5px;gap:4px}
+ .production-overview-page .overview-source-tags svg{width:16px;flex-basis:16px}
+ .production-overview-page .production-board{padding:16px 11px 6px}
+ .production-overview-page .production-board>header h2{font-size:23px}
+ .production-overview-page .production-board .board-product strong{font-size:16px}
+ .production-overview-page .production-board .board-product-icon{width:34px;height:34px;flex-basis:34px}
+ .production-overview-page .production-board .board-product{gap:7px}
+ .production-overview-page .production-board .board-value{font-size:28px}
+ .production-overview-page .production-board .board-target-chip{padding:7px 4px;gap:2px}
+ .production-overview-page .production-board .board-target-chip>span{font-size:10px}
+ .production-overview-page .production-board .board-target-chip b{font-size:13.5px}
+}
+
+/* Restore the original compact board heading, period switch and capacity numbers. */
+.production-overview-page .production-board>header h2{font-size:22px;font-weight:700;line-height:1.4;letter-spacing:normal;-webkit-text-stroke:0}
+.production-overview-page .production-board .board-period{padding:3px;border-radius:6px}
+.production-overview-page .production-board .board-period button{width:42px;height:36px;font-size:16px;border-radius:4px}
+.production-overview-page .production-board .board-value{font-family:inherit;font-size:28px;font-weight:800;letter-spacing:normal;-webkit-text-stroke:0}
+.production-overview-page .production-board .board-value small{font-size:12px;margin-left:5px}
+@media(max-width:360px){.production-overview-page .production-board>header h2{font-size:20px}.production-overview-page .production-board .board-value{font-size:25px}}

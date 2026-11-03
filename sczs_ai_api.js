@@ -6,8 +6,8 @@ function init() {
     region: "app_open_api_c003_wgsc_region_capacity_1",
     channel: "app_open_api_c001_wgsc_chn_capacity_1",
     staffCapacity: "app_open_api_c003_wgsc_staff_capacity_1",
-    channelInfo: "app_open_api_c002_wgsc_chn_level_1",
-    staff: "app_open_api_c002_wgsc_staff_1",
+    channelInfo: "app_open_api_c003_wgsc_chn_level_1",
+    staff: "app_open_api_c003_wgsc_staff_1",
     targets: "app_open_api_c003_wgsc_target_1",
     aiAnalysis: "app_open_api_c004_wgsc_ai_analysis_1",
     terminal: "app_open_api_c002_wgsc_staff_terminal_1"
@@ -67,7 +67,7 @@ function init() {
     var scopeId = text(Params.scopeId);
     var channelType = text(Params.channelType) || "全部类型";
     if (channelType === "3星+渠道") channelType = "三星+渠道";
-    if (["全部类型", "三星+渠道", "末梢渠道", "直销队伍"].indexOf(channelType) < 0) throw new Error("生产类型无效");
+    if (["全部类型", "三星+渠道", "末梢渠道", "直销队伍", "营业厅"].indexOf(channelType) < 0) throw new Error("生产类型无效");
 
     if (["city", "branch", "grid"].indexOf(scopeType) < 0) throw new Error("scopeType 无效");
     if (scopeType !== "city" && !scopeId) throw new Error("scopeType 非 city 时必须传 scopeId");
@@ -113,11 +113,12 @@ function init() {
       var rows = sql("SELECT product_name, prod_period_type, SUM(capacity) AS total FROM " + tables.region + " WHERE stat_date=#{cutoff}" + regionLevelCond + " GROUP BY product_name, prod_period_type", regionArgs, true);
       for (var i = 0; i < rows.length; i++) addCap(rows[i].product_name, rows[i].prod_period_type, rows[i].total);
       
-    } else if (channelType === "三星+渠道") {
+    } else if (channelType === "三星+渠道" || channelType === "营业厅") {
       // 查渠道产能表联表渠道维度表 (使用别名)
       var cArgs = JSON.parse(JSON.stringify(regionArgs));
+      cArgs.channelLevel = channelType === "营业厅" ? "营业厅" : "三星+";
       var cCond = scopeCond.replace(/branch_company/g, "c.branch_company").replace(/grid_name/g, "c.grid_name");
-      var rows = sql("SELECT c.product_name, c.prod_period_type, SUM(c.capacity) AS total FROM " + tables.channel + " c INNER JOIN " + "(SELECT d.* FROM " + tables.channelInfo + " d JOIN (SELECT chn_code,MAX(id) AS latest_id FROM " + tables.channelInfo + " GROUP BY chn_code) newest ON d.id=newest.latest_id) ci ON c.channel_code = ci.chn_code AND c.branch_company=ci.branch AND c.grid_name=ci.grid WHERE c.stat_date=#{cutoff} AND ci.star_level = '三星+'" + cCond + " GROUP BY c.product_name, c.prod_period_type", cArgs, true);
+      var rows = sql("SELECT c.product_name, c.prod_period_type, SUM(c.capacity) AS total FROM " + tables.channel + " c INNER JOIN " + "(SELECT d.* FROM " + tables.channelInfo + " d JOIN (SELECT chn_code,MAX(id) AS latest_id FROM " + tables.channelInfo + " GROUP BY chn_code) newest ON d.id=newest.latest_id) ci ON c.channel_code = ci.chn_code AND c.branch_company=ci.branch AND c.grid_name=ci.grid WHERE c.stat_date=#{cutoff} AND ci.star_level = #{channelLevel}" + cCond + " GROUP BY c.product_name, c.prod_period_type", cArgs, true);
       for (var i = 0; i < rows.length; i++) addCap(rows[i].product_name, rows[i].prod_period_type, rows[i].total);
 
     } else if (channelType === "末梢渠道") {
@@ -259,7 +260,7 @@ function init() {
     var answer = text(Params.answer);
     var channelType = text(Params.channelType) || "全部类型";
     if (channelType === "3星+渠道") channelType = "三星+渠道";
-    if (["全部类型", "三星+渠道", "末梢渠道", "直销队伍"].indexOf(channelType) < 0) throw new Error("生产类型无效"); 
+    if (["全部类型", "三星+渠道", "末梢渠道", "直销队伍", "营业厅"].indexOf(channelType) < 0) throw new Error("生产类型无效"); 
 
     if (["city", "branch", "grid"].indexOf(scopeType) < 0) throw new Error("scopeType 无效");
     if (!scopeId) throw new Error("scopeId 不能为空");

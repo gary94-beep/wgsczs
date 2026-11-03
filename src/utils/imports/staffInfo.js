@@ -1,34 +1,20 @@
-import { requireColumns } from './helpers.js'
-
-const COLUMN_MAP = {
-  staff_no: 'staff_no', staff_name: 'staff_name', branch: 'branch',
-  grid: 'grid', job: 'job', team_type: 'team_type'
-}
-
+import { importRecords, templateCsv, importComment, targetNumber, requiredText, teamTypes } from './monthlyTargets.js'
+const columns = ['id','staff_no','staff_name','branch','grid','job','team_type','monthly_kd_target']
 export function staffInfoRows(data) {
-  if (!Array.isArray(data) || !data.length) throw new Error('文件内容为空')
-  const header = data[0].map(item => String(item || '').trim())
-  requireColumns(header, ['staff_no', 'staff_name', 'branch', 'grid'])
-
-  const rows = []
-  for (let i = 1; i < data.length; i++) {
-    const line = data[i]
-    if (!line || !line.some(cell => String(cell || '').trim())) continue
-    const record = {}
-    Object.keys(COLUMN_MAP).forEach(col => {
-      const index = header.indexOf(col)
-      const field = COLUMN_MAP[col]
-      record[field] = String(index >= 0 && line[index] != null ? line[index] : '').trim()
-    })
-    if (!record.staff_no) continue
-    rows.push(record)
-  }
-  if (!rows.length) throw new Error('文件无有效数据行')
-  return rows
+  const rows = importRecords(data, columns, ['staff_no','staff_name','branch','grid','monthly_kd_target'])
+  const seen = new Set()
+  return rows.map(row => {
+    for (const field of ['staff_no','staff_name','branch','grid']) requiredText(row,field,64)
+    row.job ||= row.team_type
+    row.team_type ||= row.job
+    if (!teamTypes.includes(row.team_type) || !row.job || (teamTypes.includes(row.job) && row.job !== row.team_type)) throw new Error(`第${row._line}行岗位和队伍类别无效或不一致`)
+    row.monthly_kd_target = targetNumber(row.monthly_kd_target,'monthly_kd_target',row._line)
+    if (seen.has(row.staff_no)) throw new Error(`第${row._line}行工号重复`)
+    seen.add(row.staff_no)
+    const {_line,...record} = row
+    return record
+  })
 }
-
 export function staffInfoTemplateCsv() {
-  const header = 'id,staff_no,staff_name,branch,grid,job,team_type'
-  const sample = '必填（导入时请删除示例行）,必填,选填,选填,选填,选填,选填'
-  return '\ufeff' + [header, sample].join('\r\n')
+  return templateCsv(columns,[importComment+'：主键自动生成','员工工号（文本，必填）','姓名（必填）','分公司（必填）','网格（必填）','岗位（行销经理、商企经理、装维随销）','队伍类别（可留空，默认使用job）','宽带月目标；空白或无表示未配置，最多2位小数'])
 }

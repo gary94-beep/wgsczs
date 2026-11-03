@@ -96,24 +96,27 @@ function encryptHandle2Payload(payload, aesKey) {
 export function loadExternalScript(src) {
   return new Promise((resolve, reject) => {
     const existing = document.querySelector(`script[src="${src}"]`)
-    if (existing) {
-      if (existing.dataset.loaded === 'true') resolve()
-      else {
-        existing.addEventListener('load', resolve, { once: true })
-        existing.addEventListener('error', () => reject(new Error(`脚本加载失败：${src}`)), { once: true })
-      }
-      return
+    if (existing?.dataset.loaded === 'true') { resolve(); return }
+    const script = existing || document.createElement('script')
+    let settled = false
+    const finish = error => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      script.removeEventListener('load', loaded)
+      script.removeEventListener('error', failed)
+      if (error) reject(error)
+      else resolve()
     }
-
-    const script = document.createElement('script')
-    script.src = src
-    script.async = false
-    script.onload = () => {
+    const loaded = () => {
       script.dataset.loaded = 'true'
-      resolve()
+      finish()
     }
-    script.onerror = () => { script.remove(); reject(new Error(`脚本加载失败：${src}`)) }
-    document.head.appendChild(script)
+    const failed = () => { if (!existing) script.remove(); finish(new Error('登录组件加载失败，请检查公司网络或VPN连接后重试')) }
+    const timer = setTimeout(() => { if (!existing) script.remove(); finish(new Error('登录组件加载超时，请检查公司网络后重试')) }, 15000)
+    script.addEventListener('load', loaded, { once: true })
+    script.addEventListener('error', failed, { once: true })
+    if (!existing) { script.src = src; script.async = false; document.head.appendChild(script) }
   })
 }
 
@@ -203,15 +206,20 @@ export async function postHandle2(serviceId, data, options = {}) {
   }
   const { aesKey, body } = await buildHandle2Payload(serviceId, data, options)
 
-  const response = await fetch(apiBase, {
+  let response
+  try { response = await fetch(apiBase, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json;charset=utf-8' },
     body: JSON.stringify(body),
     signal: options.signal || AbortSignal.timeout(options.timeoutMs || 60000)
-  })
+  }) } catch (error) {
+    if (options.signal?.aborted) throw error
+    if (error.name === 'TimeoutError' || error.name === 'AbortError') throw new Error('公司接口请求超时，尚未确认处理结果；已有验证码可直接尝试登录')
+    throw new Error('未能连接公司接口，请检查公司网络或VPN连接后重试')
+  }
 
   if (!response.ok) {
-    throw new Error(`接口请求失败：${response.status}`)
+    throw new Error([502,503,504].includes(response.status) ? `公司接口或本地代理暂时不可用（${response.status}），已有验证码可直接尝试登录` : `接口请求失败：${response.status}`)
   }
 
   const json = await response.json()

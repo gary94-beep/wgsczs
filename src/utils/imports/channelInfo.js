@@ -1,35 +1,20 @@
-import { requireColumns, normalizeStar } from './helpers.js'
-
-const COLUMN_MAP = {
-  uni_code: 'uni_code', chn_code: 'chn_code', chn_name: 'chn_name',
-  branch: 'branch', grid_code: 'grid_code', grid: 'grid', star: 'star', star_level: 'star_level'
-}
-
+import { normalizeStar } from './helpers.js'
+import { importRecords, templateCsv, importComment, targetNumber, requiredText } from './monthlyTargets.js'
+const columns = ['id','uni_code','chn_code','chn_name','branch','grid_code','grid','star','star_level','monthly_kd_target']
 export function channelInfoRows(data) {
-  if (!Array.isArray(data) || !data.length) throw new Error('文件内容为空')
-  const header = data[0].map(item => String(item || '').trim())
-  requireColumns(header, ['uni_code', 'chn_code', 'chn_name', 'branch', 'grid_code', 'grid', 'star'])
-
-  const rows = []
-  for (let i = 1; i < data.length; i++) {
-    const line = data[i]
-    if (!line || !line.some(cell => String(cell || '').trim())) continue
-    const record = {}
-    Object.keys(COLUMN_MAP).forEach(col => {
-      const index = header.indexOf(col)
-      const field = COLUMN_MAP[col]
-      record[field] = String(index >= 0 && line[index] != null ? line[index] : '').trim()
-    })
-    if (!record.chn_code) continue
-    record.star_level = normalizeStar(record.star)
-    rows.push(record)
-  }
-  if (!rows.length) throw new Error('文件无有效数据行')
-  return rows
+  const rows = importRecords(data,columns,['uni_code','chn_code','chn_name','branch','grid_code','grid','star','monthly_kd_target'])
+  const seen = new Set()
+  return rows.map(row => {
+    for (const field of ['uni_code','chn_code','chn_name','branch','grid']) requiredText(row,field,field==='chn_name'?128:64)
+    if (!row.star_level) row.star_level = normalizeStar(row.star)
+    if (!['营业厅','三星+','非三星+'].includes(row.star_level)) throw new Error(`第${row._line}行star_level须为营业厅、三星+或非三星+`)
+    row.monthly_kd_target = targetNumber(row.monthly_kd_target,'monthly_kd_target',row._line)
+    if (seen.has(row.chn_code)) throw new Error(`第${row._line}行渠道编码重复`)
+    seen.add(row.chn_code)
+    const {_line,...record} = row
+    return record
+  })
 }
-
 export function channelInfoTemplateCsv() {
-  const header = 'id,uni_code,chn_code,chn_name,branch,grid_code,grid,star'
-  const sample = '必填（导入时请删除示例行）,必填,必填,选填,选填,选填,选填,选填'
-  return '\ufeff' + [header, sample].join('\r\n')
+  return templateCsv(columns,[importComment+'：主键自动生成','唯一编码（必填）','渠道编码（文本，必填）','渠道名称（必填）','分公司（必填）','网格编码','网格（必填）','星级，如三星、四星、五星','营业厅、三星+、非三星+；留空按star判断','宽带月目标；空白或无表示未配置，最多2位小数'])
 }

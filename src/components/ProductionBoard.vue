@@ -30,7 +30,7 @@ function rate(item, kind) {
 }
 </script>
 <style scoped>
-.production-board { margin: 12px 14px 20px; padding: 18px 16px 8px; border: 1px solid #e1edf8; border-radius: 8px; background: #fff; color: #142349; }
+.production-board { margin: 12px 0 20px; padding: 18px 16px 8px; border: 1px solid #e1edf8; border-radius: 8px; background: #fff; color: #142349; }
 header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 header > div:first-child { min-width: 0; } h2 { margin: 0; font-size: 22px; line-height: 1.4; } p { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 0; color: #7188a0; font-size: 12px; }
 .board-demo { padding: 2px 7px; border-radius: 4px; color: #226df0; background: #eaf3ff; }
@@ -47,10 +47,10 @@ header > div:first-child { min-width: 0; } h2 { margin: 0; font-size: 22px; line
 .board-value small { margin-left: 5px; color: #72869e; font-size: 12px; font-weight: 500; }
 .board-targets { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .board-target-chip { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-width: 0; min-height: 38px; padding: 5px 8px; border-radius: 5px; background: #eaf3ff; color: #1269ed; }
-.board-target-chip > span { font-size: 11px; flex: 0 0 auto; } .board-target-chip b { min-width: 0; font-size: 17px; line-height: 1.3; overflow-wrap: anywhere; }
+.board-target-chip > span { font-size: 11px; flex: 0 0 auto; white-space: nowrap; } .board-target-chip b { flex: 0 0 auto; min-width: 0; font-size: 17px; line-height: 1.3; white-space: nowrap; overflow-wrap: normal; }
 .board-target-chip b.board-rate-status { font-size: 12px; }
 .board-target-base { color: #142349; background: #f0f3f8; } .board-target-base > span { color: #607998; }
 .board-target-challenge { color: #099d87; background: #e2f8f1; }
 .coverage-note { grid-column: 1 / -1; color: #7188a0; font-size: 11px; line-height: 1.5; }
-@media (max-width: 360px) { .production-board { margin: 10px; padding: 16px 12px 6px; } h2 { font-size: 20px; } .board-product { gap: 7px; } .board-product strong { font-size: 14px; } .board-value { font-size: 25px; } .board-target-chip { flex-direction: column; align-items: flex-start; justify-content: center; min-height: 47px; padding: 5px 7px; gap: 2px; } .board-target-chip b { font-size: 16px; } }
+@media (max-width: 360px) { .production-board { margin: 10px 0 20px; padding: 16px 12px 6px; } h2 { font-size: 20px; } .board-product { gap: 7px; } .board-product strong { font-size: 14px; } .board-value { font-size: 25px; } .board-target-chip { min-height: 38px; padding: 5px; gap: 2px; } .board-target-chip > span { font-size: 10px; } .board-target-chip b { font-size: 14px; } .board-target-chip b.board-rate-status { font-size: 10px; } }
 </style>

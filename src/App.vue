@@ -13,6 +13,7 @@
               type="button" :disabled="loading || codeSending || codeCountdown > 0" @click="sendCode">{{ codeSending ?
                 '发送中' : codeCountdown > 0 ? `${codeCountdown}s` : '获取' }}</button></div>
         </label>
+        <p v-if="authFeedback" class="login-auth-feedback" role="status">{{ authFeedback }}</p>
         <button class="primary-login" type="button" :disabled="loading || codeSending" @click="handleLogin">{{ loading ?
           '登录中' : '登录' }}</button>
         <button class="quick-login" type="button" :disabled="loading || codeSending"
@@ -29,7 +30,7 @@
       </section>
     </main>
 
-    <main v-else class="dashboard-page">
+    <main v-else class="dashboard-page" :class="{'production-overview-page':stage === 'overview','broadband-page':stage === 'broadband'}">
       <header v-if="stage === 'workbench'" class="top-bar">
         <div>
           <BrandHeading compact />
@@ -39,11 +40,12 @@
             aria-hidden="true"></span></button>
       </header>
 
-      <nav v-if="stage !== 'workbench'" class="breadcrumbs" aria-label="当前位置">
+      <nav v-if="stage !== 'workbench' && stage !== 'broadband'" class="breadcrumbs" aria-label="当前位置">
         <button type="button" @click="goWorkbench">工作台</button><span>›</span>
         <template v-if="stage === 'warnings'"><strong>预警监控</strong></template><template v-else-if="stage === 'monitor'"><button type="button" @click="openMonitor">预警监控</button><span>›</span><strong>{{ isChangeAlert ? '异动预警' : '低产预警' }}</strong></template>
         <template v-else-if="stage === 'campus'"><strong>校园生产管理</strong></template>
         <template v-else-if="stage === 'search'"><strong>产能速查</strong></template>
+        <template v-else-if="stage === 'broadband'"><strong>宽带专项</strong></template>
         <template v-else-if="stage === 'imports'"><strong>数据导入</strong></template>
         <template v-else-if="stage === 'scripts'"><button type="button"
             @click="returnFromScripts">预警监控</button><span>›</span><strong>经典话术库</strong></template>
@@ -75,6 +77,7 @@
           <button type="button" @click="openMonitor"><span class="menu-icon menu-icon-green"><i
                 class="menu-glyph menu-glyph-alert" aria-hidden="true"></i></span><span
               class="menu-copy"><strong>预警监控</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+          <button type="button" @click="openBroadband"><span class="menu-icon menu-icon-blue"><i class="broadband-icon" :style="broadbandIconStyle" aria-hidden="true"></i></span><span class="menu-copy"><strong>宽带专项</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
           <button v-if="user.isSuperAdmin" type="button" @click="openImports"><span class="menu-icon menu-icon-blue"><i class="data-import-icon" :style="dataImportIconStyle" aria-hidden="true"></i></span><span class="menu-copy"><strong>数据导入</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
         </section>
       </template>
@@ -150,6 +153,11 @@
             </div>
           </div>
 
+          <h3>专项目标与商家</h3>
+          <div v-for="table in extraImportTables" :key="table.key" class="import-nav-item">
+            <div class="import-nav-label"><span class="menu-icon menu-icon-blue">{{ table.icon }}</span><span class="menu-copy"><strong>{{ table.label }}</strong></span></div>
+            <div class="target-actions"><button type="button" class="icon-action" :disabled="loading" :title="`下载${table.label}模板`" :aria-label="`下载${table.label}模板`" @click="downloadExtraImportTemplate(table)"><span class="action-icon download-icon" aria-hidden="true"></span></button><button type="button" class="icon-action" :disabled="loading" :title="`导入${table.label}`" :aria-label="`导入${table.label}`" @click="chooseExtraImport(table.key)"><span class="action-icon upload-icon" aria-hidden="true"></span></button></div>
+          </div>
           <h3>产能数据</h3>
 
           <div class="import-nav-item">
@@ -232,13 +240,13 @@
       </template>
 
       <template v-else-if="stage === 'overview'">
-        <section class="overview-heading">
-          <div>
-            <h2>生产总览</h2><span>{{ scopeName }} · {{ overviewLabel }}</span>
+        <section class="overview-heading overview-intro-card">
+          <div class="overview-intro-copy">
+            <h2>生产总览</h2><span class="overview-intro-scope"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0z"/><circle cx="12" cy="10" r="2.5"/></svg>{{ scopeName }} · {{ overviewLabel }}</span>
           </div>
           <ChannelTypeFilter v-model="selectedChannelType" @update:model-value="selectedChannel = ''" />
+          <div class="overview-source-tags"><span class="overview-source-capacity"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0M4 18c0 4 16 4 16 0"/></svg>产能 · 系统取数</span><span v-if="!selectedChannelType" class="overview-source-target"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="13" r="9"/><circle cx="11" cy="13" r="5"/><path d="m11 13 9-10m-5 0h5v5"/></svg>目标 · 市公司导入</span></div>
         </section>
-        <div class="source-strip"><span>产能：系统取数</span><span v-if="!selectedChannelType">目标：市公司导入</span></div>
         <ProductionBoard v-model:period="overviewPeriod" :items="overview" :scope="scopeName" :stat-date="dashboard.statDate" :demo="isMock"
           :show-targets="!selectedChannelType" @open="openProduct" />
 
@@ -319,7 +327,7 @@
       </template>
 
       <template v-else-if="stage === 'warnings'">
-        <header class="drill-page-title"><h2>预警监控</h2><p>{{ scopeName }}</p></header>
+        <header class="warning-page-heading"><div><h2>预警监控</h2><p>低产预警 / 异动预警</p></div><span class="warning-heading-scope"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0z"/><circle cx="12" cy="10" r="2.5"/></svg>{{ scopeName }}</span><div class="warning-heading-source"><span><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0M4 18c0 4 16 4 16 0"/></svg>产能 · 系统取数</span></div></header>
         <div class="workbench-menu warning-menu">
           <button type="button" @click="openAlertMonitor('low')"><span class="menu-icon menu-icon-green"><i class="warning-entry-icon" :style="warningIcons.low" aria-hidden="true"></i></span><span class="menu-copy"><strong>低产预警</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
           <button type="button" @click="openAlertMonitor('change')"><span class="menu-icon menu-icon-blue"><i class="warning-entry-icon" :style="warningIcons.change" aria-hidden="true"></i></span><span class="menu-copy"><strong>异动预警</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
@@ -422,7 +430,7 @@
               :data-category="item.channelType" :class="{ zero: item.production === 0 }">
               <span class="channel-warning-avatar" :style="channelWarningIconStyle" aria-hidden="true"></span>
               <div class="person-main"><strong>{{ tab === 'tail' ? item.microChannelName || item.channel : item.channel }}</strong>
-                <span class="person-category">{{ tab === 'stars' ? (item.channelStar ? item.channelStar + '星' : '星级未提供') : item.serviceProvider || '区域服务商未提供' }} · {{ item.channelCode || '渠道编码未提供' }}</span>
+                <span class="person-category">{{ tab === 'halls' ? '营业厅' : tab === 'stars' ? (item.channelStar ? item.channelStar + '星' : '星级未提供') : item.serviceProvider || '区域服务商未提供' }}<template v-if="tab !== 'tail'"> · {{ item.channelCode || '渠道编码未提供' }}</template></span>
                 <span class="alert-organization">{{ branchName(item.branchId) }} · {{ gridName(item.gridId) || '网格未提供' }}</span>
                 <span v-if="item.staffCount != null" class="channel-member-count">人员规模 {{ item.staffCount }} 人</span>
               </div>
@@ -461,8 +469,12 @@
         <CampusAnalysis :phone="user.phone" :token="token" />
       </template>
 
+      <template v-else-if="stage === 'broadband'">
+        <BroadbandAnalysis @back-to-workbench="goWorkbench" :permission="user" :organization="dashboard.organization" :stat-date="dashboard.statDate" :scope="scopeName" :token="token" />
+      </template>
+
       <nav v-if="stage !== 'workbench'" class="bottom-nav" aria-label="主导航"><button type="button"
-          :class="{ active: stage === 'campus' }" @click="goWorkbench"><i class="bottom-icon bottom-home"
+          :class="{ active: ['campus', 'broadband'].includes(stage) }" @click="goWorkbench"><i class="bottom-icon bottom-home"
             aria-hidden="true"></i><span>工作台</span></button><button type="button"
           :class="{ active: ['overview', 'branches', 'grids'].includes(stage) }" @click="goOverview"><i
             class="bottom-icon bottom-overview" aria-hidden="true"></i><span>生产总览</span></button><button type="button"
@@ -477,6 +489,7 @@
     <input ref="channelFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleChannelFile" />
     <input ref="terminalFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleTerminalFile" />
     <input ref="staffFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleStaffFile" />
+    <input ref="extraImportFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleExtraImportFile" />
     <input ref="regionCapacityFileInput" type="file" accept=".xlsx,.xls,.csv" hidden
       @change="handleRegionCapacityFile" />
     <input ref="channelCapacityFileInput" type="file" accept=".xlsx,.xls,.csv" hidden
@@ -504,11 +517,13 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import lowWarningIcon from './assets/warning-icons/triangle-alert.svg'
 import changeWarningIcon from './assets/warning-icons/chart-no-axes-combined.svg'
+import broadbandIcon from './assets/product-icons/wifi.svg'
 import { isMock } from './api/client'
 import { sendLoginCode, loginWithCode, loginWithOneClick } from './api/auth.js'
 import { fetchChannelOptions, fetchChangeAlerts, fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts, fetchAiAnalysis } from './api/production'
 import { monitorBranchOptions } from './utils/monitorBranches.js'
 import ChannelTypeFilter from './components/ChannelTypeFilter.vue'
+import BroadbandAnalysis from './components/BroadbandAnalysis.vue'
 import { normalizeChannelType } from './utils/channelTypes.js'
 import CapacityCard from './components/CapacityCard.vue'
 import SalesScriptPanel from './components/SalesScriptPanel.vue'
@@ -526,6 +541,7 @@ import { parseCsv, parseExcelFile, normalizeCapacityRows, downloadCsv, ensureXls
 import { channelInfoRows, channelInfoTemplateCsv } from './utils/imports/channelInfo.js'
 import { terminalInfoRows, terminalInfoTemplateCsv } from './utils/imports/terminalInfo.js'
 import { staffInfoRows, staffInfoTemplateCsv } from './utils/imports/staffInfo.js'
+import {staffBroadbandRows,staffBroadbandTemplateCsv,staffCategoryRows,staffCategoryTemplateCsv,areaContractorRows,areaContractorTemplateCsv} from './utils/imports/monthlyTargets.js'
 import { regionCapacityRows, regionCapacityTemplateCsv } from './utils/imports/regionCapacity.js'
 import { channelCapacityRows, channelCapacityTemplateCsv } from './utils/imports/channelCapacity.js'
 import { staffCapacityRows, staffCapacityTemplateCsv } from './utils/imports/staffCapacity.js'
@@ -538,6 +554,7 @@ const warningIcons = {
   change: { '--warning-icon': `url(${JSON.stringify(changeWarningIcon)})` }
 }
 const exportIconStyle = { '--export-icon': `url(${JSON.stringify(downloadIcon)})` }
+const broadbandIconStyle = { '--broadband-icon': `url("${broadbandIcon}")` }
 const channelWarningIconStyle = { '--channel-warning-icon': `url("${channelWarningIcon}")` }
 const dataImportIconStyle = { '--import-icon': `url(${JSON.stringify(uploadIcon)})` }
 const exportBusy = ref(false)
@@ -551,7 +568,7 @@ const loginPhone = ref('')
 const loginCode = ref('')
 const codeSending = ref(false)
 const codeCountdown = ref(0)
-const codePhone = ref('')
+const authFeedback = ref('')
 let codeTimer
 const agreedToTerms = ref(false)
 const user = reactive({ name: '', phone: '', role: '', branchId: '', branchName: '', gridId: '', gridName: '', cityName: '', isSuperAdmin: false })
@@ -578,6 +595,12 @@ const channelFileInput = ref(null)
 const permissionFileInput = ref(null)
 const terminalFileInput = ref(null)
 const staffFileInput = ref(null)
+const extraImportFileInput = ref(null), activeExtraImportTarget = ref('')
+const extraImportTables = [
+  {key:'staffBroadbandTarget',label:'营业员终端员-手宽月度目标表',icon:'宽',parse:staffBroadbandRows,template:staffBroadbandTemplateCsv},
+  {key:'staffCategoryTarget',label:'人员分类月度目标表',icon:'类',parse:staffCategoryRows,template:staffCategoryTemplateCsv},
+  {key:'areaContractor',label:'包片商维度表',icon:'商',parse:areaContractorRows,template:areaContractorTemplateCsv}
+]
 const regionCapacityFileInput = ref(null)
 const channelCapacityFileInput = ref(null)
 const staffCapacityFileInput = ref(null)
@@ -700,6 +723,7 @@ const lowChannels = computed(() => alertResult.value?.channels || [])
 
 const alertCategories = computed(() => [
   { id: 'people', label: '直销人员', count: alertResult.value ? lowPeople.value.length : null },
+  { id: 'halls', label: '营业厅', count: alertResult.value ? lowChannels.value.filter(item => item.channelType === '营业厅').length : null },
   { id: 'stars', label: '3星+渠道', count: alertResult.value ? lowChannels.value.filter(item => item.channelType === '三星+渠道').length : null },
   { id: 'tail', label: '末梢渠道', count: alertResult.value ? lowChannels.value.filter(item => item.channelType === '末梢渠道').length : null }
 ].map(category => {
@@ -707,7 +731,7 @@ const alertCategories = computed(() => [
   const total = typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
   return { ...category, total, rate: total !== null && total > 0 && category.count <= total ? Math.round(category.count / total * 1000) / 10 : null }
 }))
-const displayedChannels = computed(() => lowChannels.value.filter(item => item.channelType === (tab.value === 'stars' ? '三星+渠道' : '末梢渠道')))
+const displayedChannels = computed(() => lowChannels.value.filter(item => item.channelType === ({ stars: '三星+渠道', tail: '末梢渠道', halls: '营业厅' })[tab.value]))
 function selectAlertCategory(id) { tab.value = id; selectedChannel.value = '' }
 
 function displayNumber(value) { return Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 }) }
@@ -726,6 +750,7 @@ function openMonitor() { stage.value = 'warnings'; scrollTop() }
 function openAlertMonitor(mode) { alertMode.value = mode; monitorBranchId.value = user.role === 'city' ? '' : user.branchId; monitorGridId.value = user.role === 'grid' ? user.gridId : ''; monitorProductId.value = dashboard.products[0]?.productId || ''; selectedChannel.value = ''; threshold.value = 1; tab.value = 'people'; stage.value = 'monitor'; scrollTop() }
 function openCampus() { stage.value = 'campus'; scrollTop() }
 function openSearch() { stage.value = 'search'; scrollTop() }
+function openBroadband() { stage.value = 'broadband'; scrollTop() }
 function openImports() { if (user.isSuperAdmin !== true) return showToast('仅超级管理员可导入数据', 'warning'); stage.value = 'imports'; scrollTop() }
 function openScriptLibrary() { scriptReturnStage.value = stage.value; scriptProductId.value = activeProduct.value?.productId || dashboard.products[0]?.productId || ''; stage.value = 'scripts'; scrollTop() }
 function returnFromScripts() { stage.value = scriptReturnStage.value; scrollTop() }
@@ -783,7 +808,7 @@ onMounted(async () => {
   window.addEventListener('handle2-auth-expired', expireSession)
 })
 onUnmounted(() => { window.removeEventListener('handle2-auth-expired', expireSession); clearInterval(codeTimer) })
-watch(loginPhone, () => { codePhone.value = ''; loginCode.value = '' })
+watch(loginPhone, () => { authFeedback.value = ''; loginCode.value = '' })
 function expireSession() { token.value = ''; page.value = 'login'; alertSequence++; alertResult.value = null; aiAnalysis.byScope = {}; Object.assign(dashboard, { organization: { cityName: '', branches: [], grids: [] }, rows: [], dailyRows: [], targets: [], regionRows: undefined, periodRows: [], salesScripts: [] }); showToast('登录已过期，请重新认证', 'warning') }
 
 async function handleLogin() {
@@ -791,6 +816,7 @@ async function handleLogin() {
   if (!agreedToTerms.value) return showToast('请先同意登录协议', 'warning')
   if (!/^1\d{10}$/.test(loginPhone.value)) return showToast('请输入正确的11位手机号', 'warning')
   loading.value = true
+  authFeedback.value = ''
   try {
     const phone = loginPhone.value
     let identity
@@ -798,11 +824,10 @@ async function handleLogin() {
       identity = { mobile: (await getMobileByToken(token.value)).mobile, token: token.value }
     }
     else {
-      if (!isMock && codePhone.value !== phone) throw new Error('请先为当前手机号获取验证码')
       identity = await loginWithCode(phone, loginCode.value)
     }
     await completeLogin(identity)
-  } catch (error) { token.value = ''; showToast(error.message || '登录失败', 'error') } finally { loading.value = false }
+  } catch (error) { token.value = ''; authFeedback.value = error.message || '登录失败'; showToast(authFeedback.value, 'error') } finally { loading.value = false }
 }
 
 async function completeLogin(identity) {
@@ -814,7 +839,7 @@ async function completeLogin(identity) {
   await loadDashboard()
   goWorkbench()
   page.value = 'dashboard'
-  codePhone.value = ''; loginCode.value = ''; codeCountdown.value = 0; clearInterval(codeTimer)
+  authFeedback.value = ''; loginCode.value = ''; codeCountdown.value = 0; clearInterval(codeTimer)
 }
 
 async function loadDashboard() {
@@ -853,16 +878,17 @@ async function sendCode() {
   if (!/^1\d{10}$/.test(loginPhone.value)) return showToast('请先输入正确的手机号', 'warning')
   const phone = loginPhone.value
   codeSending.value = true
+  authFeedback.value = '正在校验权限并请求验证码，请稍候…'
   try {
     await sendLoginCode(phone)
     if (phone !== loginPhone.value) return showToast('手机号已变更，请重新获取验证码', 'warning')
-    codePhone.value = phone
     if (isMock) loginCode.value = '123456'
     codeCountdown.value = 60
     clearInterval(codeTimer)
     codeTimer = setInterval(() => { if (--codeCountdown.value <= 0) clearInterval(codeTimer) }, 1000)
+    authFeedback.value = isMock ? '模拟验证码：123456' : '验证码请求已提交，请留意短信。已有有效验证码也可直接登录。'
     showToast(isMock ? '模拟验证码：123456' : '验证码请求已提交')
-  } catch (error) { codePhone.value = ''; showToast(error.message || '验证码发送失败', 'error') }
+  } catch (error) { authFeedback.value = error.message || '验证码发送失败'; showToast(authFeedback.value, 'error') }
   finally { codeSending.value = false }
 }
 async function oneClickLogin() {
@@ -913,6 +939,20 @@ function downloadScriptTemplate() {
 }
 
 // ==================== 数据导入 ====================
+function downloadExtraImportTemplate(table) {
+  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载模板', 'warning')
+  downloadCsv(table.template(), `${table.label}导入模板.csv`)
+}
+function chooseExtraImport(key) {
+  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可导入', 'warning')
+  activeExtraImportTarget.value = key
+  extraImportFileInput.value?.click()
+}
+function handleExtraImportFile(event) {
+  const table = extraImportTables.find(item => item.key === activeExtraImportTarget.value)
+  if (!table) { event.target.value = ''; return }
+  return handleImportFile(event, table.key, table.parse, table.label)
+}
 function handlePermissionFile(event) {
   return handleImportFile(event, 'permission', permissionRows, '权限表')
 }
