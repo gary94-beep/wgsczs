@@ -40,7 +40,7 @@
             aria-hidden="true"></span></button>
       </header>
 
-      <nav v-if="stage !== 'workbench' && stage !== 'broadband'" class="breadcrumbs" aria-label="当前位置">
+      <nav v-if="stage !== 'workbench'" class="breadcrumbs" aria-label="当前位置">
         <button type="button" @click="goWorkbench">工作台</button><span>›</span>
         <template v-if="stage === 'warnings'"><strong>预警监控</strong></template><template v-else-if="stage === 'monitor'"><button type="button" @click="openMonitor">预警监控</button><span>›</span><strong>{{ isChangeAlert ? '异动预警' : '低产预警' }}</strong></template>
         <template v-else-if="stage === 'campus'"><strong>校园生产管理</strong></template>

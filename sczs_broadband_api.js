@@ -112,6 +112,45 @@ function createBroadbandEngine() {
     list.sort(function (a, b) { return (b.stats.gap === null ? -1 : b.stats.gap) - (a.stats.gap === null ? -1 : a.stats.gap) || a.name.localeCompare(b.name); });
     return list;
   }
+
+  // Geographic grid classes are independent of the E-A production tiers.
+  var geographicClasses = {
+    A: ['小榄','火炬开发区','古镇','坦洲','东区'],
+    B: ['东升','石岐区','三乡','沙溪','横栏','东凤','西区','黄圃'],
+    C: ['港口','南头','三角','大涌','南朗','民众','板芙','南区','阜沙','五桂山','神湾','翠亨新区']
+  };
+  function gridClass(value) {
+    var name = String(value || '').replace(/^\s+|\s+$/g,'');
+    for (var exact in geographicClasses) if (Object.prototype.hasOwnProperty.call(geographicClasses,exact) && geographicClasses[exact].indexOf(name) >= 0) return exact;
+    name = name.replace(/(?:综合网格|网格|街道|镇)$/,'');
+    if (name === '火炬' || name === '火炬高新区') name = '火炬开发区';
+    for (var key in geographicClasses) if (Object.prototype.hasOwnProperty.call(geographicClasses,key) && geographicClasses[key].indexOf(name) >= 0) return key;
+    return null;
+  }
+  function rankingAnalysis(rows, clock) {
+    function candidates(level) {
+      return regions(rows,level,clock).filter(function (r) {
+        return r.name && !/统筹|^(未知|全市|市公司|中山市)$/.test(r.name) && (level !== 'grid' || r.name !== r.branch) && r.stats.completionRate !== null && isFinite(r.stats.completionRate) && r.stats.monthlyTarget > 0;
+      }).map(function (r) {
+        return {name:r.name,branch:r.branch,grid:r.grid,completionRate:r.stats.completionRate,production:r.stats.production,monthlyTarget:r.stats.monthlyTarget};
+      });
+    }
+    function order(a,b) {
+      return a.completionRate-b.completionRate || String(a.name).localeCompare(String(b.name)) || String(a.branch).localeCompare(String(b.branch));
+    }
+    function ranked(list,count) {
+      var sorted=list.slice().sort(order), best=list.slice().sort(function (a,b) {return b.completionRate-a.completionRate || order(a,b);});
+      return {count:list.length,best:best.length?best[0]:null,worst:sorted.slice(0,count)};
+    }
+    var branches=ranked(candidates('branch').filter(function (r) {return !/统筹|未知|全市/.test(r.name);}),1), grids=candidates('grid'), classified=[], unknown=0;
+    for (var i=0;i<grids.length;i++) if (!gridClass(grids[i].grid)) unknown++;
+    ['A','B','C'].forEach(function (type,index) {
+      var selected=grids.filter(function (r) {return gridClass(r.grid)===type;});
+      var item=ranked(selected,index+1);item.type=type;item.worstLimit=index+1;classified.push(item);
+    });
+    return {branches:branches,grids:classified,unclassifiedCount:unknown};
+  }
+
   function details(rows, params) {
     var status = params.status || 'behind', needle = String(params.query || '').replace(/^\s+|\s+$/g, '').toLowerCase(), selectedTier = params.tier || '';
     if (['all', 'behind', 'zero', 'low', 'focus', 'missingData', 'missingTarget'].indexOf(status) < 0) throw new Error('明细筛选类型无效');
@@ -127,7 +166,7 @@ function createBroadbandEngine() {
     var offset = (page - 1) * size;
     return { rows: list.slice(offset, offset + size), pagination: { page: page, pageSize: size, total: list.length, hasMore: offset + size < list.length } };
   }
-  return { categories: categories, category: category, calendar: calendar, numeric: numeric, entity: entity, summarize: summarize, distribution: distribution, regions: regions, details: details };
+  return { categories: categories, category: category, calendar: calendar, numeric: numeric, entity: entity, summarize: summarize, distribution: distribution, regions: regions, gridClass: gridClass, rankingAnalysis: rankingAnalysis, details: details };
 }
 
 function createBroadbandGateway(deps) {
@@ -242,7 +281,7 @@ function createBroadbandGateway(deps) {
     var level = text(Params.level) || (user.role === 'city' && !ctx.branch ? 'branch' : 'grid');
     if (level !== 'branch' && level !== 'grid') throw new Error('区域层级无效');
     var rows = bbRows(ctx, item.id);
-    result.category = item; result.level = level; result.stats = ctx.engine.summarize(rows, ctx.clock); result.distribution = ctx.engine.distribution(rows);
+    result.category = item; result.level = level; result.stats = ctx.engine.summarize(rows, ctx.clock); result.distribution = ctx.engine.distribution(rows); result.rankingAnalysis = ctx.engine.rankingAnalysis(rows, ctx.clock);
     result.regions = ctx.engine.regions(rows, level, ctx.clock);
     return result;
   }
@@ -251,7 +290,7 @@ function createBroadbandGateway(deps) {
     var query = text(Params.query);
     if (query.length > 100) throw new Error('搜索内容请控制在100字以内');
     var rows = bbRows(ctx, item.id), details = ctx.engine.details(rows, { status: text(Params.status) || 'behind', tier: text(Params.tier), query: query, page: Params.page, pageSize: Params.pageSize });
-    result.category = item; result.stats = ctx.engine.summarize(rows, ctx.clock); result.distribution = ctx.engine.distribution(rows);
+    result.category = item; result.stats = ctx.engine.summarize(rows, ctx.clock); result.distribution = ctx.engine.distribution(rows); result.rankingAnalysis = ctx.engine.rankingAnalysis(rows, ctx.clock);
     result.rows = details.rows; result.pagination = details.pagination;
     return result;
   }

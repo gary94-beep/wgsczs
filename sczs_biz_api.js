@@ -10,6 +10,7 @@ function init() {
     staff: "app_open_api_c003_wgsc_staff_1",
     permission: "app_open_api_c003_wgsc_permission_1",
     targets: "app_open_api_c003_wgsc_target_1",
+    staffTargets: "app_open_api_c001_wgsc_staff_target_m_1",
     scripts: "app_open_api_c001_wgsc_script_1"
   };
 
@@ -230,6 +231,24 @@ function init() {
   // ============================================================
   // search
   // ============================================================
+  // Monthly staff goals are read only for matching personnel search results.
+  function searchStaffTargets() {
+    var rows = pagedSql("SELECT id,team_type,product_id,month_base_target FROM " + tables.staffTargets, {}, "id DESC");
+    var goals = {};
+    for (var i=0;i<rows.length;i++) {
+      var r=rows[i];
+      if (['行销经理','商企经理','装维随销'].indexOf(text(r.team_type))<0) continue;
+      var p;
+      try {p=product(r.product_id);} catch (e) {continue;}
+      var key=JSON.stringify([text(r.team_type),p.productId]);
+      if (Object.prototype.hasOwnProperty.call(goals,key)) continue;
+      var value=text(r.month_base_target), numeric=value===''?null:Number(value);
+      if (numeric!==null && (!isFinite(numeric)||numeric<0)) numeric=null;
+      goals[key]=numeric;
+    }
+    return goals;
+  }
+
   function search() {
     var data = dashboard();
     var q = text(Params.query).toLowerCase();
@@ -262,11 +281,14 @@ function init() {
         m[per] = (m[per] === null ? 0 : m[per]) + r.production;
       }
     }
+    var staffGoals = Params.kind === "people" && Object.keys(groups).length ? searchStaffTargets() : {};
     var currentDate = new Date(data.statDate + "T00:00:00Z"), days = currentDate.getUTCDate();
     var previousDays = Math.min(days, new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth(), 0)).getUTCDate());
     for (var key in groups) if (Object.prototype.hasOwnProperty.call(groups, key)) {
       for (var mi = 0; mi < groups[key].values.length; mi++) {
         var metric = groups[key].values[mi];
+        var goalKey = JSON.stringify([text(groups[key].role),metric.productId]);
+        metric.monthTarget = Object.prototype.hasOwnProperty.call(staffGoals,goalKey) ? staffGoals[goalKey] : null;
         metric.monthAverage = metric.month === null ? null : metric.month / days;
         metric.previousAverage = metric.previous === null ? null : metric.previous / previousDays;
         metric.changeValue = metric.monthAverage === null || metric.previousAverage === null ? null : metric.monthAverage - metric.previousAverage;
@@ -474,7 +496,7 @@ function init() {
     function org(b, g) {
       if (!b || !g || b === "全市") return;
       branches[b] = { branchId: b, branchName: b };
-      if (b !== g || ["未知", "市统筹"].indexOf(g) >= 0) grids[gridId(b, g)] = { gridId: gridId(b, g), gridName: g, branchId: b };
+      if (b !== g && !/统筹|^(未知|全市|市公司|中山市)$/.test(g)) grids[gridId(b, g)] = { gridId: gridId(b, g), gridName: g, branchId: b };
     }
     for (var i = 0; i < region.length; i++) {
       var r = region[i];

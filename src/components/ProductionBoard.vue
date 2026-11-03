@@ -4,7 +4,7 @@
     <button v-for="item in items" :key="item.productId" type="button" class="board-row" :aria-label="`${item.productName}，${period === 'day' ? '当日产能' : '本月累计'}${format(value(item).production)}${item.unit}，查看详情`" @click="$emit('open', item.productId)">
       <span class="board-product"><span class="board-product-icon" :style="iconStyle(item.productId)" aria-hidden="true"></span><strong>{{ item.productName }}</strong></span>
       <span class="board-value">{{ format(value(item).production) }}<small>{{ item.unit }}</small></span>
-      <span v-if="value(item).dataCoverage?.partial" class="coverage-note">已统计 {{ value(item).dataCoverage.coveredGridCount }}/{{ value(item).dataCoverage.selectedGridCount }} 个网格</span>
+
       <span v-if="showTargets" class="board-targets"><span v-for="kind in targetKinds" :key="kind.id" class="board-target-chip" :class="`board-target-${kind.id}`"><span>{{ kind.label }}</span><b :class="{ 'board-rate-status': !rate(value(item), kind.id).endsWith('%') }">{{ rate(value(item), kind.id) }}</b></span></span>
     </button>
   </section>
@@ -51,6 +51,5 @@ header > div:first-child { min-width: 0; } h2 { margin: 0; font-size: 22px; line
 .board-target-chip b.board-rate-status { font-size: 12px; }
 .board-target-base { color: #142349; background: #f0f3f8; } .board-target-base > span { color: #607998; }
 .board-target-challenge { color: #099d87; background: #e2f8f1; }
-.coverage-note { grid-column: 1 / -1; color: #7188a0; font-size: 11px; line-height: 1.5; }
 @media (max-width: 360px) { .production-board { margin: 10px 0 20px; padding: 16px 12px 6px; } h2 { font-size: 20px; } .board-product { gap: 7px; } .board-product strong { font-size: 14px; } .board-value { font-size: 25px; } .board-target-chip { min-height: 38px; padding: 5px; gap: 2px; } .board-target-chip > span { font-size: 10px; } .board-target-chip b { font-size: 14px; } .board-target-chip b.board-rate-status { font-size: 10px; } }
 </style>

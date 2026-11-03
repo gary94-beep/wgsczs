@@ -59,6 +59,7 @@ export async function mockFetchAlerts(params) {
 
 export async function mockSearchCapacity(params) {
   const data = await mockFetchDashboard(params)
+  try { const goals=JSON.parse(localStorage.getItem('wgsc-import-staffCategoryTarget')||'[]'); data.staffCategoryTargets=Array.isArray(goals)?goals:[] } catch { data.staffCategoryTargets=[] }
   const allowed = new Set(data.organization.grids.map(row => row.gridId))
   if ((params.gridIds || []).some(id => !allowed.has(id))) throw new Error('无权访问该网格')
   return { results: searchCapacity(data, { ...params, gridIds: params.gridIds?.length ? params.gridIds : [...allowed] }), statDate: data.statDate }

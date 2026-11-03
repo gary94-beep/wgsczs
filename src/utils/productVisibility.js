@@ -22,6 +22,10 @@ export function isVisibleProduct(item) {
 
 export function visibleDashboard(data) {
   const result = { ...data }
+  if (data.organization?.grids) result.organization = { ...data.organization, grids: data.organization.grids.filter(grid => {
+    const name = String(grid.gridName || grid.gridId?.split('::').pop() || '').trim()
+    return name && !/统筹|^(未知|全市|市公司|中山市)$/.test(name) && name !== grid.branchId && !name.endsWith('分公司')
+  }) }
   for (const field of ['products', 'targets', 'rows', 'dailyRows', 'regionRows', 'periodRows', 'salesScripts']) {
     if (Array.isArray(data[field])) result[field] = data[field].filter(isVisibleProduct).map(displayProduct)
   }

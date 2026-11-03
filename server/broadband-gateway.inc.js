@@ -108,7 +108,7 @@
     var level = text(Params.level) || (user.role === 'city' && !ctx.branch ? 'branch' : 'grid');
     if (level !== 'branch' && level !== 'grid') throw new Error('区域层级无效');
     var rows = bbRows(ctx, item.id);
-    result.category = item; result.level = level; result.stats = ctx.engine.summarize(rows, ctx.clock); result.distribution = ctx.engine.distribution(rows);
+    result.category = item; result.level = level; result.stats = ctx.engine.summarize(rows, ctx.clock); result.distribution = ctx.engine.distribution(rows); result.rankingAnalysis = ctx.engine.rankingAnalysis(rows, ctx.clock);
     result.regions = ctx.engine.regions(rows, level, ctx.clock);
     return result;
   }
@@ -117,7 +117,7 @@
     var query = text(Params.query);
     if (query.length > 100) throw new Error('搜索内容请控制在100字以内');
     var rows = bbRows(ctx, item.id), details = ctx.engine.details(rows, { status: text(Params.status) || 'behind', tier: text(Params.tier), query: query, page: Params.page, pageSize: Params.pageSize });
-    result.category = item; result.stats = ctx.engine.summarize(rows, ctx.clock); result.distribution = ctx.engine.distribution(rows);
+    result.category = item; result.stats = ctx.engine.summarize(rows, ctx.clock); result.distribution = ctx.engine.distribution(rows); result.rankingAnalysis = ctx.engine.rankingAnalysis(rows, ctx.clock);
     result.rows = details.rows; result.pagination = details.pagination;
     return result;
   }

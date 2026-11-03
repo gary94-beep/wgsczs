@@ -1,16 +1,15 @@
 <template>
   <section class="bb-page" :class="{'bb-inner-page':view !== 'overview','bb-overview':view === 'overview'}" aria-label="宽带专项">
-    <nav v-if="view !== 'overview'" class="bb-inner-crumb" aria-label="专项当前位置"><button type="button" @click="emit('back-to-workbench')">工作台</button><span>›</span><strong>宽带专项</strong></nav>
     <header v-if="view !== 'overview'" class="bb-hero"><button type="button" class="bb-back" aria-label="返回上一级" @click="back">‹</button><div><h2>{{ activeCategory?.name }}</h2></div><span v-if="data?.demo" class="bb-demo">演示数据</span></header>
-    <div v-if="view === 'overview'" class="bb-info-row"><nav aria-label="专项当前位置"><button type="button" @click="emit('back-to-workbench')">工作台</button><span>›</span><strong>宽带专项</strong></nav><span class="bb-info-scope"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0z"/><circle cx="12" cy="10" r="2"/></svg>{{ scopeLabel }}</span><span class="bb-info-date"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18m-13 4h3"/></svg>截至 {{ data?.statDate || statDate || '—' }}</span><em v-if="data?.demo">示意数据</em></div>
+    <div v-if="view === 'overview'" class="bb-info-row"><span class="bb-info-scope"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0z"/><circle cx="12" cy="10" r="2"/></svg>{{ scopeLabel }}</span><span class="bb-info-date"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18m-13 4h3"/></svg>截至 {{ data?.statDate || statDate || '—' }}</span><em v-if="data?.demo">示意数据</em></div>
     <div v-else class="bb-scope"><strong>{{ scopeLabel }}</strong><span>截至 {{ data?.statDate || statDate || '—' }}</span></div>
     <div v-if="view === 'overview'" class="bb-dispatch-note"><strong class="bb-dispatch-title">调度看板</strong><span>优先关注零产与低产对象</span></div>
     <div class="bb-filters">
-      <label v-if="permission.role === 'city'"><span>分公司<span class="bb-filter-colon">：</span></span><select v-model="filters.branch" aria-label="宽带专项分公司" :disabled="busy" @change="changeBranch"><option value="">全市</option><option v-for="b in organization.branches" :key="b.branchId" :value="b.branchName || b.branchId">{{ b.branchName || b.branchId }}</option></select></label>
+      <label v-if="permission.role === 'city'"><span>分公司<span class="bb-filter-colon">：</span></span><select v-model="filters.branch" aria-label="宽带专项分公司" :disabled="busy" @change="changeBranch"><option value="">全市</option><option v-for="b in branchOptions" :key="b.branchId" :value="b.branchName || b.branchId">{{ b.branchName || b.branchId }}</option></select></label>
       <label v-if="permission.role !== 'grid'"><span>{{ view === 'overview' ? '镇区' : '网格' }}<span class="bb-filter-colon">：</span></span><select v-model="filters.grid" aria-label="宽带专项网格" :disabled="busy || !filters.branch" @change="changeFilters"><option value="">{{ view === 'overview' ? '全部镇区' : '全部网格' }}</option><option v-for="g in gridOptions" :key="g.gridId" :value="g.gridName">{{ g.gridName }}</option></select></label>
       <button type="button" class="bb-refresh" aria-label="刷新宽带专项" :disabled="busy" @click="load(false)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7V3m0 4h-4M4 17v4m0-4h4M20 7a9 9 0 0 0-15-2M4 17a9 9 0 0 0 15 2"/></svg></button>
     </div>
-    <div v-if="clock" class="bb-time"><strong>本月时序 <b>{{ percent(clock.timeProgress) }}</b></strong><span>已过 {{ clock.elapsedDays }}/{{ clock.daysInMonth }} 天</span><div v-if="view === 'overview'" class="bb-clock-progress"><i :style="{width:fill(clock.timeProgress)}"></i></div><small v-else>时序目标＝月目标 × {{ clock.elapsedDays }}/{{ clock.daysInMonth }}</small></div>
+    <div v-if="clock" class="bb-time"><strong>本月时序 <b>{{ percent(clock.timeProgress) }}</b></strong><span>已过 {{ clock.elapsedDays }}/{{ clock.daysInMonth }} 天</span><div v-if="view === 'overview'" class="bb-clock-progress"><i :style="{width:fill(clock.timeProgress)}"></i></div></div>
     <div v-if="error" class="bb-error" role="alert"><span>{{ error }}</span><button type="button" @click="load(false)">重试</button></div>
     <p v-if="busy" class="bb-loading" role="status">正在查询宽带专项…</p>
     <p v-for="warning in data?.warnings || []" :key="warning" class="bb-warning">{{ warning }}</p>
@@ -44,6 +43,28 @@
         <div class="bb-metric bb-metric-gap bb-tone-behind"><span>月目标缺口</span><strong>{{ format(stats.gap) }}<small>条</small></strong><svg class="bb-metric-icon" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17"/><path d="M20 10v12" stroke="white" stroke-width="3.5" stroke-linecap="round"/><circle cx="20" cy="29" r="2" fill="white"/></svg></div>
       </section>
       <div class="bb-target-summary"><span>月目标 <b>{{ format(stats.monthlyTarget) }}</b> 条</span><span>时序应达 <b>{{ whole(stats.expected) }}</b> 条</span><span>时序达标 <b>{{ stats.reachedCount }}/{{ stats.evaluatedCount }}</b> {{ activeCategory?.unit }}（{{ percent(stats.reachedRate) }}）</span></div>
+      <section v-if="data.rankingAnalysis" class="bb-ranking-analysis" aria-label="区域完成率分析">
+        <header><h3>区域完成率分析</h3><span>按月目标完成率</span></header>
+        <div class="bb-ranking-row">
+          <strong>分公司</strong>
+          <div v-if="data.rankingAnalysis.branches.count > 1" class="bb-ranking-copy">
+            <p><span class="bb-ranking-good">相对领先</span>{{ rankLabel(data.rankingAnalysis.branches.best) }}</p>
+            <p><span class="bb-ranking-bad">重点关注</span>{{ rankLabel(data.rankingAnalysis.branches.worst[0]) }}</p>
+          </div>
+          <p v-else-if="data.rankingAnalysis.branches.best">当前范围仅1个可评估分公司：{{ rankLabel(data.rankingAnalysis.branches.best) }}</p>
+          <p v-else>暂无可评估分公司</p>
+        </div>
+        <div v-for="group in data.rankingAnalysis.grids" :key="group.type" class="bb-ranking-row">
+          <strong>{{ group.type }}类网格</strong>
+          <div v-if="group.count" class="bb-ranking-copy">
+            <p><span class="bb-ranking-good">相对领先</span>{{ rankLabel(group.best) }}</p>
+            <p><span class="bb-ranking-bad">重点关注{{ group.worst.length }}个</span>{{ group.worst.map(rankLabel).join('；') }}</p>
+            <small v-if="group.count < group.worstLimit">当前范围可评估{{ group.count }}个，按实际数量展示。</small>
+          </div>
+          <p v-else>当前范围暂无可评估的{{ group.type }}类网格</p>
+        </div>
+        <footer>仅比较当前类型和筛选范围；完成率＝有效对象累计完成÷同批月目标。缺目标不排名；同率按名称排序。<template v-if="data.rankingAnalysis.unclassifiedCount">另有{{ data.rankingAnalysis.unclassifiedCount }}个网格尚未配置ABC类别。</template></footer>
+      </section>
       <div v-if="stats.missingDataCount || stats.missingTargetCount" class="bb-quality"><span>异常产能 {{ stats.missingDataCount }} · 缺目标/零目标 {{ stats.missingTargetCount }}</span><small>完成量、目标、完成率及同期对比均按同批有效对象计算；当前月份无记录按零产计入；异常产能或缺目标的对象不参与计算。全部已记录产能 {{ format(stats.knownProduction) }} 条。<span v-if="stats.invalidDataCount">其中 {{ stats.invalidDataCount }} 个对象的产能记录异常。</span></small><button v-if="view === 'details'" type="button" @click="setStatus(stats.missingDataCount ? 'missingData' : 'missingTarget')">查看待核实对象 ›</button></div>
       <details class="bb-trends"><summary>展开周、月同期对比</summary><div><span>近7天日均</span><b>{{ format(stats.weeklyAverage) }} 条/日</b></div><div><span>较前7天日均</span><b>{{ stats.weekChangeRate == null ? '暂无可比数据' : signedPercent(stats.weekChangeRate) }}</b></div><div><span>本月 / 上月同期日均</span><b>{{ format(stats.monthAverage) }} / {{ format(stats.previousAverage) }} 条/日</b></div><div><span>较上月同期日均</span><b>{{ stats.monthChangeRate == null ? '暂无可比数据' : signedPercent(stats.monthChangeRate) }}</b></div></details>
 
@@ -51,7 +72,7 @@
       <section v-if="data.distribution" class="bb-distribution"><header class="bb-section-head"><h3>{{ activeCategory?.unit === '人' ? '人员' : '商家/渠道' }}产能分层占比</h3><span>按本月累计条数</span></header><div class="bb-bars bb-percent-bars"><button v-for="bin in data.distribution" :key="bin.id" type="button" :class="[`bb-bin-${bin.id}`,{'active':tier===bin.id && view==='details'}]" :aria-label="`查看${bin.id}层明细`" @click="selectTier(bin.id)"><strong>{{ percent(bin.rate) }}</strong><div class="bb-bar-track"><i :style="{height:fill(bin.rate)}"></i></div><b>{{ bin.id }}层</b><small>{{ bin.label }}</small><span>{{ bin.count }} {{ activeCategory?.unit }}</span></button></div><p>占比＝该层对象数÷当前范围总规模 {{ stats.totalCount }}；柱高按0–100%统一刻度。<span v-if="stats.missingDataCount">异常产能 {{ stats.missingDataCount }} 个未分层。</span></p></section>
       <section v-if="view === 'regions'" class="bb-regions">
         <header class="bb-section-head"><h3>{{ data.level === 'branch' ? '分公司' : '镇区/网格' }}对比</h3><span>按月目标缺口从大到小</span></header>
-        <article v-for="(region,index) in data.regions" :key="region.id" class="bb-region-card"><button type="button" class="bb-region-row" :disabled="busy" @click="openRegion(region)"><span class="bb-rank">{{ index+1 }}</span><strong>{{ region.name || '组织未提供' }}</strong><div><span>{{ format(region.stats.production) }} / {{ format(region.stats.monthlyTarget) }} 条</span><div class="bb-progress" :class="tone(region.stats)"><i :style="{width: fill(region.stats.completionRate)}"></i><b :style="{left: fill(clock.timeProgress)}"></b></div><small>月目标缺口 {{ format(region.stats.gap) }} · 时序达标 {{ region.stats.reachedCount }}/{{ region.stats.evaluatedCount }}</small></div><b :class="tone(region.stats)">{{ percent(region.stats.completionRate) }}<small>月完成率 ›</small></b></button><div class="bb-region-levels" v-if="region.distribution"><div v-for="bin in region.distribution" :key="bin.id" :class="`bb-bin-${bin.id}`"><strong>{{ percent(bin.rate) }}</strong><div class="bb-mini-track"><i :style="{height:fill(bin.rate)}"></i></div><b>{{ bin.id }}层</b><small>{{ bin.count }}{{ activeCategory?.unit }}</small></div></div></article>
+        <article v-for="(region,index) in data.regions" :key="region.id" class="bb-region-card"><button type="button" class="bb-region-row" :disabled="busy" @click="openRegion(region)"><span class="bb-rank">{{ index+1 }}</span><strong>{{ region.name || '组织未提供' }}</strong><div><span>{{ format(region.stats.production) }} / {{ format(region.stats.monthlyTarget) }} 条</span><div class="bb-progress" :class="tone(region.stats)"><i :style="{width: fill(region.stats.completionRate)}"></i><b :style="{left: fill(clock.timeProgress)}"></b></div></div><b :class="tone(region.stats)">{{ percent(region.stats.completionRate) }}<small>月完成率 ›</small></b><small class="bb-region-meta"><span>月目标缺口 {{ format(region.stats.gap) }}</span><span>时序达标 {{ region.stats.reachedCount }}/{{ region.stats.evaluatedCount }}</span></small></button><div class="bb-region-levels" v-if="region.distribution"><div v-for="bin in region.distribution" :key="bin.id" :class="`bb-bin-${bin.id}`"><strong>{{ percent(bin.rate) }}</strong><div class="bb-mini-track"><i :style="{height:fill(bin.rate)}"></i></div><b>{{ bin.id }}层</b><small>{{ bin.count }}{{ activeCategory?.unit }}</small></div></div></article>
         <p v-if="!data.regions?.length" class="bb-empty">当前范围暂无该类对象，请核对维表中的岗位和组织信息。</p>
         <button type="button" class="bb-primary bb-detail-entry" :disabled="busy" @click="openDetails">查看零产/低产重点对象 ›</button>
       </section>
@@ -80,6 +101,7 @@
 import {computed,onMounted,onUnmounted,reactive,ref,watch} from 'vue'
 import {fetchBroadbandOverview,fetchBroadbandRegions,fetchBroadbandDetails} from '../api/production.js'
 import {createBroadbandEngine} from '../utils/broadband.js'
+import {monitorBranchOptions} from '../utils/monitorBranches.js'
 import {finiteValue,percent,fill,tone as rateTone} from '../utils/broadbandDisplay.js'
 import detailPersonIcon from '../assets/ui-icons/user-round.svg'
 import detailStoreIcon from '../assets/ui-icons/store.svg'
@@ -94,8 +116,10 @@ const clock=computed(()=>data.value?.clock)
 const activeCategory=computed(()=>categoryId.value?engine.category(categoryId.value):null)
 const stats=computed(()=>data.value?.stats||{})
 const scopeLabel=computed(()=>[filters.branch||props.scope||'当前权限范围',filters.grid||''].filter(Boolean).join(' · '))
+const branchOptions=computed(()=>monitorBranchOptions(props.organization.branches))
 const gridOptions=computed(()=>{const branch=props.organization.branches.find(b=>(b.branchName||b.branchId)===filters.branch);return props.organization.grids.filter(g=>g.branchId===(branch?.branchId||filters.branch))})
 const format=v=>finiteValue(v)===null?'—':finiteValue(v).toLocaleString('zh-CN',{maximumFractionDigits:2})
+const rankLabel=r=>r?`${r.name}（${percent(r.completionRate)}）`:'暂无可评估数据'
 const whole=v=>finiteValue(v)===null?'—':Math.round(finiteValue(v)).toLocaleString('zh-CN')
 const cadences={contractors:'至少1天1条',managers:'2天1条',clerks:'3天1条',installers:'4天1条',stars:'5天1条',residents:'6天1条'}
 const signedPercent=v=>`${v>0?'+':''}${percent(v)}`
@@ -379,4 +403,22 @@ onUnmounted(()=>{sequence++;clearTimeout(searchTimer)})
  .bb-person{padding:13px 10px}.bb-person .bb-person-title h3{font-size:19px}.bb-person header>.bb-person-status{font-size:13px;padding:5px 9px}.bb-person .bb-person-line{font-size:13px}
  .bb-person-values>span{font-size:12px}.bb-person .bb-person-values b{font-size:24px}
 }
+
+/* Use App's shared breadcrumbs, matching overview and capacity search. */
+.bb-overview .bb-info-row{margin:0 0 14px;padding:0;min-height:28px;background:transparent;gap:8px 14px;justify-content:space-between;color:#607998;font-size:13px;font-weight:500}
+.bb-overview .bb-info-scope{padding:0;border:0;background:transparent;color:#607998;font-size:inherit;font-weight:500}
+.bb-overview .bb-info-date{font:inherit;color:inherit;white-space:nowrap}
+.bb-overview .bb-info-row svg{width:16px;height:16px}
+.bb-region-row .bb-region-meta{grid-column:2/-1;display:flex;flex-wrap:wrap;align-items:center;gap:5px 16px;min-width:0;margin:0;font-size:12px;line-height:1.65;color:#718bad;text-align:left}
+.bb-region-meta>span{white-space:nowrap}
+
+.bb-ranking-analysis{margin:-4px 0 12px;padding:13px 14px;border:1px solid #d5e6fb;border-radius:10px;background:linear-gradient(120deg,#f8fbff,#edf5ff);color:#294d75;font-size:14px;line-height:1.8}
+.bb-ranking-analysis>header{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;margin-bottom:5px}
+.bb-ranking-analysis h3{margin:0;color:#163964;font-size:17px;font-weight:800}.bb-ranking-analysis>header>span{color:#718bad;font-size:12px}
+.bb-ranking-row{display:grid;grid-template-columns:76px minmax(0,1fr);gap:10px;padding:9px 0;border-top:1px solid #dce9f8;align-items:start}
+.bb-ranking-row>strong{font-weight:800;color:#254d7b}.bb-ranking-row p{margin:0;overflow-wrap:anywhere}.bb-ranking-copy p+p{margin-top:4px}
+.bb-ranking-good,.bb-ranking-bad{display:inline-block;margin-right:8px;padding:0 6px;border-radius:4px;font-size:12px;font-weight:700;white-space:nowrap}
+.bb-ranking-good{color:#079b82;background:#dff5ee}.bb-ranking-bad{color:#d97715;background:#fff0df}.bb-ranking-copy>small{display:block;color:#8293aa;font-size:12px}
+.bb-ranking-analysis>footer{padding-top:8px;border-top:1px solid #dce9f8;color:#71839b;font-size:12px;line-height:1.7}
+@media(max-width:360px){.bb-ranking-analysis{padding:11px 10px;font-size:13px}.bb-ranking-row{grid-template-columns:65px minmax(0,1fr);gap:6px}}
 </style>

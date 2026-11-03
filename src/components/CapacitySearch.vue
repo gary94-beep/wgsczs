@@ -8,8 +8,8 @@
     <p v-if="error" class="search-error" role="alert">{{ error }}</p>
     <template v-if="query.trim()"><div class="search-result-heading" aria-live="polite"><span>{{ busy ? '查询中...' : `共 ${results.length} ${kind === 'people' ? '位人员' : '个渠道'}` }}</span><time>截至 {{ dashboard.statDate }}</time></div><p v-if="!busy && !error && !results.length" class="search-empty">当前可查看范围内暂无匹配结果</p>
       <article v-for="item in results.slice(0, limit)" :key="item.key" class="search-result">
-        <header class="search-identity"><span class="search-avatar" :class="`search-avatar-${kind}`" aria-hidden="true"><i class="search-ui-icon" :style="iconStyle(kind === 'people' ? 'person' : 'store')"></i></span><div class="search-identity-copy"><h3>{{ item.name }}</h3><div class="search-identity-meta"><span class="search-role">{{ item.role || '类型未提供' }}</span><span class="search-code">{{ item.code || '编码未提供' }}</span></div><p>{{ branchName(item.branchId) }} · {{ gridName(item.gridId) }}</p></div></header>
-        <div class="search-table-wrap"><table class="search-metrics" :aria-label="`${item.name}产能`"><thead><tr class="search-metric-head"><th scope="col">产品</th><th scope="col">当日</th><th scope="col">本月</th></tr></thead><tbody><template v-for="metric in item.values" :key="metric.productId"><tr><th scope="row">{{ metric.productName }}</th><td :class="{ 'metric-muted': metric.day == null || metric.day === 0 }">{{ format(metric.day) }}<small v-if="metric.day != null"> {{ metric.unit }}</small></td><td :class="{ 'metric-muted': metric.month == null || metric.month === 0 }">{{ format(metric.month) }}<small v-if="metric.month != null"> {{ metric.unit }}</small></td></tr><tr class="search-comparison"><td colspan="3"><span>本月日均 {{ format(metric.monthAverage) }} · 上月同期日均 {{ format(metric.previousAverage) }} {{ metric.unit }}/日</span><strong :class="{ 'comparison-down': metric.changeValue < 0, 'comparison-up': metric.changeValue > 0 }">{{ comparison(metric) }}</strong></td></tr></template></tbody></table></div>
+        <header class="search-identity"><span class="search-avatar" :class="`search-avatar-${kind}`" aria-hidden="true"><i class="search-ui-icon" :style="iconStyle(kind === 'people' ? 'person' : 'store')"></i></span><div class="search-identity-copy"><h3>{{ item.name }}</h3><div class="search-identity-meta"><span class="search-role">{{ item.role || '类型未提供' }}</span><span v-if="item.role !== '末梢渠道' &amp;&amp; !String(item.code || '').startsWith('tail:')" class="search-code">{{ item.code || '编码未提供' }}</span></div><p>{{ branchName(item.branchId) }} · {{ gridName(item.gridId) }}</p></div></header>
+        <div class="search-table-wrap"><table class="search-metrics" :class="{'has-month-targets':kind === 'people'}" :aria-label="`${item.name}产能`"><thead><tr class="search-metric-head"><th scope="col">产品</th><th scope="col">当日</th><th scope="col">本月</th><th v-if="kind === 'people'" scope="col">月度目标</th></tr></thead><tbody><template v-for="metric in item.values" :key="metric.productId"><tr><th scope="row">{{ metric.productName }}</th><td :class="{ 'metric-muted': metric.day == null || metric.day === 0 }">{{ format(metric.day) }}<small v-if="metric.day != null"> {{ metric.unit }}</small></td><td :class="{ 'metric-muted': metric.month == null || metric.month === 0 }">{{ format(metric.month) }}<small v-if="metric.month != null"> {{ metric.unit }}</small></td><td v-if="kind === 'people'" class="metric-month-target" :class="{'metric-muted':metric.monthTarget == null}">{{ metric.monthTarget == null ? '-' : format(metric.monthTarget) }}<small v-if="metric.monthTarget != null"> {{ metric.unit }}</small></td></tr><tr class="search-comparison"><td :colspan="kind === 'people' ? 4 : 3"><span v-if="kind === 'people'">本月累计 {{ format(metric.month) }} · 上月同期累计 {{ format(metric.previous) }} {{ metric.unit }}</span><span v-else>本月日均 {{ format(metric.monthAverage) }} · 上月同期日均 {{ format(metric.previousAverage) }} {{ metric.unit }}/日</span><strong :class="{ 'comparison-down': comparisonValue(metric) < 0, 'comparison-up': comparisonValue(metric) > 0 }">{{ comparison(metric) }}</strong></td></tr></template></tbody></table></div>
       </article>
       <button v-if="results.length > limit" class="search-more" type="button" @click="limit += 10">查看更多</button>
     </template>
@@ -18,6 +18,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { searchCapacity } from '../utils/capacitySearch.js'
+import { compareSearchTotals } from '../utils/searchTotalsComparison.js'
 import searchIcon from '../assets/ui-icons/search.svg'
 import clearIcon from '../assets/ui-icons/x.svg'
 import locationIcon from '../assets/ui-icons/map-pin.svg'
@@ -50,10 +51,13 @@ const branchName = id => props.dashboard.organization.branches.find(item => item
 const gridName = id => props.dashboard.organization.grids.find(item => item.gridId === id)?.gridName || '网格未提供'
 const iconStyle = name => ({ '--search-icon': `url("${({ search: searchIcon, clear: clearIcon, location: locationIcon, store: storeIcon, person: personIcon })[name]}")` })
 const format = value => value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })
+const comparisonValue = metric => kind.value === 'people' ? compareSearchTotals(metric).difference : metric.changeValue
 function comparison(metric) {
-  if (metric.changeValue == null) return '较上月同期日均：暂无可比数据'
+  const total = kind.value === 'people', value = total ? compareSearchTotals(metric) : {difference:metric.changeValue,rate:metric.changeRate}
+  const label = total ? '较上月同期' : '较上月同期日均'
+  if (value.difference == null) return label+'：暂无可比数据'
   const signed = value => `${value > 0 ? '+' : ''}${format(value)}`
-  return `较上月同期日均 ${signed(metric.changeValue)} ${metric.unit}/日${metric.changeRate == null ? '（上期为0，变化率不适用）' : `（${signed(metric.changeRate)}%）`}`
+  return `${label} ${signed(value.difference)} ${metric.unit}${total ? '' : '/日'}${value.rate == null ? '（上期为0，变化率不适用）' : `（${signed(value.rate)}%）`}`
 }
 </script>
 <style scoped>
@@ -127,4 +131,11 @@ button, input, select { font: inherit; } button { cursor: pointer; }
 .search-toolbar{border-radius:12px}
 @media(max-width:430px){.search-page-heading{padding:16px 14px;gap:13px}.search-page-heading h2{font-size:28px}.search-page-heading p{font-size:13px}.search-page-meta{font-size:12px}.search-page-meta .search-scope{padding:5px 7px}.search-heading-source>span{font-size:13px;padding:6px 10px}}
 @media(max-width:360px){.capacity-search{padding:18px 0 24px}.search-page-heading{padding:14px 12px;gap:11px}.search-page-heading h2{font-size:25px}.search-page-heading p{font-size:12px}.search-page-meta{font-size:11px}}
+
+.search-metrics.has-month-targets th:first-child{width:31%}
+.search-metrics.has-month-targets th,.search-metrics.has-month-targets td{padding-left:7px;padding-right:7px}
+.search-metrics.has-month-targets td:not([colspan]){white-space:nowrap}
+.search-metrics.has-month-targets .metric-month-target{color:#354f72;font-size:15px;font-weight:600}
+.search-metrics.has-month-targets .metric-month-target.metric-muted{color:#7188a0;font-weight:500}
+@media(max-width:360px){.search-metrics.has-month-targets th,.search-metrics.has-month-targets td{padding-left:5px;padding-right:5px}.search-metrics.has-month-targets td:not([colspan]){font-size:13px}.search-metrics.has-month-targets thead th{font-size:11px}}
 </style>

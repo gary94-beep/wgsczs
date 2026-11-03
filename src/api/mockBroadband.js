@@ -30,9 +30,9 @@ export async function mockBroadbandOverview(params) {
 }
 export async function mockBroadbandRegions(params) {
   const ctx=await context(params),category=engine.category(params.categoryId),records=rows(ctx,category.id),level=params.level||'branch'
-  return {...base(ctx),category,level,stats:engine.summarize(records,ctx.clock),distribution:engine.distribution(records),regions:engine.regions(records,level,ctx.clock)}
+  return {...base(ctx),category,level,stats:engine.summarize(records,ctx.clock),distribution:engine.distribution(records),rankingAnalysis:engine.rankingAnalysis(records,ctx.clock),regions:engine.regions(records,level,ctx.clock)}
 }
 export async function mockBroadbandDetails(params) {
   const ctx=await context(params),category=engine.category(params.categoryId),records=rows(ctx,category.id)
-  return {...base(ctx),category,stats:engine.summarize(records,ctx.clock),distribution:engine.distribution(records),...engine.details(records,params)}
+  return {...base(ctx),category,stats:engine.summarize(records,ctx.clock),distribution:engine.distribution(records),rankingAnalysis:engine.rankingAnalysis(records,ctx.clock),...engine.details(records,params)}
 }
