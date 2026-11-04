@@ -19,7 +19,8 @@ function init() {
     scripts: "app_open_api_c001_wgsc_script_1",
     staffBroadbandTarget: "app_open_api_c001_wgsc_stf_bb_target_m_1",
     staffCategoryTarget: "app_open_api_c001_wgsc_staff_target_m_1",
-    areaContractor: "app_open_api_c002_wgsc_area_contractor_1"
+    areaContractor: "app_open_api_c002_wgsc_area_contractor_1",
+    staffOwn: "app_open_api_c001_wgsc_staff_own_team_1" // 新增
   };
 
   // ========== 产品 ==========
@@ -271,6 +272,7 @@ function init() {
           staffBroadbandTarget: ["staffBroadbandTarget", ["type","name","branch","grid","business_hall","ngboss_id","monthly_kd_target"], ["ngboss_id"]],
           staffCategoryTarget: ["staffCategoryTarget", ["target_month","team_type","product_id","product_name","month_base_target","month_challenge_target"], ["target_month","team_type","product_id"]],
           areaContractor: ["areaContractor", ["branch","grid","chn_name","chn_code","monthly_kd_target","mon"], ["chn_code","mon"]],
+          staffOwn: ["staffOwn", ["branch", "grid", "staff_no", "staff_name", "team"]], // 新增
           permission: ["permission", ["name", "phone", "role", "branch", "grid", "super_admin", "enabled"]]
         };
     var target = text(Params.target);
@@ -317,6 +319,14 @@ function init() {
           r.super_admin = Number(r.is_super_admin);
           delete r.is_super_admin;
         } else if (!r.branch || !r.grid || (target === "channelInfo" ? !r.chn_code || !r.chn_name : !r.staff_no || !r.staff_name)) throw new Error("第" + (i + 1) + "行缺必填字段");
+        
+        // 追加 staffOwn 的必填校验
+        if (target === "staffOwn") {
+          if (!r.branch || !r.grid || !r.staff_no || !r.staff_name) {
+             throw new Error("第" + (i + 1) + "行缺必填字段(branch/grid/staff_no/staff_name)");
+          }
+        }
+
         if (target === "channelInfo") {
           var star = r.star.match(/([0-9三四五六七八九十])\s*星/);
           if (!r.star_level) r.star_level = star && (Number(star[1]) >= 3 || /[三四五六七八九十]/.test(star[1])) ? "三星+" : "非三星+";

@@ -92,24 +92,25 @@
 
         <section class="import-navigation" aria-label="数据导入导航">
           <template v-for="group in importConfig" :key="group.title">
-            <h3>{{ group.title }}</h3>
-            
-            <div v-for="item in group.items.filter(i => !i.hidden)" :key="item.key" class="import-nav-item">
-              <div class="import-nav-label">
-                <span class="menu-icon" :class="`menu-icon-${item.color}`">{{ item.icon }}</span>
-                <span class="menu-copy"><strong>{{ item.label }}</strong></span>
+            <template v-if="group.show">
+              <h3>{{ group.title }}</h3>
+              <div v-for="item in group.items.filter(i => !i.hidden)" :key="item.key" class="import-nav-item">
+                <div class="import-nav-label">
+                  <span class="menu-icon" :class="`menu-icon-${item.color}`">{{ item.icon }}</span>
+                  <span class="menu-copy"><strong>{{ item.label }}</strong></span>
+                </div>
+                <div class="target-actions">
+                  <!-- 下载模板按钮 -->
+                  <button type="button" class="icon-action" :disabled="loading || !templateGetters[item.key]" title="下载模板" @click="handleDownloadTemplate(item)">
+                    <span class="action-icon download-icon" aria-hidden="true"></span>
+                  </button>
+                  <!-- 导入数据按钮 -->
+                  <button type="button" class="icon-action" :disabled="loading || !item.parse" title="导入数据" @click="triggerImport(item)">
+                    <span class="action-icon upload-icon" aria-hidden="true"></span>
+                  </button>
+                </div>
               </div>
-              <div class="target-actions">
-                <!-- 下载模板按钮 -->
-                <button type="button" class="icon-action" :disabled="loading || !templateGetters[item.key]" title="下载模板" @click="handleDownloadTemplate(item)">
-                  <span class="action-icon download-icon" aria-hidden="true"></span>
-                </button>
-                <!-- 导入数据按钮 -->
-                <button type="button" class="icon-action" :disabled="loading || !item.parse" title="导入数据" @click="triggerImport(item)">
-                  <span class="action-icon upload-icon" aria-hidden="true"></span>
-                </button>
-              </div>
-            </div>
+            </template>
           </template>
         </section>
       </template>
@@ -412,6 +413,7 @@ import { staffCapacityRows, staffCapacityTemplateCsv } from './utils/imports/sta
 import { permissionRows, permissionTemplateCsv } from './utils/imports/permission.js'
 import { validateScriptImport, scriptTemplateCsv } from './utils/imports/salesScript.js'
 import { parseTargetFile, targetTemplateCsv } from './utils/imports/targets.js'
+import { staffOwnRows, staffOwnTemplateCsv } from './utils/imports/staffOwn.js'
 
 // ==================== 图标与样式 ====================
 const warningIcons = {
@@ -466,15 +468,22 @@ let alertSequence = 0
 // ==================== 数据导入配置中心 ====================
 const importConfig = [
   {
-    title: '权限与基础资料',
+    title: '权限',
     items: [
-      { key: 'permission', label: '人员权限表', icon: '人', color: 'blue', parse: permissionRows },
-      { key: 'channelInfo', label: '渠道维度表', icon: '渠', color: 'blue', parse: channelInfoRows },
-      { key: 'terminal', label: '末梢维度表', icon: '末', color: 'blue', parse: terminalInfoRows },
-      { key: 'staff', label: '自控团队工号表', icon: '控', color: 'blue', parse: staffInfoRows },
-      { key: 'staffOwn', label: '自有团队工号表', icon: '有', color: 'blue', parse: null },
-      { key: 'areaContractor', label: '包片商维度表', icon: '商', color: 'blue', parse: areaContractorRows }
-    ]
+      { key: 'permission', label: '人员权限表', icon: '人', color: 'green', parse: permissionRows }
+    ],
+    show: true
+  },
+  {
+    title: '基础资料',
+    items: [
+      { key: 'channelInfo', label: '渠道维度', icon: '渠', color: 'blue', parse: channelInfoRows },
+      { key: 'terminal', label: '末梢维度', icon: '末', color: 'blue', parse: terminalInfoRows },
+      { key: 'areaContractor', label: '包片商维度', icon: '商', color: 'blue', parse: areaContractorRows },
+      { key: 'staff', label: '自控团队工号', icon: '控', color: 'blue', parse: staffInfoRows },
+      { key: 'staffOwn', label: '自有团队工号', icon: '有', color: 'blue', parse: staffOwnRows }
+    ],
+    show: true
   },
   {
     title: '产能数据',
@@ -482,16 +491,18 @@ const importConfig = [
       { key: 'region', label: '区域产能', icon: '区', color: 'green', parse: regionCapacityRows, isCapacity: true },
       { key: 'channel', label: '渠道产能', icon: '渠', color: 'green', parse: channelCapacityRows, isCapacity: true },
       { key: 'staffCapacity', label: '工号产能', icon: '工', color: 'green', parse: staffCapacityRows, isCapacity: true }
-    ]
+    ],
+     show: false
   },
   {
     title: '目标管理',
     items: [
-      { key: 'target', label: '产品目标表', icon: '产', color: 'yellow', parse: 'target' },
-      { key: 'staffBroadbandTarget', label: '营业员终端员-手宽月度目标表', icon: '营', color: 'yellow', parse: staffBroadbandRows },
-      { key: 'staffCategoryTarget', label: '人员分类月度目标表', icon: '员', color: 'yellow', parse: staffCategoryRows },
-      { key: 'script', label: '经典话术表', icon: '术', color: 'yellow', parse: 'script', hidden: !showSalesScriptLibrary }
-    ]
+      { key: 'target', label: '产品目标', icon: '产', color: 'yellow', parse: 'target' },
+      { key: 'staffBroadbandTarget', label: '营业员终端员-手宽月度目标', icon: '营', color: 'yellow', parse: staffBroadbandRows },
+      { key: 'staffCategoryTarget', label: '人员分类月度目标', icon: '员', color: 'yellow', parse: staffCategoryRows },
+      { key: 'script', label: '经典话术', icon: '术', color: 'yellow', parse: 'script', hidden: !showSalesScriptLibrary }
+    ],
+     show: true
   }
 ]
 
@@ -500,6 +511,7 @@ const templateGetters = {
   channelInfo: () => ['渠道维度表导入模板.csv', channelInfoTemplateCsv()],
   terminal: () => ['末梢维度表导入模板.csv', terminalInfoTemplateCsv()],
   staff: () => ['自控团队工号表导入模板.csv', staffInfoTemplateCsv()],
+  staffOwn: () => ['自有团队工号表导入模板.csv', staffOwnTemplateCsv()],
   areaContractor: () => ['包片商维度表导入模板.csv', areaContractorTemplateCsv()],
   region: () => ['区域汇总产能表导入模板.csv', regionCapacityTemplateCsv()],
   channel: () => ['渠道汇总产能表导入模板.csv', channelCapacityTemplateCsv()],
