@@ -1,5 +1,5 @@
 <template>
-  <section class="bb-page" :class="{'bb-inner-page':view !== 'overview','bb-overview':view === 'overview'}" aria-label="宽带专项">
+  <section class="bb-page" :class="{'bb-inner-page':view !== 'overview','bb-overview':view === 'overview'}" aria-label="宽带专项" :aria-busy="busy">
     <header v-if="view !== 'overview'" class="bb-hero"><button type="button" class="bb-back" aria-label="返回上一级" @click="back">‹</button><div><h2>{{ activeCategory?.name }}</h2></div><span v-if="data?.demo" class="bb-demo">演示数据</span></header>
     <div v-if="view === 'overview'" class="bb-info-row"><span class="bb-info-scope"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0z"/><circle cx="12" cy="10" r="2"/></svg>{{ scopeLabel }}</span><span class="bb-info-date"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18m-13 4h3"/></svg>截至 {{ data?.statDate || statDate || '—' }}</span><em v-if="data?.demo">示意数据</em></div>
     <div v-else class="bb-scope"><strong>{{ scopeLabel }}</strong><span>截至 {{ data?.statDate || statDate || '—' }}</span></div>
@@ -11,7 +11,7 @@
     </div>
     <div v-if="clock" class="bb-time"><strong>本月时序 <b>{{ percent(clock.timeProgress) }}</b></strong><span>已过 {{ clock.elapsedDays }}/{{ clock.daysInMonth }} 天</span><div v-if="view === 'overview'" class="bb-clock-progress"><i :style="{width:fill(clock.timeProgress)}"></i></div></div>
     <div v-if="error" class="bb-error" role="alert"><span>{{ error }}</span><button type="button" @click="load(false)">重试</button></div>
-    <p v-if="busy" class="bb-loading" role="status">正在查询宽带专项…</p>
+    <p v-if="busy && !data" class="bb-loading" role="status">正在查询宽带专项…</p>
     <p v-for="warning in data?.warnings || []" :key="warning" class="bb-warning">{{ warning }}</p>
 
     <template v-if="view === 'overview'">
@@ -35,7 +35,7 @@
       <p v-if="data" class="bb-footnote">完成率＝有效对象累计产能÷同批对象月目标。有效对象须有正数目标且产能无异常；当前月份无产能记录按零产计，缺目标不视作落后。</p>
     </template>
 
-    <template v-else-if="data && !error">
+    <template v-else-if="data">
       <section class="bb-summary" aria-label="专项核心指标">
         <div class="bb-metric bb-metric-people"><span>{{ activeCategory?.unit === '人' ? '人数' : activeCategory?.unit === '商' ? '商家数' : '渠道数' }}</span><strong>{{ stats.totalCount }}<small>{{ activeCategory?.unit }}</small></strong><svg class="bb-metric-icon" viewBox="0 0 40 40" aria-hidden="true"><circle cx="15" cy="12" r="6"/><path d="M4 33v-4c0-6 5-10 11-10s11 4 11 10v4z"/><circle cx="30" cy="14" r="4"/><path d="M28 23c6-1 9 3 9 8v2h-8v-4z"/></svg></div>
         <div class="bb-metric bb-metric-output"><span>累计完成</span><strong>{{ format(stats.production) }}<small>条</small></strong><svg class="bb-metric-icon" viewBox="0 0 40 40" aria-hidden="true"><rect x="8" y="3" width="25" height="34" rx="4"/><path d="M14 12h13M14 20h13M14 28h8" stroke="white" stroke-width="3" stroke-linecap="round"/></svg></div>
@@ -43,8 +43,17 @@
         <div class="bb-metric bb-metric-gap bb-tone-behind"><span>月目标缺口</span><strong>{{ format(stats.gap) }}<small>条</small></strong><svg class="bb-metric-icon" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17"/><path d="M20 10v12" stroke="white" stroke-width="3.5" stroke-linecap="round"/><circle cx="20" cy="29" r="2" fill="white"/></svg></div>
       </section>
       <div class="bb-target-summary"><span>月目标 <b>{{ format(stats.monthlyTarget) }}</b> 条</span><span>时序应达 <b>{{ whole(stats.expected) }}</b> 条</span><span>时序达标 <b>{{ stats.reachedCount }}/{{ stats.evaluatedCount }}</b> {{ activeCategory?.unit }}（{{ percent(stats.reachedRate) }}）</span></div>
-      <section v-if="data.rankingAnalysis" class="bb-ranking-analysis" aria-label="区域完成率分析">
+      <section v-if="data.rankingAnalysis && !filters.grid && permission.role !== 'grid'" class="bb-ranking-analysis" aria-label="区域完成率分析">
         <header><h3>区域完成率分析</h3><span>按月目标完成率</span></header>
+        <div v-if="branchAnalysis" class="bb-ranking-row">
+          <strong>网格</strong>
+          <div v-if="branchRanking.best" class="bb-ranking-copy">
+            <p><span class="bb-ranking-good">相对领先</span>{{ rankLabel(branchRanking.best) }}</p>
+            <p><span class="bb-ranking-bad">重点关注</span>{{ rankLabel(branchRanking.worst) }}</p>
+          </div>
+          <p v-else>当前分公司暂无可评估网格</p>
+        </div>
+        <template v-else>
         <div class="bb-ranking-row">
           <strong>分公司</strong>
           <div v-if="data.rankingAnalysis.branches.count > 1" class="bb-ranking-copy">
@@ -63,13 +72,14 @@
           </div>
           <p v-else>当前范围暂无可评估的{{ group.type }}类网格</p>
         </div>
-        <footer>仅比较当前类型和筛选范围；完成率＝有效对象累计完成÷同批月目标。缺目标不排名；同率按名称排序。<template v-if="data.rankingAnalysis.unclassifiedCount">另有{{ data.rankingAnalysis.unclassifiedCount }}个网格尚未配置ABC类别。</template></footer>
+        </template>
+        <footer>仅比较当前类型和筛选范围；完成率＝有效对象累计完成÷同批月目标。缺目标不排名；同率按名称排序。<template v-if="!branchAnalysis && data.rankingAnalysis.unclassifiedCount">另有{{ data.rankingAnalysis.unclassifiedCount }}个网格尚未配置ABC类别。</template></footer>
       </section>
       <div v-if="stats.missingDataCount || stats.missingTargetCount" class="bb-quality"><span>异常产能 {{ stats.missingDataCount }} · 缺目标/零目标 {{ stats.missingTargetCount }}</span><small>完成量、目标、完成率及同期对比均按同批有效对象计算；当前月份无记录按零产计入；异常产能或缺目标的对象不参与计算。全部已记录产能 {{ format(stats.knownProduction) }} 条。<span v-if="stats.invalidDataCount">其中 {{ stats.invalidDataCount }} 个对象的产能记录异常。</span></small><button v-if="view === 'details'" type="button" @click="setStatus(stats.missingDataCount ? 'missingData' : 'missingTarget')">查看待核实对象 ›</button></div>
       <details class="bb-trends"><summary>展开周、月同期对比</summary><div><span>近7天日均</span><b>{{ format(stats.weeklyAverage) }} 条/日</b></div><div><span>较前7天日均</span><b>{{ stats.weekChangeRate == null ? '暂无可比数据' : signedPercent(stats.weekChangeRate) }}</b></div><div><span>本月 / 上月同期日均</span><b>{{ format(stats.monthAverage) }} / {{ format(stats.previousAverage) }} 条/日</b></div><div><span>较上月同期日均</span><b>{{ stats.monthChangeRate == null ? '暂无可比数据' : signedPercent(stats.monthChangeRate) }}</b></div></details>
 
       <div class="bb-focus-banner"><strong>重点关注</strong><button type="button" @click="showFocus('zero')">零产 <b>{{ stats.zeroCount }}</b> {{ activeCategory?.unit }}</button><button type="button" @click="showFocus('low')">低产 <b>{{ stats.lowCount ?? '—' }}</b> {{ activeCategory?.unit }}</button><small>零产＝0条；低产＝1–3条（不含零产）</small></div>
-      <section v-if="data.distribution" class="bb-distribution"><header class="bb-section-head"><h3>{{ activeCategory?.unit === '人' ? '人员' : '商家/渠道' }}产能分层占比</h3><span>按本月累计条数</span></header><div class="bb-bars bb-percent-bars"><button v-for="bin in data.distribution" :key="bin.id" type="button" :class="[`bb-bin-${bin.id}`,{'active':tier===bin.id && view==='details'}]" :aria-label="`查看${bin.id}层明细`" @click="selectTier(bin.id)"><strong>{{ percent(bin.rate) }}</strong><div class="bb-bar-track"><i :style="{height:fill(bin.rate)}"></i></div><b>{{ bin.id }}层</b><small>{{ bin.label }}</small><span>{{ bin.count }} {{ activeCategory?.unit }}</span></button></div><p>占比＝该层对象数÷当前范围总规模 {{ stats.totalCount }}；柱高按0–100%统一刻度。<span v-if="stats.missingDataCount">异常产能 {{ stats.missingDataCount }} 个未分层。</span></p></section>
+      <section v-if="data.distribution" class="bb-distribution"><header class="bb-section-head"><h3>{{ activeCategory?.unit === '人' ? '人员' : '渠道' }}产能分层占比</h3><span>按本月累计条数</span></header><div class="bb-bars bb-percent-bars"><button v-for="bin in data.distribution" :key="bin.id" type="button" :class="[`bb-bin-${bin.id}`,{'active':tier===bin.id && view==='details'}]" :aria-label="`查看${bin.id}层明细`" @click="selectTier(bin.id)"><strong>{{ percent(bin.rate) }}</strong><div class="bb-bar-track"><i :style="{height:fill(bin.rate)}"></i></div><b>{{ bin.id }}层</b><small>{{ bin.label }}</small><span>{{ bin.count }} {{ activeCategory?.unit }}</span></button></div></section>
       <section v-if="view === 'regions'" class="bb-regions">
         <header class="bb-section-head"><h3>{{ data.level === 'branch' ? '分公司' : '镇区/网格' }}对比</h3><span>按月目标缺口从大到小</span></header>
         <article v-for="(region,index) in data.regions" :key="region.id" class="bb-region-card"><button type="button" class="bb-region-row" :disabled="busy" @click="openRegion(region)"><span class="bb-rank">{{ index+1 }}</span><strong>{{ region.name || '组织未提供' }}</strong><div><span>{{ format(region.stats.production) }} / {{ format(region.stats.monthlyTarget) }} 条</span><div class="bb-progress" :class="tone(region.stats)"><i :style="{width: fill(region.stats.completionRate)}"></i><b :style="{left: fill(clock.timeProgress)}"></b></div></div><b :class="tone(region.stats)">{{ percent(region.stats.completionRate) }}<small>月完成率 ›</small></b><small class="bb-region-meta"><span>月目标缺口 {{ format(region.stats.gap) }}</span><span>时序达标 {{ region.stats.reachedCount }}/{{ region.stats.evaluatedCount }}</span></small></button><div class="bb-region-levels" v-if="region.distribution"><div v-for="bin in region.distribution" :key="bin.id" :class="`bb-bin-${bin.id}`"><strong>{{ percent(bin.rate) }}</strong><div class="bb-mini-track"><i :style="{height:fill(bin.rate)}"></i></div><b>{{ bin.id }}层</b><small>{{ bin.count }}{{ activeCategory?.unit }}</small></div></div></article>
@@ -77,12 +87,12 @@
         <button type="button" class="bb-primary bb-detail-entry" :disabled="busy" @click="openDetails">查看零产/低产重点对象 ›</button>
       </section>
 
-      <template v-if="view === 'details'">
+      <div v-if="view === 'details'" class="bb-detail-results" ref="detailResults">
         <div class="bb-status-tabs" role="group" aria-label="宽带专项明细筛选"><button v-for="s in statuses" :key="s.id" type="button" :class="{active: status===s.id}" :aria-pressed="status===s.id" @click="setStatus(s.id)">{{ s.name }}</button></div>
         <p v-if="status === 'missingData' || status === 'missingTarget'" class="bb-warning">当前筛选：{{ status === 'missingData' ? '异常产能' : '缺目标 / 零目标' }}。可点击“全部”返回。</p>
         <div class="bb-search"><span aria-hidden="true">⌕</span><input v-model="query" type="search" maxlength="100" placeholder="搜索姓名、工号、商家或渠道编码" aria-label="宽带专项搜索" /><button v-if="query" type="button" aria-label="清空宽带搜索" @click="query=''">×</button></div>
         <p v-if="tier" class="bb-tier-selection">已选 {{ tier }} 层<button type="button" @click="selectTier('')">清除层级筛选 ×</button></p><p class="bb-result-count">共 {{ data.pagination?.total || 0 }} {{ activeCategory?.unit }}<span>按月目标缺口从大到小</span></p>
-        <article v-for="row in detailRows" :key="`${row.branch}|${row.grid}|${row.identity}`" class="bb-person" :class="{'bb-person-zero':row.zero,'bb-person-low':row.low}">
+        <article v-for="row in detailRows" :key="`${row.branch}|${row.grid}|${row.identity}`" class="bb-person" :class="{'bb-person-zero':row.zero,'bb-person-low':row.low,'bb-business-card':categoryId === 'contractors' || categoryId === 'stars'}">
           <header><div class="bb-person-title"><span class="bb-person-avatar" aria-hidden="true"><i class="bb-detail-icon" :style="detailIconStyle(activeCategory?.unit === '人' ? 'person' : 'store')"></i></span><h3>{{ row.name }} <small v-if="row.tier" class="bb-tier-tag" :class="`bb-bin-${row.tier}`">{{ row.tier }}层</small></h3></div><strong class="bb-person-status" :class="row.zero ? 'bb-zero' : row.low || row.status === 'behind' ? 'bb-tone-behind' : row.reached ? 'bb-tone-reached' : 'bb-muted'">{{ row.missingProduction ? '暂无数据' : row.missingTarget ? '缺目标' : row.zero ? '零产' : row.low ? '低产' : row.reached ? '已达时序' : `缺 ${format(row.gap)} 条` }}</strong></header>
           <div class="bb-person-job"><span>{{ row.role || '岗位未提供' }}</span><span>{{ activeCategory?.unit === '人' ? '工号' : '编码' }} {{ row.identity }}</span></div>
           <p class="bb-person-line"><i class="bb-detail-icon" :style="detailIconStyle('location')" aria-hidden="true"></i><span>{{ [row.branch,row.grid].filter(Boolean).join(' · ') || '组织未提供' }}</span></p>
@@ -92,16 +102,17 @@
         </article>
         <p v-if="!busy && !detailRows.length" class="bb-empty">{{ stats.evaluatedCount === 0 && status === 'behind' ? '暂无可评估对象，请核对目标和产能记录。' : '当前筛选条件下暂无对象。' }}</p>
         <button v-if="data.pagination?.hasMore" type="button" class="bb-more" :disabled="busy" @click="nextPage">{{ busy ? '加载中…' : '查看更多' }}</button>
-      </template>
+      </div>
     </template>
   </section>
 </template>
 
 <script setup>
-import {computed,onMounted,onUnmounted,reactive,ref,watch} from 'vue'
+import {computed,nextTick,onMounted,onUnmounted,reactive,ref,watch} from 'vue'
 import {fetchBroadbandOverview,fetchBroadbandRegions,fetchBroadbandDetails} from '../api/production.js'
 import {createBroadbandEngine} from '../utils/broadband.js'
 import {monitorBranchOptions} from '../utils/monitorBranches.js'
+import {branchGridRanking} from '../utils/branchGridRanking.js'
 import {finiteValue,percent,fill,tone as rateTone} from '../utils/broadbandDisplay.js'
 import detailPersonIcon from '../assets/ui-icons/user-round.svg'
 import detailStoreIcon from '../assets/ui-icons/store.svg'
@@ -110,11 +121,14 @@ const emit=defineEmits(['back-to-workbench'])
 const props=defineProps({permission:{type:Object,required:true},organization:{type:Object,required:true},statDate:String,scope:String,token:String})
 const engine=createBroadbandEngine(),view=ref('overview'),categoryId=ref(''),data=ref(null),error=ref(''),busy=ref(false),detailRows=ref([]),status=ref('focus'),tier=ref(''),query=ref(''),page=ref(1)
 const filters=reactive({branch:props.permission.role==='city'?'':props.permission.branchName||props.permission.branchId||'',grid:props.permission.role==='grid'?props.permission.gridName||'':''})
+const detailResults=ref(null)
 const history=[],statuses=[{id:'all',name:'全部'},{id:'focus',name:'重点关注'},{id:'behind',name:'未达时序'},{id:'zero',name:'零产'},{id:'low',name:'低产'}]
 let sequence=0,searchTimer
 const clock=computed(()=>data.value?.clock)
 const activeCategory=computed(()=>categoryId.value?engine.category(categoryId.value):null)
 const stats=computed(()=>data.value?.stats||{})
+const branchAnalysis=computed(()=>Boolean(filters.branch) || props.permission.role === 'branch')
+const branchRanking=computed(()=>branchGridRanking(data.value?.rankingAnalysis))
 const scopeLabel=computed(()=>[filters.branch||props.scope||'当前权限范围',filters.grid||''].filter(Boolean).join(' · '))
 const branchOptions=computed(()=>monitorBranchOptions(props.organization.branches))
 const gridOptions=computed(()=>{const branch=props.organization.branches.find(b=>(b.branchName||b.branchId)===filters.branch);return props.organization.grids.filter(g=>g.branchId===(branch?.branchId||filters.branch))})
@@ -125,9 +139,9 @@ const cadences={contractors:'至少1天1条',managers:'2天1条',clerks:'3天1�
 const signedPercent=v=>`${v>0?'+':''}${percent(v)}`
 const tone=s=>rateTone(s,clock.value?.timeProgress)
 const detailIconStyle=name=>({'--bb-detail-icon':`url("${({person:detailPersonIcon,store:detailStoreIcon,location:detailLocationIcon})[name]}")`})
-async function load(append=false) {
+async function load(append=false,keepContent=false) {
  const id=++sequence;busy.value=true;error.value=''
- if(!append) {data.value=null;detailRows.value=[];page.value=1}
+ if(!append) {if(!keepContent){data.value=null;detailRows.value=[]}page.value=1}
  const params={phone:props.permission.phone,statDate:props.statDate||'',branch:filters.branch,grid:filters.grid,categoryId:categoryId.value,status:status.value,tier:tier.value,query:query.value,page:page.value,pageSize:20,level:!filters.branch&&props.permission.role==='city'?'branch':'grid'}
  try {const response=await (view.value==='overview'?fetchBroadbandOverview:view.value==='regions'?fetchBroadbandRegions:fetchBroadbandDetails)(params,props.token);if(id!==sequence)return;data.value=response;if(view.value==='details')detailRows.value=append?[...detailRows.value,...response.rows]:response.rows}
  catch(e){if(id===sequence){error.value=e.message||'宽带专项查询失败';if(append)page.value=Math.max(1,page.value-1)}}
@@ -140,11 +154,19 @@ function openRegion(region){save();filters.branch=region.branch;filters.grid=reg
 function openDetails(){save();view.value='details';status.value='focus';tier.value='';query.value='';load(false);window.scrollTo(0,0)}
 function changeBranch(){filters.grid='';changeFilters()}
 function changeFilters(){history.length=0;load(false)}
-function setStatus(value){clearTimeout(searchTimer);status.value=value;tier.value='';load(false)}
-function showFocus(value){if(view.value!=='details')save();view.value='details';status.value=value;tier.value='';query.value='';load(false)}
+function setStatus(value){clearTimeout(searchTimer);status.value=value;tier.value='';load(false,true)}
+async function showFocus(value){
+ const inDetails=view.value==='details'
+ if(!inDetails)save()
+ view.value='details';status.value=value;tier.value='';query.value=''
+ await nextTick();clearTimeout(searchTimer)
+ await load(false,inDetails)
+ await nextTick()
+ if(!error.value && detailResults.value)detailResults.value.scrollIntoView({behavior:'smooth',block:'start'})
+}
 function selectTier(value){if(view.value!=='details')save();view.value='details';status.value='all';tier.value=value;query.value='';load(false)}
 function nextPage(){if(busy.value||!data.value?.pagination?.hasMore)return;page.value++;load(true)}
-watch(query,()=>{if(view.value!=='details')return;clearTimeout(searchTimer);sequence++;busy.value=true;detailRows.value=[];searchTimer=setTimeout(()=>load(false),250)})
+watch(query,()=>{if(view.value!=='details')return;clearTimeout(searchTimer);sequence++;busy.value=true;searchTimer=setTimeout(()=>load(false,true),250)})
 watch(()=>props.statDate,()=>load(false))
 onMounted(()=>load(false))
 onUnmounted(()=>{sequence++;clearTimeout(searchTimer)})
@@ -421,4 +443,9 @@ onUnmounted(()=>{sequence++;clearTimeout(searchTimer)})
 .bb-ranking-good{color:#079b82;background:#dff5ee}.bb-ranking-bad{color:#d97715;background:#fff0df}.bb-ranking-copy>small{display:block;color:#8293aa;font-size:12px}
 .bb-ranking-analysis>footer{padding-top:8px;border-top:1px solid #dce9f8;color:#71839b;font-size:12px;line-height:1.7}
 @media(max-width:360px){.bb-ranking-analysis{padding:11px 10px;font-size:13px}.bb-ranking-row{grid-template-columns:65px minmax(0,1fr);gap:6px}}
+
+/* Retain enough height to keep the detail filters in place, including empty results. */
+.bb-detail-results{min-height:100vh;scroll-margin-top:14px}
+.bb-person.bb-business-card .bb-person-title h3{font-size:clamp(18px,3.6vw,22px);line-height:1.45;letter-spacing:0}
+@media(max-width:360px){.bb-person.bb-business-card .bb-person-title h3{font-size:17px}}
 </style>

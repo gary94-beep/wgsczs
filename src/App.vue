@@ -432,7 +432,7 @@
               <div class="person-main"><strong>{{ tab === 'tail' ? item.microChannelName || item.channel : item.channel }}</strong>
                 <span class="person-category">{{ tab === 'halls' ? '营业厅' : tab === 'stars' ? (item.channelStar ? item.channelStar + '星' : '星级未提供') : item.serviceProvider || '区域服务商未提供' }}<template v-if="tab !== 'tail'"> · {{ item.channelCode || '渠道编码未提供' }}</template></span>
                 <span class="alert-organization">{{ branchName(item.branchId) }} · {{ gridName(item.gridId) || '网格未提供' }}</span>
-                <span v-if="item.staffCount != null" class="channel-member-count">人员规模 {{ item.staffCount }} 人</span>
+                <span v-if="tab === 'tail' &amp;&amp; item.staffCount != null" class="channel-member-count">人员规模 {{ item.staffCount }} 人</span>
               </div>
               <div class="person-score"><strong>{{ displayNumber(item.production) }}</strong><span>{{ activeProduct?.unit }}</span></div>
               <p>{{ isChangeAlert ? '异动' : item.production === 0 ? '零产' : '低产' }}</p>
