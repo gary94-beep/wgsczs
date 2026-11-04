@@ -173,20 +173,6 @@ function init() {
     }
   }
 
-
-  // ============================================================
-  // dashboard
-  // ============================================================
-
-
-  // ============================================================
-  // importTargets
-  // ============================================================
-
-  // ============================================================
-  // importScripts
-  // ============================================================
-
   // ============================================================
   // filtered
   // ============================================================
@@ -498,10 +484,15 @@ function init() {
       tables.region + " WHERE stat_date=#{cutoff}" + regionClause + " GROUP BY branch_company,grid_name,product_name,prod_period_type", args,
       "branch_company,grid_name,product_name,prod_period_type");
     var branches = {}, grids = {};
-    function org(b, g) {
-      if (!b || !g || b === "全市") return;
+     function org(b, g) {
+      var excludeNames = ["全市", "市统筹", "未知", "中山", "中山市", "市公司"];
+      if (!b || !g || excludeNames.indexOf(b) >= 0 || excludeNames.indexOf(g) >= 0) {
+        return; 
+      }
       branches[b] = { branchId: b, branchName: b };
-      if (b !== g && !/统筹|^(未知|全市|市公司|中山市)$/.test(g)) grids[gridId(b, g)] = { gridId: gridId(b, g), gridName: g, branchId: b };
+      if (b !== g && !/统筹|^(未知|全市|市公司|中山市)$/.test(g)) {
+        grids[gridId(b, g)] = { gridId: gridId(b, g), gridName: g, branchId: b };
+      }
     }
     for (var i = 0; i < region.length; i++) {
       var r = region[i];
