@@ -16,7 +16,7 @@ export function findHeaderRow(data) {
   const header = data.findIndex(row => {
     const set = new Set(row.map(cell => String(cell ?? '').replace(/^\ufeff/, '').trim().toLowerCase()))
     const isBizTable = set.has('branch_company') && set.has('grid_name') && set.has('prod_period_type') && set.has('product_name')
-    const isChannelInfoTable = set.has('uni_code') && set.has('chn_code') && set.has('chn_name')
+    const isChannelInfoTable = set.has('chn_code') && set.has('chn_name')
     const isDimensionTable = set.has('staff_no') && set.has('branch') && set.has('grid')
     const isPermissionTable = set.has('name') && set.has('phone') && set.has('role')
     const isStaffBroadbandTable = set.has('ngboss_id') && set.has('type') && set.has('monthly_kd_target')

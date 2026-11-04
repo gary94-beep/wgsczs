@@ -91,151 +91,26 @@
         </section>
 
         <section class="import-navigation" aria-label="数据导入导航">
-          <h3>权限与基础资料</h3>
-
-          <div class="import-nav-item">
-            <div class="import-nav-label">
-              <span class="menu-icon menu-icon-blue">人</span>
-              <span class="menu-copy"><strong>人员权限表</strong></span>
+          <template v-for="group in importConfig" :key="group.title">
+            <h3>{{ group.title }}</h3>
+            
+            <div v-for="item in group.items.filter(i => !i.hidden)" :key="item.key" class="import-nav-item">
+              <div class="import-nav-label">
+                <span class="menu-icon" :class="`menu-icon-${item.color}`">{{ item.icon }}</span>
+                <span class="menu-copy"><strong>{{ item.label }}</strong></span>
+              </div>
+              <div class="target-actions">
+                <!-- 下载模板按钮 -->
+                <button type="button" class="icon-action" :disabled="loading || !templateGetters[item.key]" title="下载模板" @click="handleDownloadTemplate(item)">
+                  <span class="action-icon download-icon" aria-hidden="true"></span>
+                </button>
+                <!-- 导入数据按钮 -->
+                <button type="button" class="icon-action" :disabled="loading || !item.parse" title="导入数据" @click="triggerImport(item)">
+                  <span class="action-icon upload-icon" aria-hidden="true"></span>
+                </button>
+              </div>
             </div>
-            <div class="target-actions">
-              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadPermissionTemplate">
-                <span class="action-icon download-icon" aria-hidden="true"></span>
-              </button>
-              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="permissionFileInput?.click()">
-                <span class="action-icon upload-icon" aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
-
-          <div class="import-nav-item">
-            <div class="import-nav-label">
-              <span class="menu-icon menu-icon-blue">渠</span>
-              <span class="menu-copy"><strong>渠道维度表</strong></span>
-            </div>
-            <div class="target-actions">
-              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadChannelTemplate">
-                <span class="action-icon download-icon" aria-hidden="true"></span>
-              </button>
-              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="channelFileInput?.click()">
-                <span class="action-icon upload-icon" aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
-
-          <div class="import-nav-item">
-            <div class="import-nav-label">
-              <span class="menu-icon menu-icon-blue">末</span>
-              <span class="menu-copy"><strong>末梢维度表</strong></span>
-            </div>
-            <div class="target-actions">
-              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadTerminalTemplate">
-                <span class="action-icon download-icon" aria-hidden="true"></span>
-              </button>
-              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="terminalFileInput?.click()">
-                <span class="action-icon upload-icon" aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
-
-          <div class="import-nav-item">
-            <div class="import-nav-label">
-              <span class="menu-icon menu-icon-blue">自</span>
-              <span class="menu-copy"><strong>自控团队工号表</strong></span>
-            </div>
-            <div class="target-actions">
-              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadStaffTemplate">
-                <span class="action-icon download-icon" aria-hidden="true"></span>
-              </button>
-              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="staffFileInput?.click()">
-                <span class="action-icon upload-icon" aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
-
-          <h3>专项目标与商家</h3>
-          <div v-for="table in extraImportTables" :key="table.key" class="import-nav-item">
-            <div class="import-nav-label"><span class="menu-icon menu-icon-blue">{{ table.icon }}</span><span class="menu-copy"><strong>{{ table.label }}</strong></span></div>
-            <div class="target-actions"><button type="button" class="icon-action" :disabled="loading" :title="`下载${table.label}模板`" :aria-label="`下载${table.label}模板`" @click="downloadExtraImportTemplate(table)"><span class="action-icon download-icon" aria-hidden="true"></span></button><button type="button" class="icon-action" :disabled="loading" :title="`导入${table.label}`" :aria-label="`导入${table.label}`" @click="chooseExtraImport(table.key)"><span class="action-icon upload-icon" aria-hidden="true"></span></button></div>
-          </div>
-          <h3>产能数据</h3>
-
-          <div class="import-nav-item">
-            <div class="import-nav-label">
-              <span class="menu-icon menu-icon-green">区</span>
-              <span class="menu-copy"><strong>区域产能</strong></span>
-            </div>
-            <div class="target-actions">
-              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadRegionCapacityTemplate">
-                <span class="action-icon download-icon" aria-hidden="true"></span>
-              </button>
-              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="regionCapacityFileInput?.click()">
-                <span class="action-icon upload-icon" aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
-
-          <div class="import-nav-item">
-            <div class="import-nav-label">
-              <span class="menu-icon menu-icon-green">渠</span>
-              <span class="menu-copy"><strong>渠道产能</strong></span>
-            </div>
-            <div class="target-actions">
-              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadChannelCapacityTemplate">
-                <span class="action-icon download-icon" aria-hidden="true"></span>
-              </button>
-              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="channelCapacityFileInput?.click()">
-                <span class="action-icon upload-icon" aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
-
-          <div class="import-nav-item">
-            <div class="import-nav-label">
-              <span class="menu-icon menu-icon-green">工</span>
-              <span class="menu-copy"><strong>工号产能</strong></span>
-            </div>
-            <div class="target-actions">
-              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadStaffCapacityTemplate">
-                <span class="action-icon download-icon" aria-hidden="true"></span>
-              </button>
-              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="staffCapacityFileInput?.click()">
-                <span class="action-icon upload-icon" aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
-
-          <h3>目标管理</h3>
-
-          <div class="import-nav-item">
-            <div class="import-nav-label">
-              <span class="menu-icon menu-icon-yellow">产</span>
-              <span class="menu-copy"><strong>产品目标表</strong></span>
-            </div>
-            <div class="target-actions">
-              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadTargetTemplate">
-                <span class="action-icon download-icon" aria-hidden="true"></span>
-              </button>
-              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="targetFileInput?.click()">
-                <span class="action-icon upload-icon" aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
-
-          <div v-if="showSalesScriptLibrary" class="import-nav-item">
-            <div class="import-nav-label">
-              <span class="menu-icon menu-icon-yellow">经</span>
-              <span class="menu-copy"><strong>经典话术表</strong></span>
-            </div>
-            <div class="target-actions">
-              <button type="button" class="icon-action" :disabled="loading" title="下载模板" aria-label="下载模板" @click="downloadScriptTemplate">
-                <span class="action-icon download-icon" aria-hidden="true"></span>
-              </button>
-              <button type="button" class="icon-action" :disabled="loading" title="导入数据" aria-label="导入数据" @click="scriptFileInput?.click()">
-                <span class="action-icon upload-icon" aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
+          </template>
         </section>
       </template>
 
@@ -485,19 +360,8 @@
     <main v-if="loading" class="loading-mask"><span class="loading-spinner"></span><span>加载中...</span></main>
     <div v-if="toast.show" class="toast" :class="toast.type">{{ toast.message }}</div>
 
-    <input ref="permissionFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handlePermissionFile" />
-    <input ref="channelFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleChannelFile" />
-    <input ref="terminalFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleTerminalFile" />
-    <input ref="staffFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleStaffFile" />
-    <input ref="extraImportFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleExtraImportFile" />
-    <input ref="regionCapacityFileInput" type="file" accept=".xlsx,.xls,.csv" hidden
-      @change="handleRegionCapacityFile" />
-    <input ref="channelCapacityFileInput" type="file" accept=".xlsx,.xls,.csv" hidden
-      @change="handleChannelCapacityFile" />
-    <input ref="staffCapacityFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleStaffCapacityFile" />
-
-    <input ref="targetFileInput" type="file" accept=".csv,text/csv" hidden @change="handleTargetFile" />
-    <input ref="scriptFileInput" type="file" accept=".csv,text/csv" hidden @change="handleScriptFile" />
+    <!-- 全局唯一的文件上传组件 -->
+    <input ref="unifiedFileInput" type="file" accept=".xlsx,.xls,.csv" hidden @change="handleUnifiedFileChange" />
 
     <div v-if="importErrorVisible" class="import-error-mask" @click.self="importErrorVisible = false">
       <section class="import-error-sheet">
@@ -541,7 +405,7 @@ import { parseCsv, parseExcelFile, normalizeCapacityRows, downloadCsv, ensureXls
 import { channelInfoRows, channelInfoTemplateCsv } from './utils/imports/channelInfo.js'
 import { terminalInfoRows, terminalInfoTemplateCsv } from './utils/imports/terminalInfo.js'
 import { staffInfoRows, staffInfoTemplateCsv } from './utils/imports/staffInfo.js'
-import {staffBroadbandRows,staffBroadbandTemplateCsv,staffCategoryRows,staffCategoryTemplateCsv,areaContractorRows,areaContractorTemplateCsv} from './utils/imports/monthlyTargets.js'
+import { staffBroadbandRows, staffBroadbandTemplateCsv, staffCategoryRows, staffCategoryTemplateCsv, areaContractorRows, areaContractorTemplateCsv } from './utils/imports/monthlyTargets.js'
 import { regionCapacityRows, regionCapacityTemplateCsv } from './utils/imports/regionCapacity.js'
 import { channelCapacityRows, channelCapacityTemplateCsv } from './utils/imports/channelCapacity.js'
 import { staffCapacityRows, staffCapacityTemplateCsv } from './utils/imports/staffCapacity.js'
@@ -549,6 +413,7 @@ import { permissionRows, permissionTemplateCsv } from './utils/imports/permissio
 import { validateScriptImport, scriptTemplateCsv } from './utils/imports/salesScript.js'
 import { parseTargetFile, targetTemplateCsv } from './utils/imports/targets.js'
 
+// ==================== 图标与样式 ====================
 const warningIcons = {
   low: { '--warning-icon': `url(${JSON.stringify(lowWarningIcon)})` },
   change: { '--warning-icon': `url(${JSON.stringify(changeWarningIcon)})` }
@@ -557,6 +422,8 @@ const exportIconStyle = { '--export-icon': `url(${JSON.stringify(downloadIcon)})
 const broadbandIconStyle = { '--broadband-icon': `url("${broadbandIcon}")` }
 const channelWarningIconStyle = { '--channel-warning-icon': `url("${channelWarningIcon}")` }
 const dataImportIconStyle = { '--import-icon': `url(${JSON.stringify(uploadIcon)})` }
+
+// ==================== 全局状态 ====================
 const exportBusy = ref(false)
 const alertSnapshot = ref(null)
 const overviewPeriod = ref('month')
@@ -572,7 +439,6 @@ const authFeedback = ref('')
 let codeTimer
 const agreedToTerms = ref(false)
 const user = reactive({ name: '', phone: '', role: '', branchId: '', branchName: '', gridId: '', gridName: '', cityName: '', isSuperAdmin: false })
-const scriptFileInput = ref(null)
 const dashboard = reactive({ organization: { cityName: '', branches: [], grids: [] }, statDate: '', products: [], targets: [], rows: [], dailyRows: [], salesScripts: [] })
 const selectedProductId = ref('')
 const selectedBranchId = ref('')
@@ -589,21 +455,7 @@ const selectedChannelType = ref('')
 const threshold = ref(1)
 const alertPeriod = ref('month')
 const tab = ref('people')
-const targetFileInput = ref(null)
 const toast = reactive({ show: false, type: 'success', message: '' })
-const channelFileInput = ref(null)
-const permissionFileInput = ref(null)
-const terminalFileInput = ref(null)
-const staffFileInput = ref(null)
-const extraImportFileInput = ref(null), activeExtraImportTarget = ref('')
-const extraImportTables = [
-  {key:'staffBroadbandTarget',label:'营业员终端员-手宽月度目标表',icon:'宽',parse:staffBroadbandRows,template:staffBroadbandTemplateCsv},
-  {key:'staffCategoryTarget',label:'人员分类月度目标表',icon:'类',parse:staffCategoryRows,template:staffCategoryTemplateCsv},
-  {key:'areaContractor',label:'包片商维度表',icon:'商',parse:areaContractorRows,template:areaContractorTemplateCsv}
-]
-const regionCapacityFileInput = ref(null)
-const channelCapacityFileInput = ref(null)
-const staffCapacityFileInput = ref(null)
 const importErrorVisible = ref(false)
 const importErrorTitle = ref('')
 const importErrorList = ref([])
@@ -611,20 +463,132 @@ const alertResult = ref(null)
 const alertLoading = ref(false), alertError = ref('')
 let alertSequence = 0
 
-// AI 分析结果
-const aiAnalysis = reactive({
-  loading: false,
-  error: '',
-  byScope: {}    // key: "scopeType::scopeId::channelType" -> { answer, updatedAt }
-})
+// ==================== 数据导入配置中心 ====================
+const importConfig = [
+  {
+    title: '权限与基础资料',
+    items: [
+      { key: 'permission', label: '人员权限表', icon: '人', color: 'blue', parse: permissionRows },
+      { key: 'channelInfo', label: '渠道维度表', icon: '渠', color: 'blue', parse: channelInfoRows },
+      { key: 'terminal', label: '末梢维度表', icon: '末', color: 'blue', parse: terminalInfoRows },
+      { key: 'staff', label: '自控团队工号表', icon: '控', color: 'blue', parse: staffInfoRows },
+      { key: 'staffOwn', label: '自有团队工号表', icon: '有', color: 'blue', parse: null },
+      { key: 'areaContractor', label: '包片商维度表', icon: '商', color: 'blue', parse: areaContractorRows }
+    ]
+  },
+  {
+    title: '产能数据',
+    items: [
+      { key: 'region', label: '区域产能', icon: '区', color: 'green', parse: regionCapacityRows, isCapacity: true },
+      { key: 'channel', label: '渠道产能', icon: '渠', color: 'green', parse: channelCapacityRows, isCapacity: true },
+      { key: 'staffCapacity', label: '工号产能', icon: '工', color: 'green', parse: staffCapacityRows, isCapacity: true }
+    ]
+  },
+  {
+    title: '目标管理',
+    items: [
+      { key: 'target', label: '产品目标表', icon: '产', color: 'yellow', parse: 'target' },
+      { key: 'staffBroadbandTarget', label: '营业员终端员-手宽月度目标表', icon: '营', color: 'yellow', parse: staffBroadbandRows },
+      { key: 'staffCategoryTarget', label: '人员分类月度目标表', icon: '员', color: 'yellow', parse: staffCategoryRows },
+      { key: 'script', label: '经典话术表', icon: '术', color: 'yellow', parse: 'script', hidden: !showSalesScriptLibrary }
+    ]
+  }
+]
+
+const templateGetters = {
+  permission: () => ['人员权限表导入模板.csv', permissionTemplateCsv()],
+  channelInfo: () => ['渠道维度表导入模板.csv', channelInfoTemplateCsv()],
+  terminal: () => ['末梢维度表导入模板.csv', terminalInfoTemplateCsv()],
+  staff: () => ['自控团队工号表导入模板.csv', staffInfoTemplateCsv()],
+  areaContractor: () => ['包片商维度表导入模板.csv', areaContractorTemplateCsv()],
+  region: () => ['区域汇总产能表导入模板.csv', regionCapacityTemplateCsv()],
+  channel: () => ['渠道汇总产能表导入模板.csv', channelCapacityTemplateCsv()],
+  staffCapacity: () => ['工号汇总产能表导入模板.csv', staffCapacityTemplateCsv()],
+  target: () => ['产能目标表导入模板.csv', targetTemplateCsv(dashboard)],
+  staffBroadbandTarget: () => ['营业员终端员-手宽月度目标表导入模板.csv', staffBroadbandTemplateCsv()],
+  staffCategoryTarget: () => ['人员分类月度目标表导入模板.csv', staffCategoryTemplateCsv()],
+  script: () => ['产品经典话术表导入模板.csv', scriptTemplateCsv(dashboard.products)]
+}
+
+const unifiedFileInput = ref(null)
+const currentImportKey = ref('')
+
+function handleDownloadTemplate(item) {
+  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载模板', 'warning')
+  const getter = templateGetters[item.key]
+  if (!getter) return showToast('该模板暂未提供下载', 'warning')
+  try {
+    const [filename, csvContent] = getter()
+    downloadCsv(csvContent, filename)
+  } catch (err) {
+    showToast(err.message || '模板下载失败', 'error')
+  }
+}
+
+function triggerImport(item) {
+  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可导入', 'warning')
+  if (!item.parse) return showToast('该功能正在开发中', 'warning')
+  currentImportKey.value = item.key
+  if (unifiedFileInput.value) {
+    unifiedFileInput.value.value = ''
+    unifiedFileInput.value.click()
+  }
+}
+
+async function handleUnifiedFileChange(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  const group = importConfig.find(g => g.items.some(i => i.key === currentImportKey.value))
+  const item = group?.items.find(i => i.key === currentImportKey.value)
+  if (!item) return
+
+  if (item.key === 'target') return handleTargetFile(event)
+  if (item.key === 'script') return handleScriptFile(event)
+  if (loading.value) return
+  if (file.size > 5 * 1024 * 1024) return showToast('文件过大，请控制在 5MB 以内', 'warning')
+  
+  loading.value = true
+  try {
+    const data = await parseExcelFile(file)
+    let rows = item.parse(data)
+    if (item.isCapacity) {
+      rows = normalizeCapacityRows(rows)
+      const result = await importCapacity(item.key, rows, token.value)
+      await refreshAfterImport()
+      handleImportResult(result)
+    } else {
+      const result = await importRows(item.key, rows, token.value, user)
+      await refreshAfterImport()
+      handleImportResult(result)
+    }
+  } catch (error) {
+    showToast(error.message || `${item.label}导入失败`, 'error')
+  } finally {
+    loading.value = false
+  }
+}
+
+function handleImportResult(result) {
+  if (result?.failed > 0) {
+    showToast(`导入完成：成功 ${result.success} 条，失败 ${result.failed} 条`, 'warning')
+    showImportErrors(`导入完成：成功 ${result.success} 条，失败 ${result.failed} 条`, result.errors || [])
+  } else {
+    showToast(`导入成功，共 ${result.success} 条`)
+  }
+}
+
+// ==================== 其他逻辑 ====================
+const showSalesScriptLibrary = false
+const scriptFileInput = ref(null)
+const targetFileInput = ref(null)
+const scriptProductId = ref('')
+const scriptReturnStage = ref('monitor')
 
 const scopeName = computed(() => user.role === 'city' ? dashboard.organization.cityName : user.role === 'grid' ? user.gridName : user.branchName)
 const roleLabel = computed(() => user.isSuperAdmin === true ? '超级管理员' : ({ city: '市公司', branch: '分公司', grid: '网格长' })[user.role] || '')
 const overviewLabel = computed(() => ({ city: '全市生产总览', branch: '分公司生产总览', grid: '网格生产总览' })[user.role] || '生产总览')
 const selectedProduct = computed(() => dashboard.products.find(item => item.productId === selectedProductId.value))
 const activeProduct = computed(() => dashboard.products.find(item => item.productId === (stage.value === 'monitor' ? monitorProductId.value : selectedProductId.value)))
-const scriptProductId = ref('')
-const scriptReturnStage = ref('monitor')
 const libraryScript = computed(() => dashboard.salesScripts.find(item => item.productId === scriptProductId.value))
 const libraryProduct = computed(() => dashboard.products.find(item => item.productId === scriptProductId.value))
 const selectedBranch = computed(() => dashboard.organization.branches.find(item => item.branchId === selectedBranchId.value))
@@ -635,7 +599,6 @@ const cleanThreshold = computed(() => {
   return Math.round(Math.floor(value / thresholdStep.value + 1e-9) * thresholdStep.value * 10) / 10
 })
 
-// ============ AI 分析结果（按 scope + channel 取） ============
 function aiScopeKey(type, id, channel = '') { 
   const c = channel || '全部类型'
   return `${type}::${id}::${c}` 
@@ -644,6 +607,7 @@ function aiEntry(type, id) {
   const currentType = selectedChannelType.value || '全部类型'
   return aiAnalysis.byScope[aiScopeKey(type, id, currentType)] || null 
 }
+const aiAnalysis = reactive({ loading: false, error: '', byScope: {} })
 const aiAnswerOverview = computed(() => {
   if (user.role === 'city') return aiEntry('city', '全市')?.answer || ''
   if (user.role === 'branch') return aiEntry('branch', user.branchId)?.answer || ''
@@ -665,22 +629,10 @@ async function loadAiAnalysis(statDate) {
   aiAnalysis.loading = true
   aiAnalysis.error = ''
   try {
-    const currentChannelType = selectedChannelType.value || ''
-    
-    const data = await fetchAiAnalysis({ 
-      statDate, 
-      phone: user.phone,
-      channelType: currentChannelType 
-    }, token.value)
-    
+    const data = await fetchAiAnalysis({ statDate, phone: user.phone, channelType: selectedChannelType.value || '' }, token.value)
     const map = {}
     for (const row of (data?.rows || [])) {
-      // 【核心修改】：把 channelType 也加入到缓存的 Key 里面
-      const cacheKey = aiScopeKey(row.scopeType, row.scopeId, row.channelType)
-      map[cacheKey] = {
-        answer: row.answer || '',
-        updatedAt: row.updatedAt || ''
-      }
+      map[aiScopeKey(row.scopeType, row.scopeId, row.channelType)] = { answer: row.answer || '', updatedAt: row.updatedAt || '' }
     }
     aiAnalysis.byScope = map
   } catch (e) {
@@ -701,7 +653,6 @@ const cityMetric = computed(() => metric(selectedProductId.value, scopeGridIds.v
 const branchMetric = computed(() => metric(selectedProductId.value, gridsOf(selectedBranchId.value), { level: 'branch', id: selectedBranchId.value }))
 const branchMetrics = computed(() => dashboard.organization.branches.map(item => ({ ...item, ...metric(selectedProductId.value, gridsOf(item.branchId), { level: ['未知', '市统筹'].includes(item.branchId) ? 'grid' : 'branch', id: ['未知', '市统筹'].includes(item.branchId) ? `${item.branchId}::${item.branchId}` : item.branchId }) })))
 const gridMetrics = computed(() => dashboard.organization.grids.filter(item => item.branchId === selectedBranchId.value).map(item => ({ ...item, ...metric(selectedProductId.value, [item.gridId], { level: 'grid', id: item.gridId }) })))
-const showSalesScriptLibrary = false
 const monitorBranches = computed(() => monitorBranchOptions(dashboard.organization.branches))
 const monitorGrids = computed(() => dashboard.organization.grids.filter(item => !monitorBranchId.value || item.branchId === monitorBranchId.value))
 const monitorGridIds = computed(() => monitorGridId.value ? [monitorGridId.value] : monitorGrids.value.map(item => item.gridId))
@@ -713,8 +664,7 @@ watch(() => JSON.stringify([stage.value, activeProduct.value?.productId, alertPe
   channelOptions.value = []
   if (!['monitor', 'alerts'].includes(stage.value) || !activeProduct.value || !token.value) return
   try {
-    const data = await fetchChannelOptions({ productId: activeProduct.value.productId, period: alertPeriod.value,
-      phone: user.phone, gridIds: stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value] }, token.value)
+    const data = await fetchChannelOptions({ productId: activeProduct.value.productId, period: alertPeriod.value, phone: user.phone, gridIds: stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value] }, token.value)
     if (sequence === channelOptionsSequence) channelOptions.value = (data.channels || []).sort((a, b) => a.localeCompare(b, 'zh-CN'))
   } catch (error) { if (sequence === channelOptionsSequence) showToast(error.message || '渠道列表读取失败', 'warning') }
 })
@@ -774,11 +724,8 @@ async function loadAlerts() {
 }
 watch([stage, alertMode, declineRate, declineValue, monitorBranchId, monitorGridId, monitorProductId, selectedGridId, selectedProductId, cleanThreshold, alertPeriod, selectedChannel], loadAlerts)
 
-// 【监听渠道切换】：当用户切换渠道类型时，重新拉取 AI 分析
 watch(selectedChannelType, () => {
-  if (dashboard.statDate) {
-    loadAiAnalysis(dashboard.statDate)
-  }
+  if (dashboard.statDate) loadAiAnalysis(dashboard.statDate)
 })
 
 async function applyFilters() { await loadAlerts(); document.querySelector('.alert-summary')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
@@ -856,7 +803,6 @@ async function loadDashboard() {
   if (data.permission) Object.assign(user, data.permission)
   if (data.warnings?.length) showToast(data.warnings.join('；'), 'warning')
   await loadAlerts()
-  // AI 分析结果
   await loadAiAnalysis(dashboard.statDate)
 }
 
@@ -900,80 +846,7 @@ async function oneClickLogin() {
   finally { loading.value = false }
 }
 
-// ==================== 模板下载 ====================
-function downloadPermissionTemplate() {
-  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载权限模板', 'warning')
-  downloadCsv(permissionTemplateCsv(), '人员权限表导入模板.csv')
-}
-function downloadChannelTemplate() {
-  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载渠道维度模板', 'warning')
-  downloadCsv(channelInfoTemplateCsv(), '渠道维度表导入模板.csv')
-}
-function downloadTerminalTemplate() {
-  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载末梢模板', 'warning')
-  downloadCsv(terminalInfoTemplateCsv(), '末梢维度表导入模板.csv')
-}
-function downloadStaffTemplate() {
-  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载员工模板', 'warning')
-  downloadCsv(staffInfoTemplateCsv(), '自控团队工号表导入模板.csv')
-}
-function downloadRegionCapacityTemplate() {
-  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载区域产能模板', 'warning')
-  downloadCsv(regionCapacityTemplateCsv(), '区域汇总产能表导入模板.csv')
-}
-function downloadChannelCapacityTemplate() {
-  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载渠道产能模板', 'warning')
-  downloadCsv(channelCapacityTemplateCsv(), '渠道汇总产能表导入模板.csv')
-}
-function downloadStaffCapacityTemplate() {
-  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载工号产能模板', 'warning')
-  downloadCsv(staffCapacityTemplateCsv(), '工号汇总产能表导入模板.csv')
-}
-function downloadTargetTemplate() {
-  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载目标模板', 'warning')
-  downloadCsv(targetTemplateCsv(dashboard), '产能目标表导入模板.csv')
-}
-function downloadScriptTemplate() {
-  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载话术模板', 'warning')
-  downloadCsv(scriptTemplateCsv(dashboard.products), '产品经典话术表导入模板.csv')
-}
-
-// ==================== 数据导入 ====================
-function downloadExtraImportTemplate(table) {
-  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可下载模板', 'warning')
-  downloadCsv(table.template(), `${table.label}导入模板.csv`)
-}
-function chooseExtraImport(key) {
-  if (user.isSuperAdmin !== true) return showToast('仅超级管理员可导入', 'warning')
-  activeExtraImportTarget.value = key
-  extraImportFileInput.value?.click()
-}
-function handleExtraImportFile(event) {
-  const table = extraImportTables.find(item => item.key === activeExtraImportTarget.value)
-  if (!table) { event.target.value = ''; return }
-  return handleImportFile(event, table.key, table.parse, table.label)
-}
-function handlePermissionFile(event) {
-  return handleImportFile(event, 'permission', permissionRows, '权限表')
-}
-function handleChannelFile(event) {
-  return handleImportFile(event, 'channelInfo', channelInfoRows, '渠道维度表')
-}
-function handleTerminalFile(event) {
-  return handleImportFile(event, 'terminal', terminalInfoRows, '末梢表')
-}
-function handleStaffFile(event) {
-  return handleImportFile(event, 'staff', staffInfoRows, '员工表')
-}
-function handleRegionCapacityFile(event) {
-  return handleCapacityImportFile(event, 'region', regionCapacityRows, '区域产能')
-}
-function handleChannelCapacityFile(event) {
-  return handleCapacityImportFile(event, 'channel', channelCapacityRows, '渠道产能')
-}
-function handleStaffCapacityFile(event) {
-  return handleCapacityImportFile(event, 'staff', staffCapacityRows, '工号产能')
-}
+// ==================== 特殊文件的导入处理 ====================
 async function handleTargetFile(event) {
   const file = event.target.files?.[0]
   event.target.value = ''
@@ -1009,90 +882,21 @@ async function handleScriptFile(event) {
   finally { loading.value = false }
 }
 
-// ==================== 通用上传处理 ====================
-async function handleImportFile(event, target, buildRows, label) {
-  const file = event.target.files?.[0]
-  event.target.value = ''
-  if (!file) return
-  if (loading.value) return
-  if (file.size > 5 * 1024 * 1024) {
-    showToast('文件过大，请控制在 5MB 以内', 'warning')
-    return
-  }
-  loading.value = true
-  try {
-    const data = await parseExcelFile(file)
-    const rows = buildRows(data)
-    if (!user.isSuperAdmin) throw new Error('仅超级管理员可导入')
-    const result = await importRows(target, rows, token.value, user)
-    await refreshAfterImport()
-    if (result?.failed > 0) {
-      showToast(`导入完成：成功 ${result.success} 条，失败 ${result.failed} 条`, 'warning')
-      showImportErrors(
-        `导入完成：成功 ${result.success} 条，失败 ${result.failed} 条`,
-        result.errors || []
-      )
-    } else {
-      showToast(`导入成功，共 ${result.success} 条`)
-    }
-  } catch (error) {
-    showToast(error.message || `${label}导入失败`, 'error')
-  } finally {
-    loading.value = false
-  }
-}
-
-async function handleCapacityImportFile(event, target, buildRows, label) {
-  const file = event.target.files?.[0]
-  event.target.value = ''
-  if (!file) return
-  if (loading.value) return
-  if (file.size > 5 * 1024 * 1024) {
-    showToast('文件过大，请控制在 5MB 以内', 'warning')
-    return
-  }
-  loading.value = true
-  try {
-    const data = await parseExcelFile(file, { region: '区域汇总取数', channel: '渠道汇总取数', staff: '工号汇总取数' }[target])
-    let rows = buildRows(data)
-    rows = normalizeCapacityRows(rows)
-
-    if (!user.isSuperAdmin) throw new Error('仅超级管理员可导入')
-    const result = await importCapacity(target, rows, token.value)
-    await refreshAfterImport()
-    if (result?.failed > 0) {
-      showToast(`导入完成：成功 ${result.success} 条，失败 ${result.failed} 条`, 'warning')
-      showImportErrors(`导入完成：成功 ${result.success} 条，失败 ${result.failed} 条`, result.errors || [])
-    } else {
-      showToast(`导入成功，共 ${result.success} 条`)
-    }
-  } catch (error) {
-    showToast(error.message || `${label}导入失败`, 'error')
-  } finally {
-    loading.value = false
-  }
-}
-
 function formatTime(val) {
   if (!val) return ''
-  // 如果是纯数字的时间戳
   if (typeof val === 'number' || /^\d+$/.test(val)) {
     const d = new Date(Number(val))
     const pad = n => n < 10 ? '0' + n : n
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
   }
-  // 如果本来就是字符串，直接截取到分钟
   return String(val).slice(0, 16)
 }
 
-// ==================== 导入失败弹窗 ====================
 function showImportErrors(title, errors) {
   const list = Array.isArray(errors) ? errors : []
   const MAX_SHOW = 100
   const shown = list.slice(0, MAX_SHOW)
-  if (list.length > MAX_SHOW) {
-    shown.push(`…… 以及其余 ${list.length - MAX_SHOW} 条错误，建议分批处理`)
-  }
+  if (list.length > MAX_SHOW) shown.push(`…… 以及其余 ${list.length - MAX_SHOW} 条错误，建议分批处理`)
   importErrorTitle.value = title
   importErrorList.value = shown
   importErrorVisible.value = true

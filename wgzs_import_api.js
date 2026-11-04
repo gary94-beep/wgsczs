@@ -265,7 +265,7 @@ function init() {
           staff: ["staffCapacity", ["branch_company", "grid_name", "channel_code", "channel_name", "staff_no", "prod_period_type", "product_name", "capacity", "stat_date", "snapshot_time"]]
         }
       : {
-          channelInfo: ["channelInfo", ["uni_code", "chn_code", "chn_name", "branch", "grid_code", "grid", "star", "star_level", "monthly_kd_target"]],
+          channelInfo: ["channelInfo", ["chn_code", "chn_name", "branch", "grid_code", "grid", "star", "star_level", "monthly_kd_target"]],
           terminal: ["terminal", ["staff_no", "staff_name", "agent", "branch", "grid", "chn_name"]],
           staff: ["staff", ["staff_no", "branch", "grid", "staff_name", "job", "team_type", "monthly_kd_target"]],
           staffBroadbandTarget: ["staffBroadbandTarget", ["type","name","branch","grid","business_hall","ngboss_id","monthly_kd_target"], ["ngboss_id"]],
@@ -316,7 +316,7 @@ function init() {
           r.role = { city: 1, branch: 2, grid: 3 }[r.role];
           r.super_admin = Number(r.is_super_admin);
           delete r.is_super_admin;
-        } else if (!r.branch || !r.grid || (target === "channelInfo" ? !r.uni_code || !r.chn_code || !r.chn_name : !r.staff_no || !r.staff_name)) throw new Error("第" + (i + 1) + "行缺必填字段");
+        } else if (!r.branch || !r.grid || (target === "channelInfo" ? !r.chn_code || !r.chn_name : !r.staff_no || !r.staff_name)) throw new Error("第" + (i + 1) + "行缺必填字段");
         if (target === "channelInfo") {
           var star = r.star.match(/([0-9三四五六七八九十])\s*星/);
           if (!r.star_level) r.star_level = star && (Number(star[1]) >= 3 || /[三四五六七八九十]/.test(star[1])) ? "三星+" : "非三星+";
