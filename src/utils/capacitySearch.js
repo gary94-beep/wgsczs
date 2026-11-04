@@ -6,13 +6,17 @@ export function searchCapacity(dashboard, { query, kind = 'people', gridIds = []
   if (!needle) return []
   const ids = new Set(gridIds)
   const staffGoal = (role,productId) => {
-    if (kind !== 'people' || !['行销经理','商企经理','装维随销'].includes(role)) return null
+    if (kind !== 'people' || !['行销经理','商企经理','装维随销'].includes(role)) return {monthBaseTarget:null,monthChallengeTarget:null,monthTarget:null}
     const goals = (dashboard.staffCategoryTargets || []).map((row,index)=>({row,index})).filter(item=>item.row.team_type === role && item.row.product_id === productId)
       .sort((a,b)=>(Number(b.row.id)||0)-(Number(a.row.id)||0)||b.index-a.index)
     const selected = goals[0]?.row
-    if (!selected || selected.month_base_target == null || String(selected.month_base_target).trim() === '') return null
-    const value = Number(selected.month_base_target)
-    return Number.isFinite(value) && value >= 0 ? value : null
+    const goal = value => {
+      if (value == null || String(value).trim() === '') return null
+      const n=Number(value)
+      return Number.isFinite(n) && n >= 0 ? n : null
+    }
+    const base=goal(selected?.month_base_target),challenge=goal(selected?.month_challenge_target)
+    return {monthBaseTarget:base,monthChallengeTarget:challenge,monthTarget:role==='装维随销'?challenge:base}
   }
   const keyOf = row => JSON.stringify(kind === 'people'
     ? [row.gridId, row.staffId || row.staffName, row.staffId ? '' : row.channelCode || row.channel]
@@ -50,7 +54,7 @@ export function searchCapacity(dashboard, { query, kind = 'people', gridIds = []
     const monthAverage = month === null || !days ? null : month / days
     const previousAverage = previous === null || !previousDays ? null : previous / previousDays
     const changeValue = monthAverage === null || previousAverage === null ? null : monthAverage - previousAverage
-    return { productId: product.productId, productName: product.productName, unit: product.unit, monthTarget: staffGoal(group.role,product.productId), previous, day: value?.dayMissing ? null : value?.day ?? null, month,
+    return { productId: product.productId, productName: product.productName, unit: product.unit, ...staffGoal(group.role,product.productId), previous, day: value?.dayMissing ? null : value?.day ?? null, month,
       monthAverage, previousAverage, changeValue, changeRate: changeValue === null || previousAverage === 0 ? null : changeValue / previousAverage * 100 }
   }) })).filter(group => group.values.some(value => value.day !== null || value.month !== null) || !productId)
     .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN') || a.key.localeCompare(b.key))

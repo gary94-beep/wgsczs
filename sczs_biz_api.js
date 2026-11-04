@@ -233,7 +233,11 @@ function init() {
   // ============================================================
   // Monthly staff goals are read only for matching personnel search results.
   function searchStaffTargets() {
-    var rows = pagedSql("SELECT id,team_type,product_id,month_base_target FROM " + tables.staffTargets, {}, "id DESC");
+    function goalValue(value) {
+      var raw=text(value), n=raw===''?null:Number(raw);
+      return n!==null && (!isFinite(n)||n<0)?null:n;
+    }
+    var rows = pagedSql("SELECT id,team_type,product_id,month_base_target,month_challenge_target FROM " + tables.staffTargets, {}, "id DESC");
     var goals = {};
     for (var i=0;i<rows.length;i++) {
       var r=rows[i];
@@ -242,9 +246,7 @@ function init() {
       try {p=product(r.product_id);} catch (e) {continue;}
       var key=JSON.stringify([text(r.team_type),p.productId]);
       if (Object.prototype.hasOwnProperty.call(goals,key)) continue;
-      var value=text(r.month_base_target), numeric=value===''?null:Number(value);
-      if (numeric!==null && (!isFinite(numeric)||numeric<0)) numeric=null;
-      goals[key]=numeric;
+      goals[key]={base:goalValue(r.month_base_target),challenge:goalValue(r.month_challenge_target)};
     }
     return goals;
   }
@@ -288,7 +290,10 @@ function init() {
       for (var mi = 0; mi < groups[key].values.length; mi++) {
         var metric = groups[key].values[mi];
         var goalKey = JSON.stringify([text(groups[key].role),metric.productId]);
-        metric.monthTarget = Object.prototype.hasOwnProperty.call(staffGoals,goalKey) ? staffGoals[goalKey] : null;
+        var staffGoal = Object.prototype.hasOwnProperty.call(staffGoals,goalKey) ? staffGoals[goalKey] : null;
+        metric.monthBaseTarget = staffGoal ? staffGoal.base : null;
+        metric.monthChallengeTarget = staffGoal ? staffGoal.challenge : null;
+        metric.monthTarget = text(groups[key].role) === '装维随销' ? metric.monthChallengeTarget : metric.monthBaseTarget;
         metric.monthAverage = metric.month === null ? null : metric.month / days;
         metric.previousAverage = metric.previous === null ? null : metric.previous / previousDays;
         metric.changeValue = metric.monthAverage === null || metric.previousAverage === null ? null : metric.monthAverage - metric.previousAverage;
