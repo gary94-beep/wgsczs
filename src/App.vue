@@ -62,6 +62,7 @@
               @click="goBranch">{{ selectedBranch?.branchName }}</button></template>
           <template v-if="stage === 'alerts'"><span>›</span><strong>{{ selectedGrid?.gridName }}</strong></template>
         </template>
+        <button type="button" class="app-level-back" aria-label="返回上一级" @click="browserNavigation.back()"><span aria-hidden="true">‹</span> 返回</button>
       </nav>
 
       <template v-if="stage === 'workbench'">
@@ -383,6 +384,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, provide, reactive, ref, watch } from 'vue'
 import {createBrowserNavigation} from './utils/browserNavigation.js'
+import {installSwipeBack} from './utils/swipeBack.js'
 import {createSessionPersistence,isExpiredSessionError} from './utils/sessionPersistence.js'
 import lowWarningIcon from './assets/warning-icons/triangle-alert.svg'
 import changeWarningIcon from './assets/warning-icons/chart-no-axes-combined.svg'
@@ -728,7 +730,7 @@ function navigationKey(state) {
  return JSON.stringify([state.stage,['branches','grids','alerts'].includes(state.stage)?state.product:'',
   ['grids','alerts'].includes(state.stage)?state.branch:'',state.stage==='alerts'?state.grid:'',state.stage==='monitor'?state.alertMode:''])
 }
-const browserNavigation=createBrowserNavigation({restore:async state=>{
+const browserNavigation=createBrowserNavigation({onExitHint:()=>showToast('再返回一次退出','warning'),restore:async state=>{
  if(page.value!=='dashboard')return
  if(!['workbench','overview','branches','grids','alerts','warnings','monitor','search','broadband','imports','scripts','campus'].includes(state.stage) || (state.stage==='imports' && !user.isSuperAdmin))state={stage:'workbench'}
  selectedProductId.value=state.product||'';selectedBranchId.value=state.branch||'';selectedGridId.value=state.grid||''
@@ -739,6 +741,9 @@ const browserNavigation=createBrowserNavigation({restore:async state=>{
  await nextTick();window.scrollTo(0,0)
 }})
 provide('wgsc-browser-navigation',{back:()=>browserNavigation.back()})
+let removeSwipeBack
+onMounted(()=>{removeSwipeBack=installSwipeBack({target:document,canGoBack:()=>page.value==='dashboard' && browserNavigation.canGoBack(),back:()=>browserNavigation.back(),routeKey:()=>browserNavigation.entryKey})})
+onUnmounted(()=>removeSwipeBack?.())
 watch(page,value=>{
  if(value==='dashboard'){const state=navigationSnapshot();browserNavigation.start(state,navigationKey(state))}
  else browserNavigation.reset()
