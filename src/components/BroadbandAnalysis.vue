@@ -1,17 +1,17 @@
 <template>
-  <section class="bb-page" :class="{'bb-inner-page':view !== 'overview','bb-overview':view === 'overview'}" aria-label="宽带专项" :aria-busy="busy">
+  <section class="bb-page" :class="{'bb-inner-page':view !== 'overview','bb-overview':view === 'overview'}" aria-label="宽带一号工程专项" :aria-busy="busy">
     <header v-if="view !== 'overview'" class="bb-hero"><button type="button" class="bb-back" aria-label="返回上一级" @click="back">‹</button><div><h2>{{ activeCategory?.name }}</h2></div><span v-if="data?.demo" class="bb-demo">演示数据</span></header>
     <div v-if="view === 'overview'" class="bb-info-row"><span class="bb-info-scope"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0z"/><circle cx="12" cy="10" r="2"/></svg>{{ scopeLabel }}</span><span class="bb-info-date"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18m-13 4h3"/></svg>截至 {{ data?.statDate || statDate || '—' }}</span><em v-if="data?.demo">示意数据</em></div>
     <div v-else class="bb-scope"><strong>{{ scopeLabel }}</strong><span>截至 {{ data?.statDate || statDate || '—' }}</span></div>
     <div v-if="view === 'overview'" class="bb-dispatch-note"><strong class="bb-dispatch-title">调度看板</strong><span>优先关注零产与低产对象</span></div>
     <div class="bb-filters">
-      <label v-if="permission.role === 'city'"><span>分公司<span class="bb-filter-colon">：</span></span><select v-model="filters.branch" aria-label="宽带专项分公司" :disabled="busy" @change="changeBranch"><option value="">全市</option><option v-for="b in branchOptions" :key="b.branchId" :value="b.branchName || b.branchId">{{ b.branchName || b.branchId }}</option></select></label>
-      <label v-if="permission.role !== 'grid'"><span>{{ view === 'overview' ? '镇区' : '网格' }}<span class="bb-filter-colon">：</span></span><select v-model="filters.grid" aria-label="宽带专项网格" :disabled="busy || !filters.branch" @change="changeFilters"><option value="">{{ view === 'overview' ? '全部镇区' : '全部网格' }}</option><option v-for="g in gridOptions" :key="g.gridId" :value="g.gridName">{{ g.gridName }}</option></select></label>
-      <button type="button" class="bb-refresh" aria-label="刷新宽带专项" :disabled="busy" @click="load(false)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7V3m0 4h-4M4 17v4m0-4h4M20 7a9 9 0 0 0-15-2M4 17a9 9 0 0 0 15 2"/></svg></button>
+      <label v-if="permission.role === 'city'"><span>分公司<span class="bb-filter-colon">：</span></span><select v-model="filters.branch" aria-label="宽带一号工程专项分公司" :disabled="busy" @change="changeBranch"><option value="">全市</option><option v-for="b in branchOptions" :key="b.branchId" :value="b.branchName || b.branchId">{{ b.branchName || b.branchId }}</option></select></label>
+      <label v-if="permission.role !== 'grid'"><span>{{ view === 'overview' ? '镇区' : '网格' }}<span class="bb-filter-colon">：</span></span><select v-model="filters.grid" aria-label="宽带一号工程专项网格" :disabled="busy || !filters.branch" @change="changeFilters"><option value="">{{ view === 'overview' ? '全部镇区' : '全部网格' }}</option><option v-for="g in gridOptions" :key="g.gridId" :value="g.gridName">{{ g.gridName }}</option></select></label>
+      <button type="button" class="bb-refresh" aria-label="刷新宽带一号工程专项" :disabled="busy" @click="load(false)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7V3m0 4h-4M4 17v4m0-4h4M20 7a9 9 0 0 0-15-2M4 17a9 9 0 0 0 15 2"/></svg></button>
     </div>
     <div v-if="clock" class="bb-time"><strong>本月时序 <b>{{ percent(clock.timeProgress) }}</b></strong><span>已过 {{ clock.elapsedDays }}/{{ clock.daysInMonth }} 天</span><div v-if="view === 'overview'" class="bb-clock-progress"><i :style="{width:fill(clock.timeProgress)}"></i></div></div>
     <div v-if="error" class="bb-error" role="alert"><span>{{ error }}</span><button type="button" @click="load(false)">重试</button></div>
-    <p v-if="busy && !data" class="bb-loading" role="status">正在查询宽带专项…</p>
+    <p v-if="busy && !data" class="bb-loading" role="status">正在查询宽带一号工程专项…</p>
     <p v-for="warning in data?.warnings || []" :key="warning" class="bb-warning">{{ warning }}</p>
 
     <template v-if="view === 'overview'">
@@ -88,9 +88,9 @@
       </section>
 
       <div v-if="view === 'details'" class="bb-detail-results" ref="detailResults">
-        <div class="bb-status-tabs" role="group" aria-label="宽带专项明细筛选"><button v-for="s in statuses" :key="s.id" type="button" :class="{active: status===s.id}" :aria-pressed="status===s.id" @click="setStatus(s.id)">{{ s.name }}</button></div>
+        <div class="bb-status-tabs" role="group" aria-label="宽带一号工程专项明细筛选"><button v-for="s in statuses" :key="s.id" type="button" :class="{active: status===s.id}" :aria-pressed="status===s.id" @click="setStatus(s.id)">{{ s.name }}</button></div>
         <p v-if="status === 'missingData' || status === 'missingTarget'" class="bb-warning">当前筛选：{{ status === 'missingData' ? '异常产能' : '缺目标 / 零目标' }}。可点击“全部”返回。</p>
-        <div class="bb-search"><span aria-hidden="true">⌕</span><input v-model="query" type="search" maxlength="100" placeholder="搜索姓名、工号、商家或渠道编码" aria-label="宽带专项搜索" /><button v-if="query" type="button" aria-label="清空宽带搜索" @click="query=''">×</button></div>
+        <div class="bb-search"><span aria-hidden="true">⌕</span><input v-model="query" type="search" maxlength="100" placeholder="搜索姓名、工号、商家或渠道编码" aria-label="宽带一号工程专项搜索" /><button v-if="query" type="button" aria-label="清空宽带搜索" @click="query=''">×</button></div>
         <p v-if="tier" class="bb-tier-selection">已选 {{ tier }} 层<button type="button" @click="selectTier('')">清除层级筛选 ×</button></p><p class="bb-result-count">共 {{ data.pagination?.total || 0 }} {{ activeCategory?.unit }}<span>按月目标缺口从大到小</span></p>
         <article v-for="row in detailRows" :key="`${row.branch}|${row.grid}|${row.identity}`" class="bb-person" :class="{'bb-person-zero':row.zero,'bb-person-low':row.low,'bb-business-card':categoryId === 'contractors' || categoryId === 'stars'}">
           <header><div class="bb-person-title"><span class="bb-person-avatar" aria-hidden="true"><i class="bb-detail-icon" :style="detailIconStyle(activeCategory?.unit === '人' ? 'person' : 'store')"></i></span><h3>{{ row.name }} <small v-if="row.tier" class="bb-tier-tag" :class="`bb-bin-${row.tier}`">{{ row.tier }}层</small></h3></div><strong class="bb-person-status" :class="row.zero ? 'bb-zero' : row.low || row.status === 'behind' ? 'bb-tone-behind' : row.reached ? 'bb-tone-reached' : 'bb-muted'">{{ row.missingProduction ? '暂无数据' : row.missingTarget ? '缺目标' : row.zero ? '零产' : row.low ? '低产' : row.reached ? '已达时序' : `缺 ${format(row.gap)} 条` }}</strong></header>
@@ -108,7 +108,7 @@
 </template>
 
 <script setup>
-import {computed,nextTick,onMounted,onUnmounted,reactive,ref,watch} from 'vue'
+import {computed,inject,nextTick,onMounted,onUnmounted,reactive,ref,watch} from 'vue'
 import {fetchBroadbandOverview,fetchBroadbandRegions,fetchBroadbandDetails} from '../api/production.js'
 import {createBroadbandEngine} from '../utils/broadband.js'
 import {monitorBranchOptions} from '../utils/monitorBranches.js'
@@ -117,13 +117,30 @@ import {finiteValue,percent,fill,tone as rateTone} from '../utils/broadbandDispl
 import detailPersonIcon from '../assets/ui-icons/user-round.svg'
 import detailStoreIcon from '../assets/ui-icons/store.svg'
 import detailLocationIcon from '../assets/ui-icons/map-pin.svg'
-const emit=defineEmits(['back-to-workbench'])
-const props=defineProps({permission:{type:Object,required:true},organization:{type:Object,required:true},statDate:String,scope:String,token:String})
+const emit=defineEmits(['back-to-workbench','navigation-change'])
+const props=defineProps({permission:{type:Object,required:true},organization:{type:Object,required:true},statDate:String,scope:String,token:String,navigationState:{type:Object,default:null}})
 const engine=createBroadbandEngine(),view=ref('overview'),categoryId=ref(''),data=ref(null),error=ref(''),busy=ref(false),detailRows=ref([]),status=ref('focus'),tier=ref(''),query=ref(''),page=ref(1)
 const filters=reactive({branch:props.permission.role==='city'?'':props.permission.branchName||props.permission.branchId||'',grid:props.permission.role==='grid'?props.permission.gridName||'':''})
 const detailResults=ref(null)
 const history=[],statuses=[{id:'all',name:'全部'},{id:'focus',name:'重点关注'},{id:'behind',name:'未达时序'},{id:'zero',name:'零产'},{id:'low',name:'低产'}]
 let sequence=0,searchTimer
+const browserNavigation=inject('wgsc-browser-navigation',null)
+let applyingNavigation=false
+function navigationSnapshot(){return {view:view.value,categoryId:categoryId.value,branch:filters.branch,grid:filters.grid,status:status.value,tier:tier.value,query:query.value}}
+function applyNavigation(state){
+ if(!state)return
+ view.value=['overview','regions','details'].includes(state.view)?state.view:'overview';categoryId.value=state.categoryId||''
+ filters.branch=props.permission.role==='city'?state.branch||'':props.permission.branchName||props.permission.branchId||''
+ filters.grid=props.permission.role==='grid'?props.permission.gridName||'':state.grid||''
+ status.value=state.status||'focus';tier.value=state.tier||'';query.value=state.query||''
+}
+applyNavigation(props.navigationState)
+watch(()=>props.navigationState,async state=>{
+ if(!state || JSON.stringify(state)===JSON.stringify(navigationSnapshot()))return
+ applyingNavigation=true;clearTimeout(searchTimer);applyNavigation(state);history.length=0
+ await nextTick();clearTimeout(searchTimer);applyingNavigation=false;load(false)
+})
+watch(()=>JSON.stringify(navigationSnapshot()),()=>{if(!applyingNavigation)emit('navigation-change',navigationSnapshot())},{immediate:true,flush:'post'})
 const clock=computed(()=>data.value?.clock)
 const activeCategory=computed(()=>categoryId.value?engine.category(categoryId.value):null)
 const stats=computed(()=>data.value?.stats||{})
@@ -144,11 +161,11 @@ async function load(append=false,keepContent=false) {
  if(!append) {if(!keepContent){data.value=null;detailRows.value=[]}page.value=1}
  const params={phone:props.permission.phone,statDate:props.statDate||'',branch:filters.branch,grid:filters.grid,categoryId:categoryId.value,status:status.value,tier:tier.value,query:query.value,page:page.value,pageSize:20,level:!filters.branch&&props.permission.role==='city'?'branch':'grid'}
  try {const response=await (view.value==='overview'?fetchBroadbandOverview:view.value==='regions'?fetchBroadbandRegions:fetchBroadbandDetails)(params,props.token);if(id!==sequence)return;data.value=response;if(view.value==='details')detailRows.value=append?[...detailRows.value,...response.rows]:response.rows}
- catch(e){if(id===sequence){error.value=e.message||'宽带专项查询失败';if(append)page.value=Math.max(1,page.value-1)}}
+ catch(e){if(id===sequence){error.value=e.message||'宽带一号工程专项查询失败';if(append)page.value=Math.max(1,page.value-1)}}
  finally{if(id===sequence)busy.value=false}
 }
 function save(){history.push({view:view.value,categoryId:categoryId.value,branch:filters.branch,grid:filters.grid,status:status.value,tier:tier.value,query:query.value})}
-function back(){clearTimeout(searchTimer);const previous=history.pop();if(previous){view.value=previous.view;categoryId.value=previous.categoryId;filters.branch=previous.branch;filters.grid=previous.grid;status.value=previous.status;tier.value=previous.tier||'';query.value=previous.query}else{view.value='overview';categoryId.value=''};load(false);window.scrollTo(0,0)}
+function back(){if(browserNavigation?.back())return;clearTimeout(searchTimer);const previous=history.pop();if(previous){view.value=previous.view;categoryId.value=previous.categoryId;filters.branch=previous.branch;filters.grid=previous.grid;status.value=previous.status;tier.value=previous.tier||'';query.value=previous.query}else{view.value='overview';categoryId.value=''};load(false);window.scrollTo(0,0)}
 function openCategory(id){save();categoryId.value=id;view.value='regions';load(false);window.scrollTo(0,0)}
 function openRegion(region){save();filters.branch=region.branch;filters.grid=region.grid;if(data.value.level==='grid'){view.value='details';status.value='focus';tier.value='';query.value=''};load(false);window.scrollTo(0,0)}
 function openDetails(){save();view.value='details';status.value='focus';tier.value='';query.value='';load(false);window.scrollTo(0,0)}
@@ -166,7 +183,7 @@ async function showFocus(value){
 }
 function selectTier(value){if(view.value!=='details')save();view.value='details';status.value='all';tier.value=value;query.value='';load(false)}
 function nextPage(){if(busy.value||!data.value?.pagination?.hasMore)return;page.value++;load(true)}
-watch(query,()=>{if(view.value!=='details')return;clearTimeout(searchTimer);sequence++;busy.value=true;searchTimer=setTimeout(()=>load(false,true),250)})
+watch(query,()=>{if(applyingNavigation || view.value!=='details')return;clearTimeout(searchTimer);sequence++;busy.value=true;searchTimer=setTimeout(()=>load(false,true),250)})
 watch(()=>props.statDate,()=>load(false))
 onMounted(()=>load(false))
 onUnmounted(()=>{sequence++;clearTimeout(searchTimer)})

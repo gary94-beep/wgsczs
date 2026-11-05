@@ -184,7 +184,9 @@ export function decryptAndUnwrap(resultData, aesKey, options = {}) {
   if (!business || String(business.retCode) !== '0') {
     const error = new Error(business?.retMsg || '业务处理失败')
     error.code = String(business?.retCode || '')
-    if (error.code === '00008' && options.dispatchAuthExpired !== false) window.dispatchEvent(new Event('handle2-auth-expired'))
+    if (['00008','600100001','600100002','600100003'].includes(error.code) && options.dispatchAuthExpired !== false) {
+      const event=new Event('handle2-auth-expired');event.requestToken=options.requestToken;window.dispatchEvent(event)
+    }
     throw error
   }
 
@@ -226,7 +228,9 @@ export async function postHandle2(serviceId, data, options = {}) {
 
   const retInfo = json?.publicData?.retInfo
   if (!retInfo || String(retInfo.retCode) !== '0') {
-    throw new Error(retInfo?.retMsg || '网关请求失败')
+    const error=new Error(retInfo?.retMsg || '网关请求失败');error.code=String(retInfo?.retCode || '')
+    if(['600100001','600100002','600100003'].includes(error.code) && options.dispatchAuthExpired !== false){const event=new Event('handle2-auth-expired');event.requestToken=data.token;window.dispatchEvent(event)}
+    throw error
   }
   if (options.responseType === 'sendCode' && !json.data) return null
   if (!json.data) {
@@ -238,7 +242,7 @@ export async function postHandle2(serviceId, data, options = {}) {
     for (let i = 0; i < 6 && typeof result === 'string'; i++) result = JSON.parse(result)
     return result
   }
-  return decryptAndUnwrap(json.data, aesKey, options)
+  return decryptAndUnwrap(json.data, aesKey, {...options,requestToken:data.token})
 }
 
 export { isMock }

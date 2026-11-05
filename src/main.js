@@ -7,3 +7,5 @@ import './styles/capacity.css'
 import './styles/overview.css'
 
 createApp(App).mount('#app')
+
+import './styles/session-alerts.css'

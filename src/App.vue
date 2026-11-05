@@ -1,6 +1,7 @@
 <template>
   <div class="app-shell">
-    <main v-if="page === 'login'" class="login-page">
+    <main v-if="sessionChecking" class="session-check" role="status"><span class="session-spinner" aria-hidden="true"></span><p>正在验证登录状态…</p></main>
+    <main v-else-if="page === 'login'" class="login-page">
       <section class="brand-panel">
         <BrandHeading />
       </section>
@@ -45,7 +46,7 @@
         <template v-if="stage === 'warnings'"><strong>预警监控</strong></template><template v-else-if="stage === 'monitor'"><button type="button" @click="openMonitor">预警监控</button><span>›</span><strong>{{ isChangeAlert ? '异动预警' : '低产预警' }}</strong></template>
         <template v-else-if="stage === 'campus'"><strong>校园生产管理</strong></template>
         <template v-else-if="stage === 'search'"><strong>产能速查</strong></template>
-        <template v-else-if="stage === 'broadband'"><strong>宽带专项</strong></template>
+        <template v-else-if="stage === 'broadband'"><strong>宽带一号工程专项</strong></template>
         <template v-else-if="stage === 'imports'"><strong>数据导入</strong></template>
         <template v-else-if="stage === 'scripts'"><button type="button"
             @click="returnFromScripts">预警监控</button><span>›</span><strong>经典话术库</strong></template>
@@ -65,9 +66,10 @@
 
       <template v-if="stage === 'workbench'">
         <section class="workbench-heading">
-          <h2>工作台</h2>
+          <h2>工作台</h2><button type="button" class="workbench-logout" :disabled="logoutBusy" @click="handleLogout" aria-label="退出登录"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5m5-12 4 4-4 4m-7-4h11"/></svg>{{ logoutBusy ? '登出中…' : '登出' }}</button>
         </section>
         <section class="workbench-menu" aria-label="工作台菜单">
+          <button type="button" @click="openBroadband"><span class="menu-icon menu-icon-blue"><i class="broadband-icon" :style="broadbandIconStyle" aria-hidden="true"></i></span><span class="menu-copy"><strong>宽带一号工程专项</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
           <button type="button" @click="goOverview"><span class="menu-icon menu-icon-blue"><i
                 class="menu-glyph menu-glyph-overview" aria-hidden="true"></i></span><span
               class="menu-copy"><strong>生产总览</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
@@ -77,7 +79,6 @@
           <button type="button" @click="openMonitor"><span class="menu-icon menu-icon-green"><i
                 class="menu-glyph menu-glyph-alert" aria-hidden="true"></i></span><span
               class="menu-copy"><strong>预警监控</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button type="button" @click="openBroadband"><span class="menu-icon menu-icon-blue"><i class="broadband-icon" :style="broadbandIconStyle" aria-hidden="true"></i></span><span class="menu-copy"><strong>宽带专项</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
           <button v-if="user.isSuperAdmin" type="button" @click="openImports"><span class="menu-icon menu-icon-blue"><i class="data-import-icon" :style="dataImportIconStyle" aria-hidden="true"></i></span><span class="menu-copy"><strong>数据导入</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
         </section>
       </template>
@@ -272,15 +273,16 @@
         <p v-if="alertLoading" aria-live="polite">正在查询预警...</p>
         <p v-if="alertError" role="alert">{{ alertError }}</p>
         <template v-if="alertResult">
-          <div class="alert-summary">
-            <div v-for="category in alertCategories" :key="category.id" class="alert-scale-column">
-              <span class="scale-title">{{ category.id === 'people' ? '直销队伍' : category.label }}总规模</span>
-              <strong class="summary-total-count">{{ category.total ?? '—' }}<small>{{ category.id === 'people' ? '人' : '个' }}</small></strong>
-              <span>{{ isChangeAlert ? '异动预警' : '低产预警' }}</span>
-              <strong class="summary-warning-count">{{ category.count }}<small>{{ category.id === 'people' ? '人' : '个' }}</small></strong>
-              <span>{{ isChangeAlert ? '异动预警率' : '低产预警率' }}</span><strong class="summary-warning-rate">{{ category.rate === null ? '—' : category.rate + '%' }}</strong>
+          <section class="alert-overview" aria-label="预警概览">
+            <header class="alert-overview-heading"><h3>预警概览</h3><span>当前筛选范围</span></header>
+            <div class="alert-summary">
+              <article v-for="category in alertCategories" :key="category.id" class="alert-overview-card" :class="{'has-warning':category.count>0}">
+                <header><span class="alert-overview-icon" :class="'icon-'+category.id" aria-hidden="true"><svg viewBox="0 0 24 24"><template v-if="category.id==='people'"><circle cx="9" cy="7" r="4"/><path d="M2 21v-3a7 7 0 0 1 14 0v3m1-17a4 4 0 0 1 0 8m1 3a6 6 0 0 1 4 6"/></template><template v-else-if="category.id==='stars'"><path d="m12 2 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z"/></template><template v-else><path d="M3 10v11h18V10M2 4h20l-2 6a3 3 0 0 1-5 0 3 3 0 0 1-6 0 3 3 0 0 1-5 0zM9 21v-7h6v7"/></template></svg></span><div><h4>{{ category.id==='people'?'直销队伍':category.label }}</h4><p>总规模 {{ category.total === null ? '—' : displayNumber(category.total) }}{{ category.id==='people'?'人':'个' }}</p></div></header>
+                <div class="alert-overview-main"><span>{{ isChangeAlert?'异动预警':'低产预警' }}</span><strong>{{ category.count }}<small>{{ category.id==='people'?'人':'个' }}</small></strong></div>
+                <footer><span>预警率</span><strong>{{ category.rate === null ? '—' : category.rate+'%' }}</strong></footer>
+              </article>
             </div>
-          </div>
+          </section>
           <div class="tabs alert-category-tabs" role="tablist" aria-label="预警分类"><button
               v-for="category in alertCategories" :key="category.id" type="button" role="tab"
               :aria-selected="tab === category.id" :class="{ active: tab === category.id }"
@@ -346,7 +348,7 @@
       </template>
 
       <template v-else-if="stage === 'broadband'">
-        <BroadbandAnalysis @back-to-workbench="goWorkbench" :permission="user" :organization="dashboard.organization" :stat-date="dashboard.statDate" :scope="scopeName" :token="token" />
+        <BroadbandAnalysis :navigation-state="broadbandNavigation" @navigation-change="broadbandNavigation = $event" @back-to-workbench="goWorkbench" :permission="user" :organization="dashboard.organization" :stat-date="dashboard.statDate" :scope="scopeName" :token="token" />
       </template>
 
       <nav v-if="stage !== 'workbench'" class="bottom-nav" aria-label="主导航"><button type="button"
@@ -379,12 +381,14 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, provide, reactive, ref, watch } from 'vue'
+import {createBrowserNavigation} from './utils/browserNavigation.js'
+import {createSessionPersistence,isExpiredSessionError} from './utils/sessionPersistence.js'
 import lowWarningIcon from './assets/warning-icons/triangle-alert.svg'
 import changeWarningIcon from './assets/warning-icons/chart-no-axes-combined.svg'
 import broadbandIcon from './assets/product-icons/wifi.svg'
 import { isMock } from './api/client'
-import { sendLoginCode, loginWithCode, loginWithOneClick } from './api/auth.js'
+import { sendLoginCode, loginWithCode, loginWithOneClick, logoutSession, loginWithWechatCode } from './api/auth.js'
 import { fetchChannelOptions, fetchChangeAlerts, fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts, fetchAiAnalysis } from './api/production'
 import { monitorBranchOptions } from './utils/monitorBranches.js'
 import ChannelTypeFilter from './components/ChannelTypeFilter.vue'
@@ -430,6 +434,12 @@ const exportBusy = ref(false)
 const alertSnapshot = ref(null)
 const overviewPeriod = ref('month')
 const page = ref('login')
+const sessionChecking=ref(true),logoutBusy=ref(false)
+let sessionVersion=0,sessionValidation=null
+let persistentStorage=null
+try{persistentStorage=window.localStorage}catch{/* Browsers may forbid persistence. */}
+const sessionStore=createSessionPersistence(persistentStorage,['wgsc-session-v1',import.meta.env.VITE_APP_ID||'',import.meta.env.VITE_ACTIVITY_ID||'',isMock?'mock':'real'].join(':'))
+const cancelledSession=()=>Object.assign(new Error('登录状态已变化'),{cancelled:true})
 const stage = ref('workbench')
 const loading = ref(false)
 const token = ref('')
@@ -638,19 +648,21 @@ const aiAnswerGrid = computed(() => selectedGridId.value ? (aiEntry('grid', sele
 const aiUpdatedAtGrid = computed(() => selectedGridId.value ? (aiEntry('grid', selectedGridId.value)?.updatedAt || '') : '')
 
 async function loadAiAnalysis(statDate) {
+  const requestToken=token.value,attempt=sessionVersion
   aiAnalysis.loading = true
   aiAnalysis.error = ''
   try {
     const data = await fetchAiAnalysis({ statDate, phone: user.phone, channelType: selectedChannelType.value || '' }, token.value)
+    if(requestToken!==token.value || attempt!==sessionVersion)return
     const map = {}
     for (const row of (data?.rows || [])) {
       map[aiScopeKey(row.scopeType, row.scopeId, row.channelType)] = { answer: row.answer || '', updatedAt: row.updatedAt || '' }
     }
     aiAnalysis.byScope = map
   } catch (e) {
-    aiAnalysis.error = e.message || 'AI 分析读取失败'
+    if(requestToken===token.value && attempt===sessionVersion)aiAnalysis.error = e.message || 'AI 分析读取失败'
   } finally {
-    aiAnalysis.loading = false
+    if(requestToken===token.value && attempt===sessionVersion)aiAnalysis.loading = false
   }
 }
 
@@ -700,6 +712,42 @@ function displayNumber(value) { return Number(value || 0).toLocaleString('zh-CN'
 function productIcon(id) { return ({ newNumbers: 'contact', plan119: 'gift', terminal: 'smartphone', homeBroadband: 'house', gigabit: 'wifi' })[id] || 'chart-no-axes-combined' }
 function gridName(id) { return dashboard.organization.grids.find(item => item.gridId === id)?.gridName || '' }
 function branchName(id) { return dashboard.organization.branches.find(item => item.branchId === id)?.branchName || '分公司未提供' }
+const broadbandNavigation = ref(null)
+function navigationSnapshot() {
+ return {stage:stage.value,product:selectedProductId.value,branch:selectedBranchId.value,grid:selectedGridId.value,
+  channel:selectedChannel.value,channelType:selectedChannelType.value,tab:tab.value,alertMode:alertMode.value,
+  monitorBranch:monitorBranchId.value,monitorGrid:monitorGridId.value,monitorProduct:monitorProductId.value,
+  period:alertPeriod.value,threshold:threshold.value,declineRate:declineRate.value,declineValue:declineValue.value,
+  overviewPeriod:overviewPeriod.value,broadband:broadbandNavigation.value}
+}
+function navigationKey(state) {
+ if(state.stage==='broadband'){
+  const b=state.broadband||{view:'overview'}
+  return JSON.stringify(['broadband',b.view||'overview',b.view==='overview'?'':b.categoryId||'',b.view==='overview'?'':b.branch||'',b.view==='overview'?'':b.grid||''])
+ }
+ return JSON.stringify([state.stage,['branches','grids','alerts'].includes(state.stage)?state.product:'',
+  ['grids','alerts'].includes(state.stage)?state.branch:'',state.stage==='alerts'?state.grid:'',state.stage==='monitor'?state.alertMode:''])
+}
+const browserNavigation=createBrowserNavigation({restore:async state=>{
+ if(page.value!=='dashboard')return
+ if(!['workbench','overview','branches','grids','alerts','warnings','monitor','search','broadband','imports','scripts','campus'].includes(state.stage) || (state.stage==='imports' && !user.isSuperAdmin))state={stage:'workbench'}
+ selectedProductId.value=state.product||'';selectedBranchId.value=state.branch||'';selectedGridId.value=state.grid||''
+ selectedChannel.value=state.channel||'';selectedChannelType.value=state.channelType||'';tab.value=state.tab||'people'
+ alertMode.value=state.alertMode||'low';monitorBranchId.value=state.monitorBranch||'';monitorGridId.value=state.monitorGrid||'';monitorProductId.value=state.monitorProduct||''
+ alertPeriod.value=state.period||'month';threshold.value=state.threshold??1;declineRate.value=state.declineRate??30;declineValue.value=state.declineValue??5
+ overviewPeriod.value=state.overviewPeriod||'month';broadbandNavigation.value=state.broadband||null;stage.value=state.stage
+ await nextTick();window.scrollTo(0,0)
+}})
+provide('wgsc-browser-navigation',{back:()=>browserNavigation.back()})
+watch(page,value=>{
+ if(value==='dashboard'){const state=navigationSnapshot();browserNavigation.start(state,navigationKey(state))}
+ else browserNavigation.reset()
+},{flush:'post'})
+watch(()=>JSON.stringify(navigationSnapshot()),()=>{
+ if(page.value==='dashboard' && !browserNavigation.restoring){const state=navigationSnapshot();browserNavigation.commit(state,navigationKey(state))}
+},{flush:'post'})
+onUnmounted(()=>browserNavigation.dispose())
+
 function scrollTop() { window.scrollTo(0, 0) }
 function goWorkbench() { stage.value = 'workbench'; scrollTop() }
 function goOverview() { stage.value = 'overview'; selectedProductId.value = ''; selectedBranchId.value = ''; selectedGridId.value = ''; scrollTop() }
@@ -712,7 +760,7 @@ function openMonitor() { stage.value = 'warnings'; scrollTop() }
 function openAlertMonitor(mode) { alertMode.value = mode; monitorBranchId.value = user.role === 'city' ? '' : user.branchId; monitorGridId.value = user.role === 'grid' ? user.gridId : ''; monitorProductId.value = dashboard.products[0]?.productId || ''; selectedChannel.value = ''; threshold.value = 1; tab.value = 'people'; stage.value = 'monitor'; scrollTop() }
 function openCampus() { stage.value = 'campus'; scrollTop() }
 function openSearch() { stage.value = 'search'; scrollTop() }
-function openBroadband() { stage.value = 'broadband'; scrollTop() }
+function openBroadband() { broadbandNavigation.value=null;stage.value = 'broadband'; scrollTop() }
 function openImports() { if (user.isSuperAdmin !== true) return showToast('仅超级管理员可导入数据', 'warning'); stage.value = 'imports'; scrollTop() }
 function openScriptLibrary() { scriptReturnStage.value = stage.value; scriptProductId.value = activeProduct.value?.productId || dashboard.products[0]?.productId || ''; stage.value = 'scripts'; scrollTop() }
 function returnFromScripts() { stage.value = scriptReturnStage.value; scrollTop() }
@@ -756,19 +804,63 @@ async function exportAlerts() {
 }
 const searchQuery = params => queryCapacity({ ...params, phone: user.phone }, token.value)
 
-onMounted(async () => {
-  const params = new URLSearchParams(location.search)
-  token.value = params.get('token') || ''
-  loginPhone.value = params.get('phone') || params.get('mobile') || ''
-  if (token.value && !isMock) {
-    try { loginPhone.value = (await getMobileByToken(token.value)).mobile } catch (error) { showToast(error.message || '认证失败', 'error') }
-    const url = new URL(location.href); url.searchParams.delete('token'); history.replaceState(null, '', url)
-  }
-  window.addEventListener('handle2-auth-expired', expireSession)
-})
-onUnmounted(() => { window.removeEventListener('handle2-auth-expired', expireSession); clearInterval(codeTimer) })
-watch(loginPhone, () => { authFeedback.value = ''; loginCode.value = '' })
-function expireSession() { token.value = ''; page.value = 'login'; alertSequence++; alertResult.value = null; aiAnalysis.byScope = {}; Object.assign(dashboard, { organization: { cityName: '', branches: [], grids: [] }, rows: [], dailyRows: [], targets: [], regionRows: undefined, periodRows: [], salesScripts: [] }); showToast('登录已过期，请重新认证', 'warning') }
+async function restoreSavedSession() {
+ const attempt=++sessionVersion;sessionChecking.value=true
+ const params=new URLSearchParams(location.search),callbackToken=params.get('token')||'',wechatCode=/MicroMessenger/i.test(navigator.userAgent)?params.get('code')||'':''
+ const saved=sessionStore.read(),candidate=callbackToken?{token:callbackToken}:saved
+ loginPhone.value=params.get('phone')||params.get('mobile')||''
+ if(callbackToken || wechatCode){const url=new URL(location.href);url.searchParams.delete('token');url.searchParams.delete('phone');url.searchParams.delete('mobile');if(wechatCode){url.searchParams.delete('code');url.searchParams.delete('state')}history.replaceState(null,'',url)}
+ try{
+  let identity
+  if(wechatCode && !isMock)identity=await loginWithWechatCode(wechatCode)
+  else if(candidate?.token){
+   token.value=candidate.token
+   if(isMock){if(candidate.token!=='mock-token')throw Object.assign(new Error('登录已过期'),{code:'00008'});identity={token:candidate.token,mobile:candidate.mobile||loginPhone.value}}
+   else identity={token:candidate.token,mobile:(await getMobileByToken(candidate.token)).mobile}
+  }else return
+  if(attempt!==sessionVersion)throw cancelledSession()
+  await completeLogin(identity,attempt)
+ }catch(error){
+  if(error.cancelled || attempt!==sessionVersion)return
+  token.value='';page.value='login'
+  if(isExpiredSessionError(error)){sessionStore.clear();authFeedback.value='登录已过期，请重新登录'}
+  else authFeedback.value=error.message||'暂时无法验证登录状态，请稍后刷新重试'
+ }finally{sessionChecking.value=false}
+}
+function resetLocalSession(clearStored=true) {
+ sessionVersion++;if(clearStored)sessionStore.clear();sessionChecking.value=false;token.value='';page.value='login';stage.value='workbench'
+ loginPhone.value='';loginCode.value='';agreedToTerms.value=false;clearInterval(codeTimer);codeCountdown.value=0
+ alertSequence++;alertResult.value=null;alertSnapshot.value=null;alertLoading.value=false;alertError.value=''
+ aiAnalysis.byScope={};aiAnalysis.error='';aiAnalysis.loading=false
+ selectedProductId.value='';selectedBranchId.value='';selectedGridId.value='';selectedChannel.value='';selectedChannelType.value='';broadbandNavigation.value=null
+ Object.assign(user,{name:'',phone:'',role:'',branchId:'',branchName:'',gridId:'',gridName:'',cityName:'',isSuperAdmin:false})
+ Object.assign(dashboard,{organization:{cityName:'',branches:[],grids:[]},statDate:'',rows:[],dailyRows:[],targets:[],products:[],regionRows:undefined,periodRows:[],salesScripts:[]})
+}
+function expireSession(event) {
+ if(event?.requestToken && event.requestToken!==token.value)return
+ resetLocalSession();showToast('登录已过期，请重新认证','warning')
+}
+async function handleLogout() {
+ if(logoutBusy.value)return
+ const currentToken=token.value;logoutBusy.value=true;resetLocalSession();sessionChecking.value=true
+ try{await logoutSession(currentToken);showToast('已登出','success')}
+ catch(error){showToast(isExpiredSessionError(error)?'已登出':'本机已登出，平台注销暂未确认','warning')}
+ finally{logoutBusy.value=false;sessionChecking.value=false}
+}
+async function validateVisibleSession() {
+ if(document.visibilityState==='hidden' || page.value!=='dashboard' || !token.value || sessionValidation)return
+ const currentToken=token.value,attempt=sessionVersion
+ sessionValidation=(async()=>{try{
+  if(!isMock)await getMobileByToken(currentToken)
+  const saved=sessionStore.read();if(persistentStorage && (!saved || saved.token!==currentToken)){if(attempt===sessionVersion)resetLocalSession(false)}
+ }catch(error){if(attempt===sessionVersion && isExpiredSessionError(error))expireSession({requestToken:currentToken})}finally{sessionValidation=null}})()
+ await sessionValidation
+}
+function onSessionStorage(event){if(event.key===sessionStore.key && !event.newValue && page.value==='dashboard')resetLocalSession(false)}
+function onPageShow(event){if(event.persisted)validateVisibleSession()}
+onMounted(async()=>{window.addEventListener('handle2-auth-expired',expireSession);window.addEventListener('storage',onSessionStorage);window.addEventListener('pageshow',onPageShow);document.addEventListener('visibilitychange',validateVisibleSession);await restoreSavedSession()})
+onUnmounted(()=>{window.removeEventListener('handle2-auth-expired',expireSession);window.removeEventListener('storage',onSessionStorage);window.removeEventListener('pageshow',onPageShow);document.removeEventListener('visibilitychange',validateVisibleSession);clearInterval(codeTimer)})
+watch(loginPhone,()=>{authFeedback.value='';loginCode.value=''})
 
 async function handleLogin() {
   if (loading.value || codeSending.value) return
@@ -786,23 +878,28 @@ async function handleLogin() {
       identity = await loginWithCode(phone, loginCode.value)
     }
     await completeLogin(identity)
-  } catch (error) { token.value = ''; authFeedback.value = error.message || '登录失败'; showToast(authFeedback.value, 'error') } finally { loading.value = false }
+  } catch (error) { if(error.cancelled)return;token.value = ''; authFeedback.value = error.message || '登录失败'; showToast(authFeedback.value, 'error') } finally { loading.value = false }
 }
 
-async function completeLogin(identity) {
+async function completeLogin(identity,attempt=++sessionVersion) {
   if (!/^1\d{10}$/.test(identity.mobile) || !identity.token) throw new Error('认证未返回有效手机号或token')
   token.value = identity.token
   const permission = await fetchPermission(identity.mobile, identity.token)
-  if (!permission || !['city', 'branch', 'grid'].includes(permission.role) || (permission.role !== 'city' && !permission.branchId) || (permission.role === 'grid' && !permission.gridId)) throw new Error('该手机号暂无查看权限')
+  if(attempt!==sessionVersion)throw cancelledSession()
+  if (!permission || !['city', 'branch', 'grid'].includes(permission.role) || (permission.role !== 'city' && !permission.branchId) || (permission.role === 'grid' && !permission.gridId)) throw Object.assign(new Error('该手机号暂无查看权限'),{code:'SESSION_PERMISSION'})
   Object.assign(user, { isSuperAdmin: false }, permission)
   await loadDashboard()
+  if(attempt!==sessionVersion)throw cancelledSession()
+  sessionStore.save(identity)
   goWorkbench()
   page.value = 'dashboard'
   authFeedback.value = ''; loginCode.value = ''; codeCountdown.value = 0; clearInterval(codeTimer)
 }
 
 async function loadDashboard() {
+  const requestToken=token.value,attempt=sessionVersion
   const data = await fetchDashboard({ phone: user.phone }, token.value)
+  if(requestToken!==token.value || attempt!==sessionVersion)throw cancelledSession()
   dashboard.organization = data.organization || { cityName: '', branches: [], grids: [] }
   dashboard.statDate = data.statDate || ''
   dashboard.products = data.products || []
@@ -854,7 +951,7 @@ async function oneClickLogin() {
   if (!agreedToTerms.value) return showToast('请先同意登录协议', 'warning')
   loading.value = true
   try { await completeLogin(await loginWithOneClick()) }
-  catch (error) { token.value = ''; showToast(error.message || '一键登录失败，请使用短信登录', 'error') }
+  catch (error) { if(error.cancelled)return;token.value = ''; showToast(error.message || '一键登录失败，请使用短信登录', 'error') }
   finally { loading.value = false }
 }
 

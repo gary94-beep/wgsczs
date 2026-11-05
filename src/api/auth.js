@@ -20,9 +20,9 @@ export function checkAuthResult(value, required = true) {
     const code = node.status ?? node.retCode ?? node.code
     if (code !== undefined) {
       found = true
-      if (String(code) !== '0') throw new Error(node.msg || node.retMsg || node.message || '认证失败')
+      if (String(code) !== '0') throw Object.assign(new Error(node.msg || node.retMsg || node.message || '认证失败'), {code:String(code)})
     }
-    node = parse(node.result)
+    node = parse(node.result ?? node.data)
   }
   if (required && !found) throw new Error('认证返回缺少成功状态')
 }
@@ -90,4 +90,23 @@ export async function loginWithOneClick() {
   if (!/^1\d{10}$/.test(mobile)) mobile = (await getMobileByToken(token)).mobile
   if (!/^1\d{10}$/.test(mobile)) throw new Error('未获取到完整手机号，请使用短信登录')
   return { mobile, token }
+}
+
+// Protocol 4.6: explicitly invalidate the current platform token.
+export async function logoutSession(token) {
+  if (!token || isMock) return
+  const result=await postHandle2('login_out',{token},{version:'1.0',responseType:'auth',dispatchAuthExpired:false})
+  checkAuthResult(result)
+}
+// Protocol 4.8: consume an existing WeChat OAuth callback code. No new redirect is invented.
+export async function loginWithWechatCode(code) {
+  if (!code) throw new Error('微信授权码缺失')
+  const result=await postHandle2('wechat_cmcc10086_basefanscsf',{code},{version:'1.0',responseType:'auth'})
+  checkAuthResult(result,false)
+  const token=findAuthValue(result,['token','ssotoken','ssoToken'])
+  if(!token)throw new Error('微信公众号尚未绑定手机号或未返回登录凭据，请使用短信登录')
+  let mobile=findAuthValue(result,['telephone','phone','userphone','mobile'])
+  if(!/^1\d{10}$/.test(mobile))mobile=(await getMobileByToken(token)).mobile
+  if(!/^1\d{10}$/.test(mobile))throw new Error('微信授权未返回完整手机号，请使用短信登录')
+  return {mobile,token}
 }
