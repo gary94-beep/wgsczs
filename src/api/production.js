@@ -91,7 +91,7 @@ export async function importSalesScripts(rows, permission, token) {
 // 【修改点】：新增 isDaily 参数，并传给 gateway
 export async function importCapacity(target, rows, token, isDaily = false) {
   return isMock 
-    ? mockImportCapacity(target, rows) 
+    ? mockImportCapacity(target, rows, isDaily) 
     : gateway('imports', 'wgsc_importCapacity', { 
         target, 
         isDaily, 

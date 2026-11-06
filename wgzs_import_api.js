@@ -20,7 +20,11 @@ function init() {
     staffBroadbandTarget: "app_open_api_c001_wgsc_stf_bb_target_m_1",
     staffCategoryTarget: "app_open_api_c001_wgsc_staff_target_m_1",
     areaContractor: "app_open_api_c002_wgsc_area_contractor_1",
-    staffOwn: "app_open_api_c001_wgsc_staff_own_team_1" // 新增
+    staffOwn: "app_open_api_c001_wgsc_staff_own_team_1", // 新增
+    // 新增的日产能表
+    regionDay: "app_open_api_c002_wgsc_reg_capacity_d_1",
+    channelDay: "app_open_api_c002_wgsc_chn_capacity_d_1",
+    staffDay: "app_open_api_c002_wgsc_stf_capacity_d_1",
   };
 
   // ========== 产品 ==========
@@ -112,6 +116,7 @@ function init() {
   function product(v) {
     v = text(v);
     if (v === "129+高套" || v === "119+套餐") v = "plan119";
+    if (v === "手宽归档") v = "homeBroadband";
     for (var i = 0; i < products.length; i++) {
       if (products[i].productName === v || products[i].productId === v) return products[i];
     }
@@ -215,7 +220,13 @@ function init() {
       var d = new Date(v + 8 * 3600000);
       return d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()) + " " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":" + pad(d.getUTCSeconds());
     }
-    var s = text(v).replace(/^(\d{4})(\d{2})(\d{2})\s+(\d{2})(\d{2})(\d{2})$/, "$1-$2-$3 $4:$5:$6").replace("T", " ").slice(0, 19);
+    var s = text(v)
+      .replace(/^(\d{4})(\d{2})(\d{2})(\d{2})$/, "$1-$2-$3 $4:00:00")
+      .replace(/^(\d{4})(\d{2})(\d{2})\s+(\d{2})(\d{2})(\d{2})$/, "$1-$2-$3 $4:$5:$6")
+      .replace(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(\s+)/, function (_, y, m, d, separator) {
+        return y + "-" + pad(Number(m)) + "-" + pad(Number(d)) + separator;
+      })
+      .replace("T", " ").slice(0, 19);
     if (!s) return now();
     date(s);
     if (!/^\d{4}-\d{2}-\d{2} (?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(s)) throw new Error("无效取数时间");
@@ -257,14 +268,22 @@ function init() {
     throw new Error("月份须为YYYY-MM" + (shortMonth ? "，兼容10月" : ""));
   }
 
-  function imports(capacity) {
+  function imports(capacity, isDaily) {
     admin();
+    // Gateway parameters may arrive as strings, so only explicit true/1 enables daily mode.
+    isDaily = isDaily === true || isDaily === 1 || text(isDaily) === "true" || text(isDaily) === "1";
     var configs = capacity
-      ? {
-          region: ["region", ["branch_company", "grid_name", "prod_period_type", "product_name", "capacity", "stat_date", "snapshot_time"]],
-          channel: ["channel", ["branch_company", "grid_name", "channel_code", "channel_name", "prod_period_type", "product_name", "capacity", "stat_date", "snapshot_time"]],
-          staff: ["staffCapacity", ["branch_company", "grid_name", "channel_code", "channel_name", "staff_no", "prod_period_type", "product_name", "capacity", "stat_date", "snapshot_time"]]
-        }
+      ? (isDaily
+        ? {
+            region: ["regionDay", ["branch_company", "grid_name", "product_name", "capacity", "stat_date", "snapshot_time"]],
+            channel: ["channelDay", ["branch_company", "grid_name", "channel_code", "channel_name", "product_name", "capacity", "stat_date", "snapshot_time"]],
+            staff: ["staffDay", ["branch_company", "grid_name", "channel_code", "channel_name", "staff_no", "product_name", "capacity", "stat_date", "snapshot_time"]]
+          }
+        : {
+            region: ["region", ["branch_company", "grid_name", "prod_period_type", "product_name", "capacity", "stat_date", "snapshot_time"]],
+            channel: ["channel", ["branch_company", "grid_name", "channel_code", "channel_name", "prod_period_type", "product_name", "capacity", "stat_date", "snapshot_time"]],
+            staff: ["staffCapacity", ["branch_company", "grid_name", "channel_code", "channel_name", "staff_no", "prod_period_type", "product_name", "capacity", "stat_date", "snapshot_time"]]
+          })
       : {
           channelInfo: ["channelInfo", ["chn_code", "chn_name", "branch", "grid_code", "grid", "star", "star_level", "monthly_kd_target"]],
           terminal: ["terminal", ["staff_no", "staff_name", "agent", "branch", "grid", "chn_name"]],
@@ -288,11 +307,11 @@ function init() {
       if (target === "permission") r.is_super_admin = text(rows[i].is_super_admin === undefined ? rows[i].super_admin : rows[i].is_super_admin);
       if (capacity) {
         r.capacity = num(rows[i].capacity);
-        r.stat_date = date(r.stat_date);
+        r.stat_date = isDaily && target === "region" ? text(r.stat_date) : date(r.stat_date);
         r.snapshot_time = snapshot(r.snapshot_time);
-        r.prod_period_type = period(r.prod_period_type);
+        if (!isDaily) r.prod_period_type = period(r.prod_period_type);
         r.product_name = product(r.product_name).productName;
-        if (!r.branch_company || !r.grid_name || (target !== "region" && (!r.channel_code || !r.channel_name)) || (target === "staff" && !r.staff_no)) throw new Error("第" + (i + 1) + "行缺必填字段");
+        if (!r.branch_company || !r.grid_name || !r.stat_date || (target !== "region" && (!r.channel_code || !r.channel_name)) || (target === "staff" && !r.staff_no)) throw new Error("第" + (i + 1) + "行缺必填字段");
       } else {
         if (config[2]) {
           if (target === "staffCategoryTarget") {
@@ -337,7 +356,9 @@ function init() {
         if (target === "staff" && ["行销经理", "商企经理", "装维随销"].indexOf(r.team_type) < 0) throw new Error("队伍类型须为行销经理/商企经理/装维随销");
       }
       var key = capacity
-        ? JSON.stringify([r.stat_date, r.branch_company, r.grid_name, r.channel_code, r.staff_no, r.prod_period_type, r.product_name])
+        ? JSON.stringify(isDaily
+          ? [r.stat_date, r.branch_company, r.grid_name, r.channel_code, r.staff_no, r.product_name]
+          : [r.stat_date, r.branch_company, r.grid_name, r.channel_code, r.staff_no, r.prod_period_type, r.product_name])
         : config[2] ? JSON.stringify(config[2].map(function (field) { return r[field]; })) : (r.phone || r.chn_code || r.staff_no);
       if (seen[key]) throw new Error("第" + (i + 1) + "行重复唯一键");
       seen[key] = true;
@@ -593,7 +614,7 @@ function init() {
   }
 
   var handlers = {
-    wgsc_importCapacity: function () { return imports(true); },
+    wgsc_importCapacity: function () { return imports(true, Params.isDaily); },
     wgsc_importRows: function () { return imports(false); },
     wgsc_importTargets: importTargets,
     wgsc_importSalesScripts: function () { return importScripts(false); },

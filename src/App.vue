@@ -586,7 +586,7 @@ async function handleUnifiedFileChange(event) {
     const data = await parseExcelFile(file)
     let rows = item.parse(data)
     if (item.isCapacity) {
-      rows = normalizeCapacityRows(rows)
+      rows = normalizeCapacityRows(rows, item.isDaily === true)
       // 【新增逻辑】：为了兼容后端的统一入口，将日表Key转换为基础表Key
       let targetKey = item.key
       if (item.key === 'regionDay') targetKey = 'region'
