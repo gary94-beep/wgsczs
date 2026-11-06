@@ -13,10 +13,6 @@ function init() {
     staff: "app_open_api_c003_wgsc_staff_1",
     permission: "app_open_api_c003_wgsc_permission_1",
     targets: "app_open_api_c003_wgsc_target_1",
-    staffTargets: "app_open_api_c001_wgsc_staff_target_m_1",
-    ownStaff: "app_open_api_c001_wgsc_staff_own_team_1",
-    selfTeam: "app_open_api_c001_wgsc_self_team_1",
-    chnManager: "app_open_api_c001_wgsc_chn_manager_1",
     scripts: "app_open_api_c001_wgsc_script_1"
   };
 
@@ -235,177 +231,16 @@ function init() {
   // search
   // ============================================================
   // Monthly staff goals are read only for matching personnel search results.
-  function searchStaffTargets() {
-    function goalValue(value) {
-      var raw=text(value), n=raw===''?null:Number(raw);
-      return n!==null && (!isFinite(n)||n<0)?null:n;
-    }
-    var rows = pagedSql("SELECT id,team_type,product_id,month_base_target,month_challenge_target FROM " + tables.staffTargets, {}, "id DESC");
-    var goals = {};
-    for (var i=0;i<rows.length;i++) {
-      var r=rows[i];
-      if (['行销经理','商企经理','装维随销'].indexOf(text(r.team_type))<0) continue;
-      var p;
-      try {p=product(r.product_id);} catch (e) {continue;}
-      var key=JSON.stringify([text(r.team_type),p.productId]);
-      if (Object.prototype.hasOwnProperty.call(goals,key)) continue;
-      goals[key]={base:goalValue(r.month_base_target),challenge:goalValue(r.month_challenge_target)};
-    }
-    return goals;
-  }
+  
 
 
   // Query only matched managers and their distinct current links; never load these at login.
-  function ownSearch(data) {
-    var q=text(Params.query).toLowerCase();
-    if(!q || q.length>100)throw new Error("查询参数无效");
-    var args={ownQuery:q}, managers={}, result=[], ids=[];
-    var chosen=selectedGridClause(args,data,"d");
-    var selector="SELECT d.* FROM "+latestDimension(tables.ownStaff,"staff_no")+" d WHERE 1=1"+
-      scope("d.branch","d.grid",args)+chosen+
-      " AND LOCATE(#{ownQuery},LOWER(CONCAT(COALESCE(d.staff_name,''),' ',COALESCE(d.staff_no,''))))>0";
-    var roster=pagedSql(selector,args,"staff_no");
-    var ps=Params.productId?[product(Params.productId)]:products;
-    function metrics(){return ps.map(function(p){return {productId:p.productId,productName:p.productName,unit:p.unit,
-      day:data.dailyStatDate?0:null,month:data.statDate?0:null,previous:data.statDate?0:null};});}
-    function addChild(g,code,name,role,kind,branch,grid){
-      code=text(code);if(!code)return;
-      var key=JSON.stringify([kind,code]);
-      if(g.childMap[key])return;
-      var self=kind==="staff" && code===g.code;
-      var child={key:key,code:code,name:text(name)||code,role:text(role),entityType:kind,
-        relation:self?"本人":kind==="staff"?"所管人员":"所管渠道",branchId:branch,gridId:gridId(branch,grid),values:metrics()};
-      g.childMap[key]=child;g.children.push(child);
-    }
-    for(var i=0;i<roster.length;i++){
-      var r=roster[i],code=text(r.staff_no);if(!code)continue;
-      var g={key:"own:"+code,code:code,name:text(r.staff_name)||code,role:text(r.team),isOwn:true,
-        branchId:r.branch,gridId:gridId(r.branch,r.grid),values:metrics(),children:[],childMap:{}};
-      managers[code]=g;ids.push(code);result.push(g);
-      addChild(g,code,g.name,g.role,"staff",r.branch,r.grid);
-    }
-    if(!ids.length)return result;
-    var placeholders=ids.map(function(code,i){args["ownManager"+i]=code;return "#{ownManager"+i+"}";}).join(",");
-    var links=pagedSql("SELECT * FROM "+tables.selfTeam+" WHERE manager_no IN ("+placeholders+")"+
-      scope("branch_company","grid_name",args),args,"id");
-    for(i=0;i<links.length;i++){
-      r=links[i];addChild(managers[text(r.manager_no)],r.staff_no,r.staff_name,r.team_type,"staff",r.branch_company,r.grid_name);
-    }
-    links=pagedSql("SELECT * FROM "+tables.chnManager+" WHERE manager_no IN ("+placeholders+")",args,"id");
-    // Resolve channel geography where available; an omitted zero-channel inherits its authorized manager's location.
-    var channels={}, channelIds=[];
-    for(i=0;i<links.length;i++)if(text(links[i].channel_code) && !channels[text(links[i].channel_code)]){
-      channels[text(links[i].channel_code)]={};channelIds.push(text(links[i].channel_code));
-    }
-    if(channelIds.length){
-      var cp=channelIds.map(function(code,i){args["ownChannel"+i]=code;return "#{ownChannel"+i+"}";}).join(",");
-      var chns=pagedSql("SELECT chn_code,branch,grid FROM "+latestDimension(tables.channelInfo,"chn_code")+" d WHERE chn_code IN ("+cp+")",args,"chn_code");
-      for(i=0;i<chns.length;i++)channels[text(chns[i].chn_code)]=chns[i];
-      // Some contractor/tail codes exist only in capacity tables. Read distinct scoped locations, not production rows.
-      var locations=[];
-      var sources=[tables.channel,tables.channelDay];
-      for(var si=0;si<sources.length;si++)locations=locations.concat(pagedSql("SELECT DISTINCT channel_code AS chn_code,branch_company AS branch,grid_name AS grid FROM "+sources[si]+" WHERE channel_code IN ("+cp+")"+scope("branch_company","grid_name",args),args,"chn_code,branch,grid"));
-      for(i=0;i<locations.length;i++)if(!channels[text(locations[i].chn_code)].branch)channels[text(locations[i].chn_code)]=locations[i];
-      for(i=0;i<links.length;i++){
-        r=links[i];g=managers[text(r.manager_no)];var loc=channels[text(r.channel_code)]||{};
-        if(user.role!=="city" && loc.branch && (loc.branch!==user.branchName || user.role==="grid" && loc.grid!==user.gridName))continue;
-        addChild(g,r.channel_code,r.channel_name,r.channel_type,"channel",loc.branch||g.branchId,loc.grid||g.gridId.split("::").slice(1).join("::"));
-      }
-    }
-    var wanted={staff:{},channel:{}}, values={staff:{},channel:{}};
-    for(i=0;i<result.length;i++)for(var j=0;j<result[i].children.length;j++){
-      var child=result[i].children[j];wanted[child.entityType][child.code]=true;
-    }
-    function readCapacity(kind,daily){
-      if(daily?!data.dailyStatDate:!data.statDate)return;
-      var codes=Object.keys(wanted[kind]);if(!codes.length)return;
-      var key=kind==="staff"?"staff_no":"channel_code",a={ownCutoff:daily?data.dailyStamp:data.statDate};
-      var fields=codes.map(function(code,i){a["ownCode"+i]=code;return "#{ownCode"+i+"}";}).join(",");
-      var table=daily?(kind==="staff"?tables.staffDay:tables.channelDay):(kind==="staff"?tables.staffCapacity:tables.channel);
-      var where=" WHERE "+key+" IN ("+fields+") AND "+(daily?"("+dailyStamp("stat_date")+")":"stat_date")+"=#{ownCutoff}"+
-        scope("branch_company","grid_name",a)+(daily?"":" AND prod_period_type IN ('mon','last_mon')")+
-        " AND product_name IN ("+ps.map(capacityProductNames).join(",")+")";
-      var measured=pagedSql("SELECT "+key+" AS code,product_name,"+(daily?"'day'":"prod_period_type")+" AS period,SUM(capacity) AS capacity,"+
-        "SUM(CASE WHEN capacity IS NULL OR capacity<0 THEN 1 ELSE 0 END) AS invalid_count FROM "+table+where+
-        " GROUP BY "+key+",product_name"+(daily?"":",prod_period_type"),a,"code,product_name,period");
-      for(var x=0;x<measured.length;x++){
-        var row=measured[x];if(Number(row.invalid_count)>0)throw new Error("产能包含空值或负数，请修正源数据");
-        var k=JSON.stringify([text(row.code),product(row.product_name).productId,row.period]);
-        values[kind][k]=(values[kind][k]||0)+num(row.capacity);
-      }
-    }
-    readCapacity("staff",false);readCapacity("staff",true);readCapacity("channel",false);readCapacity("channel",true);
-    for(i=0;i<result.length;i++){
-      g=result[i];
-      for(j=0;j<g.children.length;j++){
-        child=g.children[j];
-        for(var m=0;m<child.values.length;m++)for(var v=0;v<3;v++){
-          var field=["day","month","previous"][v],period=["day","mon","last_mon"][v];
-          if(child.values[m][field]===null)continue;
-          var amount=values[child.entityType][JSON.stringify([child.code,child.values[m].productId,period])]||0;
-          child.values[m][field]=amount;g.values[m][field]+=amount;
-        }
-      }
-      delete g.childMap;
-      g.children.sort(function(a,b){return (a.relation==="本人"?-1:b.relation==="本人"?1:0)||a.name.localeCompare(b.name);});
-    }
-    return result;
-  }
+  
 
-  function search() {
-    if(Params.kind === "own"){var ownData=metadata();return {results:ownSearch(ownData),statDate:ownData.statDate,dailyStatDate:ownData.dailyStatDate,dailyStatHour:ownData.dailyStatHour};}
-    var data = dashboard();
-    var q = text(Params.query).toLowerCase();
-    var groups = {};
-    var result = [];
-    if (!q || q.length > 100 || ["people", "channels"].indexOf(Params.kind) < 0) throw new Error("查询参数无效");
-    for (var pi = 0; pi < 3; pi++) {
-      var per = pi === 2 ? "previous" : pi ? "day" : "month";
-      var source = pi === 2 ? data.periodRows.filter(function (r) { return r.period === "last_mon"; }) : filtered(data, per);
-      for (var i = 0; i < source.length; i++) {
-        var r = source[i];
-        if (Params.kind === "people" && r.channelType !== "直销队伍") continue;
-        if (Params.channelType && r.channelType !== Params.channelType) continue;
-        var name = Params.kind === "people" ? r.staffName : (r.microChannelName || r.channel);
-        var code = Params.kind === "people" ? r.staffId : r.channelCode;
-        if ((String(name) + " " + String(code)).toLowerCase().indexOf(q) < 0) continue;
-        var key = JSON.stringify([r.gridId, code, r.channelType]);
-        if (pi === 2 && !groups[key]) continue;
-        if (!groups[key]) {
-          groups[key] = { key: key, name: name, code: code, role: Params.kind === "people" ? r.staffRole : r.channelType, branchId: r.branchId, gridId: r.gridId, values: [] };
-        }
-        var g = groups[key];
-        var m = null;
-        for (var j = 0; j < g.values.length; j++) if (g.values[j].productId === r.productId) m = g.values[j];
-        if (!m) {
-          var p = product(r.productId);
-          m = { productId: p.productId, productName: p.productName, unit: p.unit, day: null, month: null, previous: null };
-          g.values.push(m);
-        }
-        m[per] = (m[per] === null ? 0 : m[per]) + r.production;
-      }
-    }
-    var staffGoals = Params.kind === "people" && Object.keys(groups).length ? searchStaffTargets() : {};
-    var currentDate = new Date(data.statDate + "T00:00:00Z"), days = currentDate.getUTCDate();
-    var previousDays = Math.min(days, new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth(), 0)).getUTCDate());
-    for (var key in groups) if (Object.prototype.hasOwnProperty.call(groups, key)) {
-      for (var mi = 0; mi < groups[key].values.length; mi++) {
-        var metric = groups[key].values[mi];
-        var goalKey = JSON.stringify([text(groups[key].role),metric.productId]);
-        var staffGoal = Object.prototype.hasOwnProperty.call(staffGoals,goalKey) ? staffGoals[goalKey] : null;
-        metric.monthBaseTarget = staffGoal ? staffGoal.base : null;
-        metric.monthChallengeTarget = staffGoal ? staffGoal.challenge : null;
-        metric.monthTarget = text(groups[key].role) === '装维随销' ? metric.monthChallengeTarget : metric.monthBaseTarget;
-        metric.monthAverage = metric.month === null ? null : metric.month / days;
-        metric.previousAverage = metric.previous === null ? null : metric.previous / previousDays;
-        metric.changeValue = metric.monthAverage === null || metric.previousAverage === null ? null : metric.monthAverage - metric.previousAverage;
-        metric.changeRate = metric.changeValue === null || metric.previousAverage === 0 ? null : metric.changeValue / metric.previousAverage * 100;
-      }
-      result.push(groups[key]);
-    }
-    if(Params.kind === "people")result=ownSearch(data).concat(result);
-    return { results: result, statDate: data.statDate, dailyStatDate: data.dailyStatDate, dailyStatHour: data.dailyStatHour };
-  }
+
+  
+
+  
 
   // ============================================================
   // buildAiSummary
@@ -521,7 +356,6 @@ function init() {
   function capacityQuery(data, detail, args, periods, daily) {
     if (daily === undefined) {
       var wanted=periods || (detail && Params.funCode==="wgsc_fetchChangeAlerts" ? ["mon","last_mon"] :
-        detail && Params.funCode==="wgsc_searchCapacity" ? ["mon","last_mon","day"] :
         detail && ["wgsc_fetchAlerts","wgsc_fetchChannelOptions"].indexOf(Params.funCode)>=0 ? [Params.period==="day"?"day":"mon"] : ["mon","week","last_mon","day"]);
       var historical=wanted.filter(function(p){return p!=="day";}), queries=[];
       if(historical.length && data.statDate)queries.push(capacityQuery(data,detail,args,historical,false));
@@ -539,9 +373,6 @@ function init() {
     if (channelType && selectedTypes.indexOf(channelType) < 0) throw new Error("生产类型无效");
     // A dashboard always includes every type so switching the selector is local.
     if (detail && channelType) selectedTypes = [channelType];
-    if (detail && Params.funCode === "wgsc_searchCapacity" && Params.kind === "people") selectedTypes = selectedTypes.filter(function (v) { return v === "直销队伍"; });
-    if (detail && Params.funCode === "wgsc_searchCapacity" && Params.kind === "channels") selectedTypes = selectedTypes.filter(function (v) { return v !== "直销队伍"; });
-    if (detail && Params.funCode === "wgsc_searchCapacity" && Params.kind === "channels" && !channelType) selectedTypes = selectedTypes.filter(function (v) { return v !== "营业厅"; });
     var requestedProducts = detail && Params.productId ? [product(Params.productId)] : products;
     if (detail && Params.productId) clause += " AND c.product_name IN (" + capacityProductNames(requestedProducts[0]) + ")";
     var productQuery = requestedProducts.map(function(p){return "SELECT '"+p.productId+"' AS productId,'"+p.productName+"' AS productName";}).join(" UNION ALL ");
@@ -556,12 +387,6 @@ function init() {
       if(stars)condition+=type==="营业厅"?" AND d.star_level='营业厅'":" AND d.star_level='三星+'";
       else condition+=" AND NOT EXISTS (SELECT 1 FROM "+(tail?tables.staff:tables.terminal)+" conflict WHERE conflict.staff_no=d.staff_no)";
       var identity=stars?"d.chn_code":tail?"JSON_ARRAY(d.agent,d.chn_name)":"d.staff_no";
-      if(detail && Params.funCode==="wgsc_searchCapacity"){
-        args.searchQuery=text(Params.query).toLowerCase();
-        if(!args.searchQuery || args.searchQuery.length>100 || ["people","channels"].indexOf(Params.kind)<0)throw new Error("查询参数无效");
-        var name=stars||tail?"d.chn_name":"d.staff_name";
-        condition+=" AND LOCATE(#{searchQuery},LOWER(CONCAT(COALESCE("+name+",''),' ',COALESCE("+identity+",''))))>0";
-      }
       var matchIdentity = "c."+capacityKey+"=d."+key+" AND c.branch_company=d.branch AND c.grid_name=d.grid";
       if (!detail) {
         // Summarize only measured records. Never enumerate a personnel/product/period matrix at login.
@@ -579,8 +404,6 @@ function init() {
       }
       // Filter matching roster identities before source aggregation; retain the outer roster for absent records.
       var sourceClause = clause;
-      if (Params.funCode === "wgsc_searchCapacity") sourceClause += " AND EXISTS (SELECT 1 FROM "+
-        latestDimension(dimension,key)+" d"+condition+" AND "+matchIdentity+")";
       var measured="SELECT c.branch_company,c.grid_name,c."+capacityKey+" AS identity,c.product_name,"+(daily?"'day'":"c.prod_period_type")+" AS period,"+
         "SUM(c.capacity) AS production,SUM(CASE WHEN c.capacity IS NULL OR c.capacity<0 THEN 1 ELSE 0 END) AS invalidCount,MIN(c.channel_name) AS channel"+
         " FROM "+table+" c"+sourceClause+
@@ -714,7 +537,7 @@ function init() {
     if (dashboardMemo) return dashboardMemo;
     var data = metadata();
     if (!data.statDate && !data.dailyStatDate) { dashboardMemo = data; return data; }
-    var args = {}, detail = ["wgsc_fetchAlerts", "wgsc_fetchChangeAlerts", "wgsc_searchCapacity", "wgsc_fetchChannelOptions"].indexOf(Params.funCode) >= 0;
+    var args = {}, detail = ["wgsc_fetchAlerts", "wgsc_fetchChangeAlerts", "wgsc_fetchChannelOptions"].indexOf(Params.funCode) >= 0;
     var conflictArgs = { cutoff: data.statDate };
     var conflicts = sql("SELECT 1 AS found FROM " + tables.staffCapacity + " c WHERE c.stat_date=#{cutoff}" +
       scope("c.branch_company", "c.grid_name", conflictArgs) +
@@ -883,7 +706,7 @@ function init() {
     return { people: people, channels: channels, statDate: data.statDate, totals: populationTotals(data), totalSource: "dimension" };
   }
   function resultPage(result) {
-    if (["wgsc_fetchAlerts", "wgsc_fetchChangeAlerts", "wgsc_searchCapacity"].indexOf(Params.funCode) < 0) return result;
+    if (["wgsc_fetchAlerts", "wgsc_fetchChangeAlerts"].indexOf(Params.funCode) < 0) return result;
     var page = Number(Params.page || 1), size = Number(Params.pageSize || 200);
     if (!isFinite(page) || page < 1 || Math.floor(page) !== page || !isFinite(size) || size < 1 || size > 1000 || Math.floor(size) !== size) throw new Error("分页参数无效");
     var offset = (page - 1) * size;
@@ -908,8 +731,8 @@ function init() {
     wgsc_fetchChangeAlerts: changeAlerts,
     wgsc_fetchAiSummary: buildAiSummary,
     wgsc_fetchDashboard: dashboard,
-    wgsc_fetchAlerts: alerts,
-    wgsc_searchCapacity: search
+    wgsc_fetchAlerts: alerts
+
   };
 
   try {

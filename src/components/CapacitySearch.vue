@@ -1,14 +1,28 @@
 <template>
   <section class="capacity-search" aria-label="人员渠道产能查询">
-    <header class="search-page-heading"><div class="search-heading-copy"><h2>产能速查</h2><p>个人 / 渠道产能查询</p></div><div class="search-page-meta"><span class="search-scope"><i class="search-ui-icon" :style="iconStyle('location')" aria-hidden="true"></i>{{ scope }}</span><span v-if="demo" class="search-demo">演示数据</span></div><div class="search-heading-source"><span><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0M4 18c0 4 16 4 16 0"/></svg>产能 · 系统取数</span></div></header>
+    <header class="search-page-heading">
+      <div class="search-heading-top"><h2>产能速查</h2><p>快速定位到人到渠道</p></div>
+      <div class="search-heading-bottom"><span class="search-scope"><i class="search-ui-icon" :style="iconStyle('location')" aria-hidden="true"></i>{{ scope }}</span><span class="search-source"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0M4 18c0 4 16 4 16 0"/></svg>产能 · 系统取数</span></div>
+    </header>
     <div class="search-toolbar">
-      <div class="search-controls"><div class="search-kinds" role="group" aria-label="搜索对象"><button v-for="item in kinds" :key="item.id" type="button" :aria-pressed="kind === item.id" :class="{ active: kind === item.id }" @click="kind = item.id; limit = 10">{{ item.label }}</button></div><select v-model="productId" aria-label="查询产品"><option value="">全部产品</option><option v-for="item in dashboard.products" :key="item.productId" :value="item.productId">{{ item.productName }}</option></select></div>
+      <div class="search-kinds" role="group" aria-label="搜索对象"><button v-for="item in kinds" :key="item.id" type="button" :aria-pressed="kind === item.id" :class="{ active: kind === item.id }" @click="kind = item.id; limit = 10">{{ item.label }}</button></div>
+      <label class="search-product-row"><span>产品</span><span class="search-select-wrap"><select v-model="productId" aria-label="查询产品"><option value="">全部产品</option><option v-for="item in dashboard.products" :key="item.productId" :value="item.productId">{{ item.productName }}</option></select><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5"/></svg></span></label>
       <div class="search-input"><i class="search-ui-icon" :style="iconStyle('search')" aria-hidden="true"></i><input v-model="query" type="search" maxlength="100" :placeholder="['people','own'].includes(kind) ? '搜索姓名 / 员工工号' : '搜索渠道名称 / 渠道编码'" :aria-label="['people','own'].includes(kind) ? '搜索姓名或工号' : '搜索渠道名称或编码'" @keydown.esc="query = ''" /><button v-if="query" type="button" title="清空搜索" aria-label="清空搜索" @click="query = ''"><i class="search-ui-icon" :style="iconStyle('clear')" aria-hidden="true"></i></button></div>
+    </div>
+    <p class="search-helper">{{ kind === 'own' ? '可按姓名或工号查询本人及所管对象产能' : kind === 'people' ? '可按姓名或工号查询行随销人员产能' : '可按渠道名称或编码查询产能' }}<span v-if="demo" class="search-demo">演示数据</span></p>
+    <div v-if="!query.trim()" class="search-welcome">
+      <svg class="search-welcome-art" viewBox="0 0 240 116" aria-hidden="true">
+        <ellipse cx="122" cy="99" rx="103" ry="14" fill="#d2eaff"/>
+        <g fill="#e7f4ff" stroke="#78b7fa" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="72" cy="34" r="15"/><path d="M43 88v-6a29 29 0 0 1 58 0v6Z"/><path d="M151 47h53v43h-53z"/><path d="m149 23-9 19q0 10 9 10 7 0 10-6 5 12 15 0 7 12 16 0 5 7 11 5 8-1 8-10l-10-18Z"/><path d="M174 90V71h14v19"/></g>
+        <path d="m130 83 23 23" stroke="white" stroke-width="13" stroke-linecap="round"/><circle cx="111" cy="66" r="27" fill="white" stroke="white" stroke-width="12"/><circle cx="111" cy="66" r="27" fill="#fff" stroke="#0875fc" stroke-width="5"/><path d="m131 86 22 21" stroke="#0875fc" stroke-width="7" stroke-linecap="round"/>
+      </svg>
+      <h3>输入关键词，快速查询产能</h3><p>支持查看本人、所管人员及渠道明细</p>
     </div>
     <p v-if="error" class="search-error" role="alert">{{ error }}</p>
     <template v-if="query.trim()"><div class="search-result-heading" aria-live="polite"><span>{{ busy ? '查询中...' : `共 ${results.length} ${['people','own'].includes(kind) ? '位人员' : '个渠道'}` }}</span><time v-if="dailyDate(resultDates || dashboard) !== ((resultDates || dashboard).statDate || '')">日数据 {{ dailyLabel(resultDates || dashboard) }} · 月数据 {{ (resultDates || dashboard).statDate || '暂无' }}</time><time v-else>截至 {{ dailyLabel(resultDates || dashboard) }}</time></div><p v-if="!busy && !error && !results.length" class="search-empty">当前可查看范围内暂无匹配结果</p>
       <template v-for="item in results.slice(0, limit)" :key="item.key"><OwnCapacityResult v-if="item.isOwn" :item="item" /><article v-else class="search-result">
         <header class="search-identity"><span class="search-avatar" :class="`search-avatar-${kind}`" aria-hidden="true"><i class="search-ui-icon" :style="iconStyle(kind === 'people' ? 'person' : 'store')"></i></span><div class="search-identity-copy"><h3>{{ item.name }}</h3><div class="search-identity-meta"><span class="search-role">{{ item.role || '类型未提供' }}</span><span v-if="item.role !== '末梢渠道' &amp;&amp; !String(item.code || '').startsWith('tail:')" class="search-code">{{ item.code || '编码未提供' }}</span></div><p>{{ branchName(item.branchId) }} · {{ gridName(item.gridId) }}</p></div></header>
+        <div class="search-managers"><span class="manager-caption">看管人</span><span v-for="manager in item.managers || []" :key="manager.code" class="manager-tag">{{ manager.name }}<span> · {{ manager.role }}</span></span><span v-if="!item.managers?.length" class="manager-empty">暂无看管信息</span></div>
         <div class="search-table-wrap"><table class="search-metrics" :class="{'has-month-targets':kind === 'people'}" :aria-label="`${item.name}产能`"><thead><tr class="search-metric-head"><th scope="col">产品</th><th scope="col">当日</th><th scope="col">本月</th><th v-if="kind === 'people'" scope="col">月度目标</th></tr></thead><tbody><template v-for="metric in item.values" :key="metric.productId"><tr><th scope="row">{{ metric.productName }}</th><td :class="{ 'metric-muted': metric.day == null || metric.day === 0 }">{{ format(metric.day) }}<small v-if="metric.day != null"> {{ metric.unit }}</small></td><td :class="{ 'metric-muted': metric.month == null || metric.month === 0 }">{{ format(metric.month) }}<small v-if="metric.month != null"> {{ metric.unit }}</small></td><td v-if="kind === 'people'" class="metric-month-target"><span v-if="['行销经理','商企经理'].includes(item.role) && (metric.monthBaseTarget != null || metric.monthChallengeTarget != null)" class="metric-target-pair"><span class="target-chip target-chip-base"><span>基础</span><strong>{{ metric.monthBaseTarget == null ? '—' : format(metric.monthBaseTarget) }}</strong></span><span class="target-chip target-chip-challenge"><span>挑战</span><strong>{{ metric.monthChallengeTarget == null ? '—' : format(metric.monthChallengeTarget) }}</strong></span></span><span v-else-if="item.role === '装维随销' && metric.monthChallengeTarget != null" class="metric-target-pair"><span class="target-chip target-chip-challenge"><span>挑战</span><strong>{{ format(metric.monthChallengeTarget) }}</strong></span></span><span v-else class="target-unset" aria-label="未配置目标">—</span></td></tr><tr class="search-comparison"><td :colspan="kind === 'people' ? 4 : 3"><span v-if="kind === 'people'">本月累计 {{ format(metric.month) }} · 上月同期累计 {{ format(metric.previous) }} {{ metric.unit }}</span><span v-else>本月日均 {{ format(metric.monthAverage) }} · 上月同期日均 {{ format(metric.previousAverage) }} {{ metric.unit }}/日</span><strong :class="{ 'comparison-down': comparisonValue(metric) < 0, 'comparison-up': comparisonValue(metric) > 0 }">{{ comparison(metric) }}</strong></td></tr></template></tbody></table></div>
       </article></template>
       <button v-if="results.length > limit" class="search-more" type="button" @click="limit += 10">查看更多</button>
@@ -20,6 +34,7 @@ import { computed, ref, watch } from 'vue'
 import OwnCapacityResult from './OwnCapacityResult.vue'
 import { dailyDate,dailyLabel } from '../utils/dailyReporting.js'
 import { searchCapacity } from '../utils/capacitySearch.js'
+import { matchesSearchCategory } from '../utils/searchCategories.js'
 import { compareSearchTotals } from '../utils/searchTotalsComparison.js'
 import searchIcon from '../assets/ui-icons/search.svg'
 import clearIcon from '../assets/ui-icons/x.svg'
@@ -27,13 +42,13 @@ import locationIcon from '../assets/ui-icons/map-pin.svg'
 import storeIcon from '../assets/ui-icons/store.svg'
 import personIcon from '../assets/ui-icons/user-round.svg'
 const props = defineProps({ dashboard: Object, gridIds: Array, scope: String, demo: Boolean, queryApi: Function, channelType: { type: String, default: '' } })
-const query = ref(''), kind = ref('people'), productId = ref(''), limit = ref(10)
-const kinds = [{ id: 'people', label: '人员' }, { id: 'own', label: '自有人员' }, { id: 'channels', label: '渠道' }, { id: 'halls', label: '营业厅' }]
+const query = ref(''), kind = ref('own'), productId = ref(''), limit = ref(10)
+const kinds = [{ id: 'own', label: '网格经理' }, { id: 'people', label: '行随销' }, { id: 'channels', label: '渠道' }, { id: 'halls', label: '营业厅' }]
 const resultDates=ref(null)
 const remoteResults = ref([]), error = ref(''), busy = ref(false)
 const requestKind = () => kind.value === 'halls' ? 'channels' : kind.value
 const requestType = () => kind.value === 'halls' ? '营业厅' : props.channelType
-const results = computed(() => (props.queryApi ? remoteResults.value : searchCapacity(props.dashboard, { query: query.value, kind: requestKind(), productId: productId.value, gridIds: props.gridIds, channelType: requestType() })).filter(item => kind.value !== 'channels' || item.role !== '营业厅'))
+const results = computed(() => (props.queryApi ? remoteResults.value : searchCapacity(props.dashboard, { query: query.value, kind: requestKind(), productId: productId.value, gridIds: props.gridIds, channelType: requestType() })).filter(item => matchesSearchCategory(item, kind.value)))
 let sequence = 0
 watch([query, kind, productId, () => JSON.stringify(props.gridIds), () => props.channelType], (values, previous, cleanup) => {
   const id = ++sequence
@@ -158,4 +173,32 @@ button, input, select { font: inherit; } button { cursor: pointer; }
 .target-unset{display:inline-block;padding-right:5px;color:#9bacc0;font-size:18px;font-weight:400}
 @media(max-width:360px){.metric-target-pair{gap:4px}.metric-target-pair>.target-chip{padding:4px 5px;gap:4px}.target-chip>span{font-size:10px}.target-chip>strong{font-size:12px}}
 .search-controls{flex-wrap:wrap}.search-kinds{flex-wrap:wrap}.search-kinds button{min-width:40px}.search-controls select{margin-left:auto}
+
+/* Broadband-style search introduction; the parent breadcrumb and return button stay intact. */
+.capacity-search{padding:18px 0 26px;color:#122b4b;background:radial-gradient(ellipse at 55% 65%,#e5f5ff80,transparent 75%);font-family:"Microsoft YaHei","PingFang SC",sans-serif}
+.search-page-heading{display:block;margin:0 0 16px;padding:12px 0 14px;overflow:hidden;border:1px solid #c7e2fb;border-radius:13px;background:linear-gradient(115deg,#fff,#f7fcff);box-shadow:0 2px 5px #1d70bc0b}
+.search-heading-top{display:flex;align-items:center;gap:12px;width:100%}
+.search-heading-top h2{flex:0 0 38%;box-sizing:border-box;margin:0;padding:9px 17px 10px 12px;clip-path:polygon(0 0,100% 0,89% 100%,0 100%);background:linear-gradient(110deg,#0876fc 25%,#00b6df);color:#fff;font-size:clamp(20px,5.2vw,30px);font-weight:800;letter-spacing:0;line-height:1.3;text-align:center;-webkit-text-stroke:0}
+.search-heading-top p{flex:1;min-width:0;margin:0 12px 0 0;padding-left:10px;border-left:3px solid #1672fa;color:#142b4d;font-size:clamp(12px,3.1vw,18px);line-height:1.4;font-weight:700;white-space:nowrap}
+.search-heading-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:15px 13px 0}
+.search-scope{display:inline-flex;align-items:center;gap:6px;font-size:17px;color:#123052;font-weight:700;min-width:0;overflow-wrap:anywhere}
+.search-scope .search-ui-icon{width:22px;height:22px;flex-basis:22px;color:#0876fc}
+.search-source{display:inline-flex;align-items:center;gap:7px;flex-shrink:0;padding:5px 10px;border-radius:20px;background:linear-gradient(95deg,#e4f3ff,#d6edff);color:#234c7d;font-size:13px;line-height:1.5;font-weight:700;white-space:nowrap}
+.search-source svg{width:20px;height:20px;stroke:#0875fc;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.search-toolbar{padding:15px 13px 16px;border:1px solid #cde4fa;border-radius:13px;background:#fff;box-shadow:0 2px 5px #1d70bc08}
+.search-kinds{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;overflow:hidden;flex:none;border-radius:9px;background:linear-gradient(100deg,#eaf5fc,#dfedf8)}
+.search-kinds button{box-sizing:border-box;width:100%;min-width:0;height:43px;padding:0 3px;border:0;border-right:1px solid #c9def1;border-radius:0;background:transparent;color:#63758a;font-size:16px;line-height:1.2;font-weight:700;white-space:nowrap}
+.search-kinds button:last-child{border-right:0}.search-kinds button.active{border-radius:8px 0 0 8px;background:linear-gradient(110deg,#087cff,#0066f4);color:#fff}.search-kinds button.active:last-child{border-radius:0 8px 8px 0}.search-kinds button.active:not(:first-child):not(:last-child){border-radius:5px}
+.search-product-row{display:flex;align-items:center;gap:15px;margin-top:17px;color:#18304d;font-size:17px;font-weight:700}
+.search-select-wrap{display:block;position:relative;flex:1;min-width:0}
+.search-product-row select{appearance:none;-webkit-appearance:none;box-sizing:border-box;width:100%;height:39px;padding:0 34px 0 12px;border:1px solid #b4cbe8;border-radius:5px;background:linear-gradient(110deg,#fff,#f4f9ff);color:#172a43;font-size:16px;line-height:normal;font-weight:400;box-shadow:0 1px 2px #2b619c12}
+.search-select-wrap svg{position:absolute;top:50%;right:11px;width:18px;height:18px;transform:translateY(-50%);pointer-events:none;fill:none;stroke:#6b8199;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.search-input{gap:10px;margin-top:13px;padding-left:13px;border:1px solid #71aaff;border-radius:9px;background:linear-gradient(110deg,#fff,#f3f9ff)}
+.search-input>.search-ui-icon{color:#0875fc;width:22px;height:22px;flex-basis:22px}.search-input input{height:48px;color:#17375a;font-size:16px}.search-input input::placeholder{color:#82909e;opacity:1}
+.search-helper{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:10px 5px 0;color:#8193a5;font-size:12px;line-height:1.65}.search-demo{font-size:10px;padding:1px 5px}
+.search-welcome{padding:27px 5px 18px;text-align:center}.search-welcome-art{display:block;width:194px;height:auto;margin:0 auto 13px}.search-welcome h3{margin:0;color:#102948;font-size:21px;font-weight:800;line-height:1.5}.search-welcome p{margin:7px 0 0;color:#7c8e9c;font-size:14px;line-height:1.6}
+@media(max-width:360px){.search-heading-top{gap:8px}.search-heading-top h2{padding-left:7px;padding-right:14px}.search-heading-top p{padding-left:7px;margin-right:7px;font-size:11px}.search-heading-bottom{margin-left:10px;margin-right:10px;gap:5px}.search-scope{font-size:15px}.search-source{padding:4px 7px;font-size:11px;gap:5px}.search-toolbar{padding:13px 10px}.search-kinds button{font-size:14px;height:40px}.search-product-row{font-size:16px;gap:12px}.search-welcome h3{font-size:19px}.search-welcome p{font-size:12px}.search-helper{font-size:11px}}
+
+.search-managers{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:12px 0 0;font-size:12px;line-height:1.6}.manager-caption{color:#7b8ba1;margin-right:2px}.manager-tag{display:inline-block;padding:3px 8px;border:1px solid #e5d9f6;border-radius:5px;background:#f6f0ff;color:#7247a4;font-weight:600;overflow-wrap:anywhere}.manager-tag>span{font-weight:400}.manager-empty{color:#94a2b5}
 </style>
+

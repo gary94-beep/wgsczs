@@ -5,13 +5,14 @@ import { mockFetchChangeAlerts } from './mock.js'
 import { mockFetchAiAnalysis } from './mock.js'
 import { mockFetchDashboard, mockFetchPermission, mockGetMobileByToken, mockFetchAlerts, mockSearchCapacity, mockImportTargets, mockImportCapacity, mockImportRows, mockSaveSalesScript, mockImportSalesScripts } from './mock.js'
 
-const codes = { common: import.meta.env.VITE_COMMON_SERVICE_CODE, biz: import.meta.env.VITE_BIZ_SERVICE_CODE, imports: import.meta.env.VITE_IMPORT_SERVICE_CODE, broadband: import.meta.env.VITE_BROADBAND_SERVICE_CODE, ai: import.meta.env.VITE_AI_SERVICE_CODE, test: import.meta.env.VITE_TEST_SERVICE_CODE }
+const codes = { search: import.meta.env.VITE_SEARCH_SERVICE_CODE, common: import.meta.env.VITE_COMMON_SERVICE_CODE, biz: import.meta.env.VITE_BIZ_SERVICE_CODE, imports: import.meta.env.VITE_IMPORT_SERVICE_CODE, broadband: import.meta.env.VITE_BROADBAND_SERVICE_CODE, ai: import.meta.env.VITE_AI_SERVICE_CODE, test: import.meta.env.VITE_TEST_SERVICE_CODE }
 
 export async function fetchBroadbandOverview(params,token) { return isMock ? mockBroadbandOverview(params) : gateway('broadband','wgsc_bbOverview',params,token) }
 export async function fetchBroadbandRegions(params,token) { return isMock ? mockBroadbandRegions(params) : gateway('broadband','wgsc_bbRegions',params,token) }
 export async function fetchBroadbandDetails(params,token) { return isMock ? mockBroadbandDetails(params) : gateway('broadband','wgsc_bbDetails',params,token) }
 
 function gateway(group, funCode, params, token, anonymous = false) {
+  if (group === 'search' && !codes.search) throw new Error('速查网关未配置，请填写VITE_SEARCH_SERVICE_CODE')
   if (group === 'imports' && !codes.imports) throw new Error('导入网关未配置，请填写VITE_IMPORT_SERVICE_CODE')
   if (group === 'broadband' && !codes.broadband) throw new Error('宽带专项网关未配置，请填写VITE_BROADBAND_SERVICE_CODE')
   if (!codes[group]) throw new Error(`未配置${group === 'common' ? '通用' : group === 'ai' ? 'AI' : '业务'}网关servicecode`)
@@ -45,10 +46,10 @@ export async function fetchChannelOptions(params, token) {
 }
 // Only matching, already aggregated records are downloaded. Paging also keeps
 // exports complete; no source-table data is loaded for client-side calculation.
-async function matchingPages(funCode, params, token) {
+async function matchingPages(funCode, params, token, group = 'biz') {
   let result = null
   for (let page = 1; ; page++) {
-    const data = await gateway('biz', funCode, { ...params, page, pageSize: 500 }, token)
+    const data = await gateway(group, funCode, { ...params, page, pageSize: 500 }, token)
     if (!result) result = { ...data, people: [], channels: [], results: [] }
     if (data.statDate !== result.statDate || data.dailyStatDate !== result.dailyStatDate || data.dailyStatHour !== result.dailyStatHour || data.comparisonStatDate !== result.comparisonStatDate) throw new Error('翻页期间数据日期已变化，请重新查询')
     if (result.pagination?.total !== data.pagination?.total) throw new Error('翻页期间匹配数量已变化，请重新查询')
@@ -65,7 +66,7 @@ export async function fetchAlerts(params, token) {
   return isMock ? mockFetchAlerts(params) : matchingPages('wgsc_fetchAlerts', { ...params, gridIds: JSON.stringify(params.gridIds || []) }, token)
 }
 export async function queryCapacity(params, token) {
-  const data = await (isMock ? mockSearchCapacity(params) : matchingPages('wgsc_searchCapacity', { ...params, gridIds: JSON.stringify(params.gridIds || []) }, token))
+  const data = await (isMock ? mockSearchCapacity(params) : matchingPages('wgsc_searchCapacity', { ...params, gridIds: JSON.stringify(params.gridIds || []) }, token, 'search'))
   return visibleSearchResults(data)
 }
 export async function fetchChangeAlerts(params, token) {

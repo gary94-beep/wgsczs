@@ -585,16 +585,13 @@ async function handleUnifiedFileChange(event) {
   try {
     const data = await parseExcelFile(file)
     let rows = item.parse(data)
-    
     if (item.isCapacity) {
       rows = normalizeCapacityRows(rows)
-      
       // 【新增逻辑】：为了兼容后端的统一入口，将日表Key转换为基础表Key
       let targetKey = item.key
       if (item.key === 'regionDay') targetKey = 'region'
       if (item.key === 'channelDay') targetKey = 'channel'
       if (item.key === 'staffDay') targetKey = 'staffCapacity'
-
       // 调用接口时，传入 isDaily 标识
       const result = await importCapacity(targetKey, rows, token.value, item.isDaily === true)
       await refreshAfterImport()
