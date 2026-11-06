@@ -3,20 +3,22 @@
     <header class="search-page-heading"><div class="search-heading-copy"><h2>产能速查</h2><p>个人 / 渠道产能查询</p></div><div class="search-page-meta"><span class="search-scope"><i class="search-ui-icon" :style="iconStyle('location')" aria-hidden="true"></i>{{ scope }}</span><span v-if="demo" class="search-demo">演示数据</span></div><div class="search-heading-source"><span><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0M4 18c0 4 16 4 16 0"/></svg>产能 · 系统取数</span></div></header>
     <div class="search-toolbar">
       <div class="search-controls"><div class="search-kinds" role="group" aria-label="搜索对象"><button v-for="item in kinds" :key="item.id" type="button" :aria-pressed="kind === item.id" :class="{ active: kind === item.id }" @click="kind = item.id; limit = 10">{{ item.label }}</button></div><select v-model="productId" aria-label="查询产品"><option value="">全部产品</option><option v-for="item in dashboard.products" :key="item.productId" :value="item.productId">{{ item.productName }}</option></select></div>
-      <div class="search-input"><i class="search-ui-icon" :style="iconStyle('search')" aria-hidden="true"></i><input v-model="query" type="search" maxlength="100" :placeholder="kind === 'people' ? '搜索姓名 / 员工工号' : '搜索渠道名称 / 渠道编码'" :aria-label="kind === 'people' ? '搜索姓名或工号' : '搜索渠道名称或编码'" @keydown.esc="query = ''" /><button v-if="query" type="button" title="清空搜索" aria-label="清空搜索" @click="query = ''"><i class="search-ui-icon" :style="iconStyle('clear')" aria-hidden="true"></i></button></div>
+      <div class="search-input"><i class="search-ui-icon" :style="iconStyle('search')" aria-hidden="true"></i><input v-model="query" type="search" maxlength="100" :placeholder="['people','own'].includes(kind) ? '搜索姓名 / 员工工号' : '搜索渠道名称 / 渠道编码'" :aria-label="['people','own'].includes(kind) ? '搜索姓名或工号' : '搜索渠道名称或编码'" @keydown.esc="query = ''" /><button v-if="query" type="button" title="清空搜索" aria-label="清空搜索" @click="query = ''"><i class="search-ui-icon" :style="iconStyle('clear')" aria-hidden="true"></i></button></div>
     </div>
     <p v-if="error" class="search-error" role="alert">{{ error }}</p>
-    <template v-if="query.trim()"><div class="search-result-heading" aria-live="polite"><span>{{ busy ? '查询中...' : `共 ${results.length} ${kind === 'people' ? '位人员' : '个渠道'}` }}</span><time>截至 {{ dashboard.statDate }}</time></div><p v-if="!busy && !error && !results.length" class="search-empty">当前可查看范围内暂无匹配结果</p>
-      <article v-for="item in results.slice(0, limit)" :key="item.key" class="search-result">
+    <template v-if="query.trim()"><div class="search-result-heading" aria-live="polite"><span>{{ busy ? '查询中...' : `共 ${results.length} ${['people','own'].includes(kind) ? '位人员' : '个渠道'}` }}</span><time v-if="dailyDate(resultDates || dashboard) !== ((resultDates || dashboard).statDate || '')">日数据 {{ dailyLabel(resultDates || dashboard) }} · 月数据 {{ (resultDates || dashboard).statDate || '暂无' }}</time><time v-else>截至 {{ dailyLabel(resultDates || dashboard) }}</time></div><p v-if="!busy && !error && !results.length" class="search-empty">当前可查看范围内暂无匹配结果</p>
+      <template v-for="item in results.slice(0, limit)" :key="item.key"><OwnCapacityResult v-if="item.isOwn" :item="item" /><article v-else class="search-result">
         <header class="search-identity"><span class="search-avatar" :class="`search-avatar-${kind}`" aria-hidden="true"><i class="search-ui-icon" :style="iconStyle(kind === 'people' ? 'person' : 'store')"></i></span><div class="search-identity-copy"><h3>{{ item.name }}</h3><div class="search-identity-meta"><span class="search-role">{{ item.role || '类型未提供' }}</span><span v-if="item.role !== '末梢渠道' &amp;&amp; !String(item.code || '').startsWith('tail:')" class="search-code">{{ item.code || '编码未提供' }}</span></div><p>{{ branchName(item.branchId) }} · {{ gridName(item.gridId) }}</p></div></header>
         <div class="search-table-wrap"><table class="search-metrics" :class="{'has-month-targets':kind === 'people'}" :aria-label="`${item.name}产能`"><thead><tr class="search-metric-head"><th scope="col">产品</th><th scope="col">当日</th><th scope="col">本月</th><th v-if="kind === 'people'" scope="col">月度目标</th></tr></thead><tbody><template v-for="metric in item.values" :key="metric.productId"><tr><th scope="row">{{ metric.productName }}</th><td :class="{ 'metric-muted': metric.day == null || metric.day === 0 }">{{ format(metric.day) }}<small v-if="metric.day != null"> {{ metric.unit }}</small></td><td :class="{ 'metric-muted': metric.month == null || metric.month === 0 }">{{ format(metric.month) }}<small v-if="metric.month != null"> {{ metric.unit }}</small></td><td v-if="kind === 'people'" class="metric-month-target"><span v-if="['行销经理','商企经理'].includes(item.role) && (metric.monthBaseTarget != null || metric.monthChallengeTarget != null)" class="metric-target-pair"><span class="target-chip target-chip-base"><span>基础</span><strong>{{ metric.monthBaseTarget == null ? '—' : format(metric.monthBaseTarget) }}</strong></span><span class="target-chip target-chip-challenge"><span>挑战</span><strong>{{ metric.monthChallengeTarget == null ? '—' : format(metric.monthChallengeTarget) }}</strong></span></span><span v-else-if="item.role === '装维随销' && metric.monthChallengeTarget != null" class="metric-target-pair"><span class="target-chip target-chip-challenge"><span>挑战</span><strong>{{ format(metric.monthChallengeTarget) }}</strong></span></span><span v-else class="target-unset" aria-label="未配置目标">—</span></td></tr><tr class="search-comparison"><td :colspan="kind === 'people' ? 4 : 3"><span v-if="kind === 'people'">本月累计 {{ format(metric.month) }} · 上月同期累计 {{ format(metric.previous) }} {{ metric.unit }}</span><span v-else>本月日均 {{ format(metric.monthAverage) }} · 上月同期日均 {{ format(metric.previousAverage) }} {{ metric.unit }}/日</span><strong :class="{ 'comparison-down': comparisonValue(metric) < 0, 'comparison-up': comparisonValue(metric) > 0 }">{{ comparison(metric) }}</strong></td></tr></template></tbody></table></div>
-      </article>
+      </article></template>
       <button v-if="results.length > limit" class="search-more" type="button" @click="limit += 10">查看更多</button>
     </template>
   </section>
 </template>
 <script setup>
 import { computed, ref, watch } from 'vue'
+import OwnCapacityResult from './OwnCapacityResult.vue'
+import { dailyDate,dailyLabel } from '../utils/dailyReporting.js'
 import { searchCapacity } from '../utils/capacitySearch.js'
 import { compareSearchTotals } from '../utils/searchTotalsComparison.js'
 import searchIcon from '../assets/ui-icons/search.svg'
@@ -26,7 +28,8 @@ import storeIcon from '../assets/ui-icons/store.svg'
 import personIcon from '../assets/ui-icons/user-round.svg'
 const props = defineProps({ dashboard: Object, gridIds: Array, scope: String, demo: Boolean, queryApi: Function, channelType: { type: String, default: '' } })
 const query = ref(''), kind = ref('people'), productId = ref(''), limit = ref(10)
-const kinds = [{ id: 'people', label: '人员' }, { id: 'channels', label: '渠道' }, { id: 'halls', label: '营业厅' }]
+const kinds = [{ id: 'people', label: '人员' }, { id: 'own', label: '自有人员' }, { id: 'channels', label: '渠道' }, { id: 'halls', label: '营业厅' }]
+const resultDates=ref(null)
 const remoteResults = ref([]), error = ref(''), busy = ref(false)
 const requestKind = () => kind.value === 'halls' ? 'channels' : kind.value
 const requestType = () => kind.value === 'halls' ? '营业厅' : props.channelType
@@ -34,12 +37,12 @@ const results = computed(() => (props.queryApi ? remoteResults.value : searchCap
 let sequence = 0
 watch([query, kind, productId, () => JSON.stringify(props.gridIds), () => props.channelType], (values, previous, cleanup) => {
   const id = ++sequence
-  remoteResults.value = []; error.value = ''; busy.value = false
+  remoteResults.value = []; resultDates.value=null; error.value = ''; busy.value = false
   if (!props.queryApi || !query.value.trim()) return
   const params = { query: query.value, kind: requestKind(), productId: productId.value, gridIds: props.gridIds, channelType: requestType() }
   busy.value = true
   const timer = setTimeout(async () => {
-    try { const data = await props.queryApi(params); if (id === sequence) remoteResults.value = data.results || [] }
+    try { const data = await props.queryApi(params); if (id === sequence) {remoteResults.value = data.results || [];resultDates.value={statDate:data.statDate ?? props.dashboard.statDate,dailyStatDate:data.dailyStatDate ?? props.dashboard.dailyStatDate,dailyStatHour:data.dailyStatHour ?? props.dashboard.dailyStatHour}} }
     catch (e) { if (id === sequence) error.value = e.message || '查询失败' }
     finally { if (id === sequence) busy.value = false }
   }, 250)
@@ -154,4 +157,5 @@ button, input, select { font: inherit; } button { cursor: pointer; }
 .target-chip-challenge>strong{color:#079b85}
 .target-unset{display:inline-block;padding-right:5px;color:#9bacc0;font-size:18px;font-weight:400}
 @media(max-width:360px){.metric-target-pair{gap:4px}.metric-target-pair>.target-chip{padding:4px 5px;gap:4px}.target-chip>span{font-size:10px}.target-chip>strong{font-size:12px}}
+.search-controls{flex-wrap:wrap}.search-kinds{flex-wrap:wrap}.search-kinds button{min-width:40px}.search-controls select{margin-left:auto}
 </style>

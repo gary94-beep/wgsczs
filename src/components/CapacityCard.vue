@@ -4,12 +4,12 @@
     <div v-else class="capacity-card-heading"><span class="capacity-product-icon" :style="iconStyle" aria-hidden="true"></span><strong>{{ title }}</strong><span class="capacity-summary-tag">汇总</span></div>
     <section v-for="period in ['day', 'month']" :key="period" class="capacity-period" :class="`capacity-${period}`" :aria-label="`${title}${period === 'day' ? '日产能' : '月产能'}`">
       <div class="capacity-period-top">
-        <div class="capacity-period-heading"><h3><i></i>{{ period === 'day' ? '日产能' : '月产能' }}</h3><span>{{ period === 'day' ? statDate : `${statDate.slice(5, 7)}月累计` }}</span></div>
+        <div class="capacity-period-heading"><h3><i></i>{{ period === 'day' ? '日产能' : '月产能' }}</h3><span>{{ period === 'day' ? dailyLabel({statDate,...item}) : `${statDate.slice(5, 7)}月累计` }}</span></div>
         <strong class="capacity-actual">{{ format(metricFor(period).production) }}<small>{{ unit }}</small></strong>
       </div>
 
       <TargetProgress v-if="showTargets" :item="metricFor(period)" :unit="unit" :target-digits="period === 'day' ? (productId === 'plan119' ? 1 : 0) : 2" :label="`${title}${period === 'day' ? '日' : '月'}产能`" />
-      <div class="capacity-comparison" v-if="period === 'day'"><span>{{ weekLabel }}<b>{{ format(item.weeklyAverage) }} <small>{{ unit }}/日</small></b></span><span>{{ statDate.slice(5).replace('-', '/') }}产能<b>{{ format(item.daily.production) }} <small>{{ unit }}</small></b></span><em :class="{ 'trend-down': dailyChange?.difference < 0 }">{{ comparisonLabel(dailyChange, weekLabel) }}</em></div>
+      <div class="capacity-comparison" v-if="period === 'day'"><span>{{ weekLabel }}<small v-if="item.dailyStatDate && item.dailyStatDate !== statDate">（截至{{ statDate }}）</small><b>{{ format(item.weeklyAverage) }} <small>{{ unit }}/日</small></b></span><span>{{ (item.dailyStatDate ?? statDate).slice(5).replace('-', '/') }}产能<b>{{ format(item.daily.production) }} <small>{{ unit }}</small></b></span><em :class="{ 'trend-down': dailyChange?.difference < 0 }">{{ comparisonLabel(dailyChange, weekLabel) }}</em></div>
       <div class="capacity-comparison" v-else><span>上月同期日均<b>{{ format(item.previousAverage) }} <small>{{ unit }}/日</small></b></span><span>本月日均<b>{{ format(item.monthAverage) }} <small>{{ unit }}/日</small></b></span><em :class="{ 'trend-down': monthlyChange?.difference < 0 }">{{ comparisonLabel(monthlyChange, '上月同期日均') }}</em></div>
       <!-- <CapacityTrend :points="period === 'day' ? [{ label: weekLabel, value: item.weeklyAverage }, { label: statDate, value: item.daily.production }] : [{ label: '上月同期日均', value: item.previousAverage }, { label: '本月日均', value: item.monthAverage }]" :unit="`${unit}/日`" :label="`${title}${period === 'day' ? '日' : '月同期'}产能对比`" /> -->
     </section>
@@ -18,6 +18,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { dailyLabel } from '../utils/dailyReporting.js'
 import contactIcon from '../assets/product-icons/contact.svg'
 import giftIcon from '../assets/product-icons/gift.svg'
 import smartphoneIcon from '../assets/product-icons/smartphone.svg'

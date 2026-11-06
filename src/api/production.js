@@ -50,7 +50,7 @@ async function matchingPages(funCode, params, token) {
   for (let page = 1; ; page++) {
     const data = await gateway('biz', funCode, { ...params, page, pageSize: 500 }, token)
     if (!result) result = { ...data, people: [], channels: [], results: [] }
-    if (data.statDate !== result.statDate) throw new Error('翻页期间数据日期已变化，请重新查询')
+    if (data.statDate !== result.statDate || data.dailyStatDate !== result.dailyStatDate || data.dailyStatHour !== result.dailyStatHour || data.comparisonStatDate !== result.comparisonStatDate) throw new Error('翻页期间数据日期已变化，请重新查询')
     if (result.pagination?.total !== data.pagination?.total) throw new Error('翻页期间匹配数量已变化，请重新查询')
     result.people.push(...(data.people || []))
     result.channels.push(...(data.channels || []))

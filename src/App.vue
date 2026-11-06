@@ -125,7 +125,7 @@
           <ChannelTypeFilter v-model="selectedChannelType" @update:model-value="selectedChannel = ''" />
           <div class="overview-source-tags"><span class="overview-source-capacity"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0M4 18c0 4 16 4 16 0"/></svg>产能 · 系统取数</span><span v-if="!selectedChannelType" class="overview-source-target"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="13" r="9"/><circle cx="11" cy="13" r="5"/><path d="m11 13 9-10m-5 0h5v5"/></svg>目标 · 市公司导入</span></div>
         </section>
-        <ProductionBoard v-model:period="overviewPeriod" :items="overview" :scope="scopeName" :stat-date="dashboard.statDate" :demo="isMock"
+        <ProductionBoard v-model:period="overviewPeriod" :items="overview" :scope="scopeName" :stat-date="dashboard.statDate" :daily-stat-date="dashboard.dailyStatDate" :daily-stat-hour="dashboard.dailyStatHour" :demo="isMock"
           :show-targets="!selectedChannelType" @open="openProduct" />
 
         <!-- AI 分析结果 -->
@@ -144,7 +144,7 @@
             <h2>{{ selectedChannelType ? '产能表现' : '产能与目标' }}</h2><span>{{ user.role === 'grid' ? '点击查看预警' : '点击指标查看下级'
             }}</span>
           </div>
-          <p class="production-cutoff">数据截止 {{ dashboard.statDate }}<span v-if="isMock"> · 演示数据</span></p>
+          <p class="production-cutoff">{{ capacityCutoffLabel }}<span v-if="isMock"> · 演示数据</span></p>
           <CapacityCard :show-targets="!selectedChannelType" v-for="item in overview" :key="item.productId"
             :title="item.productName" :item="item" :unit="item.unit" :product-id="item.productId" :stat-date="dashboard.statDate"
             :icon="productIcon(item.productId)" @open="openProduct(item.productId)" />
@@ -157,7 +157,7 @@
           <p>全市 · 分公司</p>
           <ChannelTypeFilter v-model="selectedChannelType" @update:model-value="selectedChannel = ''" />
         </header>
-        <p class="production-cutoff">数据截止 {{ dashboard.statDate }}<span v-if="isMock"> · 演示数据</span></p>
+        <p class="production-cutoff">{{ capacityCutoffLabel }}<span v-if="isMock"> · 演示数据</span></p>
         <CapacityCard :show-targets="!selectedChannelType" :title="'全市' + selectedProduct?.productName"
           :item="cityMetric" :unit="selectedProduct?.unit" :product-id="selectedProductId" :stat-date="dashboard.statDate"
           :icon="productIcon(selectedProductId)" :clickable="false" />
@@ -177,7 +177,7 @@
           <p>{{ selectedBranch?.branchName }} · 网格</p>
           <ChannelTypeFilter v-model="selectedChannelType" @update:model-value="selectedChannel = ''" />
         </header>
-        <p class="production-cutoff">数据截止 {{ dashboard.statDate }}<span v-if="isMock"> · 演示数据</span></p>
+        <p class="production-cutoff">{{ capacityCutoffLabel }}<span v-if="isMock"> · 演示数据</span></p>
 
         <!-- 分公司 AI 分析 -->
         <section v-if="aiAnalysis.loading || aiAnalysis.error || aiAnswerBranch" class="ai-analysis-card">
@@ -268,7 +268,7 @@
               <option value="">全部渠道</option>
               <option v-for="channel in channelOptions" :key="channel" :value="channel">{{ channel }}</option>
             </select></label>
-          <div class="filter-footer"><small v-if="isChangeAlert">日均下降 ≥ {{ declineRate }}%，且减少 ≥ {{ declineValue }} {{ activeProduct?.unit }}/日</small><small v-else>{{ tab === 'people' ? '直销人员' : '渠道合计' }}产能 ≤ {{ cleanThreshold }} {{
+          <p class="alert-data-date" style="color:#7188a0;font-size:12px;margin:12px 0 0">数据截至 {{ !isChangeAlert && alertPeriod === 'day' ? dailyLabel(dashboard) : dashboard.statDate || '暂无' }}</p><div class="filter-footer"><small v-if="isChangeAlert">日均下降 ≥ {{ declineRate }}%，且减少 ≥ {{ declineValue }} {{ activeProduct?.unit }}/日</small><small v-else>{{ tab === 'people' ? '直销人员' : '渠道合计' }}产能 ≤ {{ cleanThreshold }} {{
             activeProduct?.unit }}，0 为零产</small><div class="filter-actions"><button type="button" @click="applyFilters">筛选</button><button type="button" class="alert-export" :disabled="!alertResult || alertLoading || loading || exportBusy" title="导出当前筛选条件下全部预警分类" @click="exportAlerts"><i class="export-alert-icon" :style="exportIconStyle" aria-hidden="true"></i>{{ exportBusy ? '导出中' : '导出Excel' }}</button></div></div>
         </section>
         <p v-if="alertLoading" aria-live="polite">正在查询预警...</p>
@@ -383,6 +383,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, provide, reactive, ref, watch } from 'vue'
+import {dailyLabel,dailyDate} from './utils/dailyReporting.js'
 import {createBrowserNavigation} from './utils/browserNavigation.js'
 import {installSwipeBack} from './utils/swipeBack.js'
 import {createSessionPersistence,isExpiredSessionError} from './utils/sessionPersistence.js'
@@ -453,7 +454,7 @@ const authFeedback = ref('')
 let codeTimer
 const agreedToTerms = ref(false)
 const user = reactive({ name: '', phone: '', role: '', branchId: '', branchName: '', gridId: '', gridName: '', cityName: '', isSuperAdmin: false })
-const dashboard = reactive({ organization: { cityName: '', branches: [], grids: [] }, statDate: '', products: [], targets: [], rows: [], dailyRows: [], salesScripts: [] })
+const dashboard = reactive({ organization: { cityName: '', branches: [], grids: [] }, statDate: '', missingCapacityIsZero: false, dailyStatDate: undefined, dailyStatHour: '', products: [], targets: [], rows: [], dailyRows: [], salesScripts: [] })
 const selectedProductId = ref('')
 const selectedBranchId = ref('')
 const selectedGridId = ref('')
@@ -674,6 +675,7 @@ function metric(productId, gridIds, scope = null) {
 
 function gridsOf(branchId) { return dashboard.organization.grids.filter(item => item.branchId === branchId).map(item => item.gridId) }
 const scopeGridIds = computed(() => user.role === 'city' ? dashboard.organization.grids.map(item => item.gridId) : user.role === 'grid' ? [user.gridId] : gridsOf(user.branchId))
+const capacityCutoffLabel=computed(()=>dailyDate(dashboard)!==dashboard.statDate ? `日数据截至 ${dailyLabel(dashboard)} · 月/周数据截至 ${dashboard.statDate || '暂无'}` : `数据截止 ${dailyLabel(dashboard)}`)
 const overview = computed(() => dashboard.products.map(item => ({ ...item, ...metric(item.productId, scopeGridIds.value, { level: user.role, id: user.role === 'grid' ? user.gridId : user.branchId }) })))
 const cityMetric = computed(() => metric(selectedProductId.value, scopeGridIds.value, { level: 'city' }))
 const branchMetric = computed(() => metric(selectedProductId.value, gridsOf(selectedBranchId.value), { level: 'branch', id: selectedBranchId.value }))
@@ -685,7 +687,7 @@ const monitorGridIds = computed(() => monitorGridId.value ? [monitorGridId.value
 const monitorScopeLabel = computed(() => monitorGridId.value ? gridName(monitorGridId.value) : monitorBranchId.value ? dashboard.organization.branches.find(item => item.branchId === monitorBranchId.value)?.branchName : scopeName.value)
 const channelOptions = ref([])
 let channelOptionsSequence = 0
-watch(() => JSON.stringify([stage.value, activeProduct.value?.productId, alertPeriod.value, stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value], dashboard.statDate]), async () => {
+watch(() => JSON.stringify([stage.value, activeProduct.value?.productId, alertPeriod.value, stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value], dashboard.statDate, dashboard.dailyStatDate]), async () => {
   const sequence = ++channelOptionsSequence
   channelOptions.value = []
   if (!['monitor', 'alerts'].includes(stage.value) || !activeProduct.value || !token.value) return
@@ -839,7 +841,7 @@ function resetLocalSession(clearStored=true) {
  aiAnalysis.byScope={};aiAnalysis.error='';aiAnalysis.loading=false
  selectedProductId.value='';selectedBranchId.value='';selectedGridId.value='';selectedChannel.value='';selectedChannelType.value='';broadbandNavigation.value=null
  Object.assign(user,{name:'',phone:'',role:'',branchId:'',branchName:'',gridId:'',gridName:'',cityName:'',isSuperAdmin:false})
- Object.assign(dashboard,{organization:{cityName:'',branches:[],grids:[]},statDate:'',rows:[],dailyRows:[],targets:[],products:[],regionRows:undefined,periodRows:[],salesScripts:[]})
+ Object.assign(dashboard,{organization:{cityName:'',branches:[],grids:[]},statDate:'',missingCapacityIsZero:false,dailyStatDate:undefined,dailyStatHour:'',rows:[],dailyRows:[],targets:[],products:[],regionRows:undefined,periodRows:[],salesScripts:[]})
 }
 function expireSession(event) {
  if(event?.requestToken && event.requestToken!==token.value)return
@@ -907,6 +909,9 @@ async function loadDashboard() {
   if(requestToken!==token.value || attempt!==sessionVersion)throw cancelledSession()
   dashboard.organization = data.organization || { cityName: '', branches: [], grids: [] }
   dashboard.statDate = data.statDate || ''
+  dashboard.dailyStatDate = data.dailyStatDate ?? data.statDate ?? ''
+  dashboard.dailyStatHour = data.dailyStatHour ?? ''
+  dashboard.missingCapacityIsZero = data.missingCapacityIsZero === true
   dashboard.products = data.products || []
   dashboard.targets = data.targets || []
   dashboard.rows = data.rows || []

@@ -24,15 +24,17 @@ export function createBroadbandEngine() {
     return production === 0 ? 'E' : production <= 3 ? 'D' : production <= 6 ? 'C' : production <= 9 ? 'B' : 'A';
   }
   function entity(raw, clock) {
-    var target = numeric(raw.monthlyTarget), production = numeric(raw.production);
-    var noProductionRecord = raw.production === null || raw.production === undefined || String(raw.production).replace(/\s/g, '') === '';
-    // Confirmed business rule: absent current-month production counts as zero.
-    // Invalid recorded values and absent history remain unknown.
-    if (Number(raw.invalidProduction || 0) > 0) production = null;
-    else if (noProductionRecord) production = 0;
-    var previous = Number(raw.invalidPrevious || 0) > 0 ? null : numeric(raw.previousProduction);
-    var week = Number(raw.invalidWeek || 0) > 0 ? null : numeric(raw.weekProduction);
-    var previousWeek = Number(raw.invalidPreviousWeek || 0) > 0 ? null : numeric(raw.previousWeekProduction);
+    var referenceKnown = false;
+    try { calendar(clock && clock.statDate); referenceKnown = true; } catch (error) { /* Unknown reference: do not infer zero. */ }
+    function capacity(value, invalid) {
+      if (Number(invalid || 0) > 0) return null;
+      var absent = value === null || value === undefined || String(value).replace(/\s/g, '') === '';
+      return absent && referenceKnown ? 0 : numeric(value);
+    }
+    var target = numeric(raw.monthlyTarget), production = capacity(raw.production, raw.invalidProduction);
+    var previous = capacity(raw.previousProduction, raw.invalidPrevious);
+    var week = capacity(raw.weekProduction, raw.invalidWeek);
+    var previousWeek = capacity(raw.previousWeekProduction, raw.invalidPreviousWeek);
     var expected = target === null ? null : target * clock.elapsedDays / clock.daysInMonth;
     var eligible = target !== null && target > 0 && production !== null;
     var monthlyRate = eligible ? production / target * 100 : null;

@@ -1,3 +1,4 @@
+import { dailyDate } from './dailyReporting.js'
 import { buildMonthToDatePeriods } from './reportingPeriod.js'
 import { normalizeChannelType } from './channelTypes.js'
 
@@ -5,7 +6,8 @@ const numeric = value => typeof value === 'number' && Number.isFinite(value) && 
 const keyOf = row => JSON.stringify([row.gridId, row.productId, normalizeChannelType(row.channelType), normalizeChannelType(row.channelType) === '直销队伍' ? row.staffId : row.channelCode || JSON.stringify([row.serviceProvider, row.microChannelName || row.channel])])
 
 export function buildAlertExport({ data, result, product, filters, demo = false }) {
-  if (!result || !product || !data.statDate || result.statDate !== data.statDate) throw new Error('预警与看板日期不一致，请刷新后导出')
+  const reportDate=filters.kind !== 'change' && filters.period === 'day' ? dailyDate(data) : data.statDate
+  if (!result || !product || !reportDate || result.statDate !== reportDate || (result.comparisonStatDate && result.comparisonStatDate !== data.statDate)) throw new Error('预警与看板日期不一致，请刷新后导出')
   const allowed = new Set(data.organization.grids.map(row => row.gridId))
   const ids = new Set(filters.gridIds)
   if ([...ids].some(id => !allowed.has(id))) throw new Error('无权导出该网格')
@@ -34,7 +36,7 @@ export function buildAlertExport({ data, result, product, filters, demo = false 
     const previousAverage = numeric(row.previousAverage) ? row.previousAverage : total && !total.invalid && total.previous !== null ? total.previous / previousDays : null
     const difference = monthAverage !== null && previousAverage !== null ? monthAverage - previousAverage : null
     const percent = difference !== null && previousAverage > 0 ? difference / previousAverage : null
-    return [data.statDate, demo ? '模拟数据' : '系统数据', filters.kind === 'change' ? '异动预警' : '低产预警',
+    return [reportDate, demo ? '模拟数据' : '系统数据', filters.kind === 'change' ? '异动预警' : '低产预警',
       data.organization.branches.find(branch => branch.branchId === row.branchId)?.branchName || row.branchId,
       data.organization.grids.find(grid => grid.gridId === row.gridId)?.gridName || row.gridId, product.productName,
       type === '直销队伍' ? '直销人员' : type === '三星+渠道' ? '3星+渠道' : type === '营业厅' ? '营业厅' : '末梢渠道',
@@ -47,13 +49,13 @@ export function buildAlertExport({ data, result, product, filters, demo = false 
       difference === null ? '同期数据不足，日均变化未计算' : previousAverage === 0 ? '上月同期日均为0，变化率不适用' : '']
   })
   const scope = filters.scope || '当前权限范围'
-  const metadata = [['筛选条件', '取值'], ['数据截止日', data.statDate], ['数据性质', demo ? '模拟数据' : '系统数据'], ['组织范围', scope],
+  const metadata = [['筛选条件', '取值'], ['数据截止日', reportDate], ['日数据统计小时', data.dailyStatHour ?? ''], ['同期比较截止日', data.statDate], ['数据性质', demo ? '模拟数据' : '系统数据'], ['组织范围', scope],
     ['网格', [...ids].map(id => data.organization.grids.find(grid => grid.gridId === id)?.gridName || id).join('、')], ['产品', product.productName],
     ['预警类型', filters.kind === 'change' ? '异动预警' : '低产预警'], ['统计周期', filters.kind === 'change' || filters.period === 'month' ? '本月' : '当日'], ['渠道', filters.channel || '全部渠道'],
     ['低产阈值', filters.kind === 'change' ? '' : filters.threshold], ['日均减少率阈值（%）', filters.kind === 'change' ? filters.declineRate : ''], ['日均减少值阈值', filters.kind === 'change' ? filters.declineValue : ''],
     ['本月范围', `${dates.current.startDate}至${dates.current.endDate}`], ['上月同期范围', `${dates.previous.startDate}至${dates.previous.endDate}`], ['导出记录数', rows.length],
     ['跟进状态口径', '未登记表示尚无系统跟进记录；在Excel填写的状态不会自动回写系统'], ['日均单位', `${product.unit}/日`]]
-  const filename = `${filters.kind === 'change' ? '异动预警' : '低产预警'}_${scope}_${product.productName}_${data.statDate}${demo ? '_模拟' : ''}.xlsx`.replace(/[\\/:*?"<>|]/g, '_')
+  const filename = `${filters.kind === 'change' ? '异动预警' : '低产预警'}_${scope}_${product.productName}_${reportDate}${demo ? '_模拟' : ''}.xlsx`.replace(/[\\/:*?"<>|]/g, '_')
   return { filename, rows: [headers, ...rows], metadata }
 }
 

@@ -1,3 +1,4 @@
+import { dailyDate } from './dailyReporting.js'
 import { buildMonthToDatePeriods } from './reportingPeriod.js'
 import { matchesChannelType } from './channelTypes.js'
 import { targetValue, targetProgress, monthlyDailyTarget } from './targetValues.js'
@@ -32,6 +33,7 @@ export function compareCapacity(current, baseline) {
 
 function progress(production, targets, gridIds, field, statDate, scope) {
   const period = field === 'dailyTarget' ? 'day' : 'month'
+  targets=targets.filter(row=>!(row.targetMonth ?? row.target_month) || (row.targetMonth ?? row.target_month)===statDate.slice(0,7))
   
   const sum = kind => {
     // 1. 优先匹配汇总层级目标（全市 / 分公司）
@@ -73,6 +75,7 @@ function progress(production, targets, gridIds, field, statDate, scope) {
 }
 
 export function buildCapacityMetric(dashboard, productId, gridIds, channelType = '', scope = null) {
+  const dailyStatDate=dailyDate(dashboard),dailyStatHour=dashboard.dailyStatHour
   const ids = new Set(gridIds)
   const matches = row => row.productId === productId && ids.has(row.gridId) && matchesChannelType(row, channelType)
   const rows = dashboard.rows.filter(matches)
@@ -91,6 +94,7 @@ export function buildCapacityMetric(dashboard, productId, gridIds, channelType =
       (scope ? row.level === scope.level && (scope.level === 'city' || (scope.level === 'branch' ? row.branchId === scope.id : row.gridId === scope.id)) : row.level === 'grid' && ids.has(row.gridId)))
     const sum = period => {
       const selected = source.filter(row => row.period === period)
+      if (!selected.length && channelType && dashboard.missingCapacityIsZero && (period === 'day' ? dailyStatDate : dashboard.statDate)) return 0
       if (!selected.length || selected.some(row => typeof row.production !== 'number' || !Number.isFinite(row.production))) return null
       if (!channelType) {
         if (!scope && gridIds.some(id => !selected.some(row => row.gridId === id))) return null
@@ -104,26 +108,26 @@ export function buildCapacityMetric(dashboard, productId, gridIds, channelType =
     const sameCoverage = (a, b) => !channelType || JSON.stringify(covered(a)) === JSON.stringify(covered(b))
     
     const monthly = progress(sum('mon'), targets, gridIds, 'target', dashboard.statDate, scope)
-    const daily = progress(sum('day'), targets, gridIds, 'dailyTarget', dashboard.statDate, scope)
+    const daily = progress(sum('day'), targets, gridIds, 'dailyTarget', dailyStatDate, scope)
     if (channelType) {
       monthly.dataCoverage = coverage('mon')
       daily.dataCoverage = coverage('day')
     }
     
-    const periods = buildMonthToDatePeriods(dashboard.statDate)
-    const days = dateRange(periods.current.startDate, periods.current.endDate).length
-    const previousDays = dateRange(periods.previous.startDate, periods.previous.endDate).length
+    const periods = dashboard.statDate ? buildMonthToDatePeriods(dashboard.statDate) : null
+    const days = periods ? dateRange(periods.current.startDate, periods.current.endDate).length : null
+    const previousDays = periods ? dateRange(periods.previous.startDate, periods.previous.endDate).length : null
     const previous = sum('last_mon'), week = sum('week')
     
     return { 
       ...monthly, 
-      daily, 
+      daily, dailyStatDate, dailyStatHour, 
       weekSeries: [], 
       monthSeries: [], 
       previousSeries: [],
       weeklyAverage: week === null || !sameCoverage('day', 'week') ? null : week / 7,
-      monthAverage: monthly.production === null ? null : monthly.production / days,
-      previousAverage: previous === null || !sameCoverage('mon', 'last_mon') ? null : previous / previousDays,
+      monthAverage: monthly.production === null || !days ? null : monthly.production / days,
+      previousAverage: previous === null || !previousDays || !sameCoverage('mon', 'last_mon') ? null : previous / previousDays,
       weekBasis: 'rolling7' 
     }
   }
@@ -163,7 +167,7 @@ export function buildCapacityMetric(dashboard, productId, gridIds, channelType =
   
   return { 
     ...monthly, 
-    daily: progress(weekSeries.at(-1)?.value ?? null, targets, gridIds, 'dailyTarget', dashboard.statDate, scope),
+    daily: progress(dailyMap.has(dailyStatDate) && gridIds.every(id=>dailyMap.get(dailyStatDate).grids.has(id)) ? dailyMap.get(dailyStatDate).total : null, targets, gridIds, 'dailyTarget', dailyStatDate, scope), dailyStatDate, dailyStatHour,
     weekSeries, 
     monthSeries, 
     previousSeries, 

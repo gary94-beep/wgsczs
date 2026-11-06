@@ -1,3 +1,4 @@
+import { dailyDate } from './dailyReporting.js'
 import { normalizeChannelType, matchesChannelType } from './channelTypes.js'
 import { buildMonthToDatePeriods } from './reportingPeriod.js'
 
@@ -24,7 +25,7 @@ export function searchCapacity(dashboard, { query, kind = 'people', gridIds = []
   const groups = new Map()
   const matches = row => ids.has(row.gridId) && matchesChannelType(row, channelType)
   // Search monthly/latest-day records only, never historical identities outside the current scope.
-  const currentDay = (dashboard.dailyRows || []).filter(row => row.date === dashboard.statDate)
+  const currentDay = (dashboard.dailyRows || []).filter(row => row.date === dailyDate(dashboard))
   for (const row of [...dashboard.rows, ...currentDay].filter(matches)) {
     const fields = kind === 'people' ? [row.staffName, row.staffId] : [row.channel, row.microChannelName, row.channelCode]
     if (!fields.some(value => String(value || '').toLocaleLowerCase().includes(needle))) continue
@@ -49,12 +50,12 @@ export function searchCapacity(dashboard, { query, kind = 'people', gridIds = []
   else if (periods) add((dashboard.dailyRows || []).filter(row => row.date >= periods.previous.startDate && row.date <= periods.previous.endDate), 'previous')
   return [...groups.values()].map(group => ({ ...group, values: dashboard.products.filter(product => !productId || product.productId === productId).map(product => {
     const value = group.values.get(product.productId)
-    const month = value?.monthMissing ? null : value?.month ?? null
-    const previous = value?.previousMissing ? null : value?.previous ?? null
+    const month = value?.monthMissing ? null : value?.month ?? (dashboard.missingCapacityIsZero && dashboard.statDate ? 0 : null)
+    const previous = value?.previousMissing ? null : value?.previous ?? (dashboard.missingCapacityIsZero && dashboard.statDate ? 0 : null)
     const monthAverage = month === null || !days ? null : month / days
     const previousAverage = previous === null || !previousDays ? null : previous / previousDays
     const changeValue = monthAverage === null || previousAverage === null ? null : monthAverage - previousAverage
-    return { productId: product.productId, productName: product.productName, unit: product.unit, ...staffGoal(group.role,product.productId), previous, day: value?.dayMissing ? null : value?.day ?? null, month,
+    return { productId: product.productId, productName: product.productName, unit: product.unit, ...staffGoal(group.role,product.productId), previous, day: value?.dayMissing ? null : value?.day ?? (dashboard.missingCapacityIsZero && dailyDate(dashboard) ? 0 : null), month,
       monthAverage, previousAverage, changeValue, changeRate: changeValue === null || previousAverage === 0 ? null : changeValue / previousAverage * 100 }
   }) })).filter(group => group.values.some(value => value.day !== null || value.month !== null) || !productId)
     .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN') || a.key.localeCompare(b.key))

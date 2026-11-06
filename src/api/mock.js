@@ -58,6 +58,12 @@ export async function mockFetchAlerts(params) {
 }
 
 export async function mockSearchCapacity(params) {
+  if(params.kind === "own") {
+    const data=await mockFetchDashboard(params), grid=data.organization.grids.find(g=>!params.gridIds?.length||params.gridIds.includes(g.gridId));
+    if(!grid || !["示例自有经理","OWN-DEMO-001"].some(v=>v.toLowerCase().includes(params.query.trim().toLowerCase())))return {results:[],statDate:data.statDate,dailyStatDate:data.dailyStatDate};
+    const values=data.products.filter(p=>!params.productId||p.productId===params.productId).map(p=>({...p,day:0,month:0,previous:0}));
+    return {results:[{key:"own:demo",name:"示例自有经理",code:"OWN-DEMO-001",role:"社区经理",isOwn:true,branchId:grid.branchId,gridId:grid.gridId,values,children:[{key:"staff:demo",name:"示例自有经理",code:"OWN-DEMO-001",role:"社区经理",relation:"本人",entityType:"staff",branchId:grid.branchId,gridId:grid.gridId,values}]}],statDate:data.statDate,dailyStatDate:data.dailyStatDate};
+  }
   const data = await mockFetchDashboard(params)
   try { const goals=JSON.parse(localStorage.getItem('wgsc-import-staffCategoryTarget')||'[]'); data.staffCategoryTargets=Array.isArray(goals)?goals:[] } catch { data.staffCategoryTargets=[] }
   const allowed = new Set(data.organization.grids.map(row => row.gridId))
@@ -121,6 +127,7 @@ export async function mockFetchDashboard(params = {}) {
   return {
     organization: { cityName: '中山市', branches: mockBranches.filter(item => !branchId || item.branchId === branchId), grids: mockGrids.filter(item => (!branchId || item.branchId === branchId) && (!gridId || item.gridId === gridId)) },
     statDate,
+    missingCapacityIsZero: true,
     periods: buildMonthToDatePeriods(statDate),
     products: mockProducts,
     salesScripts: readSalesScripts(),

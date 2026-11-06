@@ -6,6 +6,9 @@ function init() {
     region: "app_open_api_c003_wgsc_region_capacity_1",
     channel: "app_open_api_c001_wgsc_chn_capacity_1",
     staffCapacity: "app_open_api_c003_wgsc_staff_capacity_1",
+    dailyRegion: "app_open_api_c002_wgsc_reg_capacity_d_1",
+    dailyChannel: "app_open_api_c002_wgsc_chn_capacity_d_1",
+    dailyStaff: "app_open_api_c002_wgsc_stf_capacity_d_1",
     channelInfo: "app_open_api_c003_wgsc_chn_level_1",
     staff: "app_open_api_c003_wgsc_staff_1",
     targets: "app_open_api_c003_wgsc_target_1",
@@ -51,7 +54,7 @@ function init() {
     return s;
   }
   function now() { var d = new Date(new Date().getTime() + 8 * 3600000); return formatDate(d) + " " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":" + pad(d.getUTCSeconds()); }
-  function productId(name) { name = text(name); if (name === "129+高套" || name === "119+套餐") name = "plan119"; for (var i = 0; i < products.length; i++) { if (products[i].productName === name || products[i].productId === name) return products[i].productId; } throw new Error("未知产品：" + name); }
+  function productId(name) { name = text(name); if (name === "手宽归档") name = "homeBroadband"; if (name === "129+高套" || name === "119+套餐") name = "plan119"; for (var i = 0; i < products.length; i++) { if (products[i].productName === name || products[i].productId === name) return products[i].productId; } throw new Error("未知产品：" + name); }
 
   function checkAuth() {
     var secret = text(Params.secret);
@@ -97,7 +100,7 @@ function init() {
     // ---------- 1. 根据类型查询产能并组装 ----------
     var capacityMap = {};
     function addCap(productName, periodType, value) {
-      if (value === null || value === undefined) return;
+      if (value === null || value === undefined) throw new Error("产能记录为空值，请修正源数据");
       var pid = productId(productName);
       if (!capacityMap[pid]) capacityMap[pid] = { day: null, mon: null, week: null, last_mon: null };
       if (["day", "mon", "week", "last_mon"].indexOf(periodType) >= 0) {
@@ -108,9 +111,56 @@ function init() {
     var regionLevelCond = scopeCond;
     if (scopeType === "city") regionLevelCond += " AND branch_company='全市' AND grid_name='全市'";
     if (scopeType === "branch") regionLevelCond += " AND grid_name=#{scopeId}";
+    // stat_date is the business date/batch, including YYYYMMDDHH; snapshot_time is not a business date.
+    function dailyDateSql(column) {
+      return "SUBSTR(REPLACE(REPLACE(SUBSTR(TRIM(" + column + "),1,10),'-',''),'/',''),1,8)";
+    }
+    function dailyHourSql(column) {
+      var value = "TRIM(" + column + ")";
+      return "CASE WHEN LENGTH(" + value + ")=10 AND SUBSTR(" + value + ",5,1) NOT IN ('-','/') THEN SUBSTR(" + value +
+        ",9,2) WHEN LENGTH(" + value + ")>=13 AND SUBSTR(" + value + ",11,1) IN ('T',' ') THEN SUBSTR(" + value + ",12,2) ELSE '' END";
+    }
+    function dailyBatchSql(column) {
+      return dailyDateSql(column) + "=#{dailyDateKey} AND (" + dailyHourSql(column) + ")=#{dailyHourKey}";
+    }
+    var dailyLatest = sql("SELECT MAX(" + dailyDateSql("stat_date") + ") AS d FROM " + tables.dailyRegion +
+      " WHERE 1=1" + regionLevelCond, regionArgs, true);
+    var dailyStatDate = dailyLatest[0] && dailyLatest[0].d ? date(dailyLatest[0].d) : null;
+    var dailyBatchArgs = JSON.parse(JSON.stringify(regionArgs));
+    dailyBatchArgs.dailyDateKey = dailyStatDate ? dailyStatDate.replace(/-/g, "") : "";
+    var dailyHours = dailyStatDate ? sql("SELECT MAX(" + dailyHourSql("stat_date") + ") AS h FROM " + tables.dailyRegion +
+      " WHERE " + dailyDateSql("stat_date") + "=#{dailyDateKey}" + regionLevelCond, dailyBatchArgs, true) : [];
+    var dailyStatHour = dailyHours[0] && text(dailyHours[0].h) !== "" ? text(dailyHours[0].h) : null;
+    dailyBatchArgs.dailyHourKey = dailyStatHour === null ? "" : dailyStatHour;
+    var dailyTable = channelType === "全部类型" ? tables.dailyRegion :
+      (channelType === "三星+渠道" || channelType === "营业厅" ? tables.dailyChannel : tables.dailyStaff);
+    var dailyHasData = false;
+    // Reuse the same organization/dimension joins, while keeping legacy periods untouched.
+    function readCapacity(query, args, oldTable) {
+      var legacy = sql(query, args, true), result = [];
+      for (var li = 0; li < legacy.length; li++) {
+        if (["mon", "week", "last_mon"].indexOf(legacy[li].prod_period_type) >= 0) result.push(legacy[li]);
+      }
+      if (!dailyStatDate) return result;
+      var dailyArgs = JSON.parse(JSON.stringify(args));
+      dailyArgs.dailyDateKey = dailyBatchArgs.dailyDateKey;
+      dailyArgs.dailyHourKey = dailyBatchArgs.dailyHourKey;
+      var dailyQuery = query.replace(oldTable, dailyTable)
+        .replace(/(?:c\.)?prod_period_type, /g, "")
+        .replace(/, (?:c\.)?prod_period_type/g, "")
+        .replace(/(c\.)?stat_date=#\{cutoff\}/, function (_, alias) {
+          return dailyBatchSql((alias || "") + "stat_date");
+        });
+      var dailyRows = sql(dailyQuery, dailyArgs, true);
+      for (var di = 0; di < dailyRows.length; di++) {
+        if (dailyRows[di].total !== null && dailyRows[di].total !== undefined) dailyHasData = true;
+        result.push({ product_name: dailyRows[di].product_name, prod_period_type: "day", total: dailyRows[di].total });
+      }
+      return result;
+    }
     if (channelType === "全部类型") {
       // 查区域产能表
-      var rows = sql("SELECT product_name, prod_period_type, SUM(capacity) AS total FROM " + tables.region + " WHERE stat_date=#{cutoff}" + regionLevelCond + " GROUP BY product_name, prod_period_type", regionArgs, true);
+      var rows = readCapacity("SELECT product_name, prod_period_type, SUM(capacity) AS total FROM " + tables.region + " WHERE stat_date=#{cutoff}" + regionLevelCond + " GROUP BY product_name, prod_period_type", regionArgs, tables.region);
       for (var i = 0; i < rows.length; i++) addCap(rows[i].product_name, rows[i].prod_period_type, rows[i].total);
       
     } else if (channelType === "三星+渠道" || channelType === "营业厅") {
@@ -118,21 +168,21 @@ function init() {
       var cArgs = JSON.parse(JSON.stringify(regionArgs));
       cArgs.channelLevel = channelType === "营业厅" ? "营业厅" : "三星+";
       var cCond = scopeCond.replace(/branch_company/g, "c.branch_company").replace(/grid_name/g, "c.grid_name");
-      var rows = sql("SELECT c.product_name, c.prod_period_type, SUM(c.capacity) AS total FROM " + tables.channel + " c INNER JOIN " + "(SELECT d.* FROM " + tables.channelInfo + " d JOIN (SELECT chn_code,MAX(id) AS latest_id FROM " + tables.channelInfo + " GROUP BY chn_code) newest ON d.id=newest.latest_id) ci ON c.channel_code = ci.chn_code AND c.branch_company=ci.branch AND c.grid_name=ci.grid WHERE c.stat_date=#{cutoff} AND ci.star_level = #{channelLevel}" + cCond + " GROUP BY c.product_name, c.prod_period_type", cArgs, true);
+      var rows = readCapacity("SELECT c.product_name, c.prod_period_type, SUM(c.capacity) AS total FROM " + tables.channel + " c INNER JOIN " + "(SELECT d.* FROM " + tables.channelInfo + " d JOIN (SELECT chn_code,MAX(id) AS latest_id FROM " + tables.channelInfo + " GROUP BY chn_code) newest ON d.id=newest.latest_id) ci ON c.channel_code = ci.chn_code AND c.branch_company=ci.branch AND c.grid_name=ci.grid WHERE c.stat_date=#{cutoff} AND ci.star_level = #{channelLevel}" + cCond + " GROUP BY c.product_name, c.prod_period_type", cArgs, tables.channel);
       for (var i = 0; i < rows.length; i++) addCap(rows[i].product_name, rows[i].prod_period_type, rows[i].total);
 
     } else if (channelType === "末梢渠道") {
       // 查工号产能表联表末梢维度表
       var sArgs = JSON.parse(JSON.stringify(regionArgs));
       var sCond = scopeCond.replace(/branch_company/g, "c.branch_company").replace(/grid_name/g, "c.grid_name");
-      var rows = sql("SELECT c.product_name, c.prod_period_type, SUM(c.capacity) AS total FROM " + tables.staffCapacity + " c INNER JOIN " + "(SELECT d.* FROM " + tables.terminal + " d JOIN (SELECT staff_no,MAX(id) AS latest_id FROM " + tables.terminal + " GROUP BY staff_no) newest ON d.id=newest.latest_id) t ON c.staff_no = t.staff_no AND c.branch_company=t.branch AND c.grid_name=t.grid WHERE c.stat_date=#{cutoff}" + sCond + " GROUP BY c.product_name, c.prod_period_type", sArgs, true);
+      var rows = readCapacity("SELECT c.product_name, c.prod_period_type, SUM(c.capacity) AS total FROM " + tables.staffCapacity + " c INNER JOIN " + "(SELECT d.* FROM " + tables.terminal + " d JOIN (SELECT staff_no,MAX(id) AS latest_id FROM " + tables.terminal + " GROUP BY staff_no) newest ON d.id=newest.latest_id) t ON c.staff_no = t.staff_no AND c.branch_company=t.branch AND c.grid_name=t.grid WHERE c.stat_date=#{cutoff}" + sCond + " GROUP BY c.product_name, c.prod_period_type", sArgs, tables.staffCapacity);
       for (var i = 0; i < rows.length; i++) addCap(rows[i].product_name, rows[i].prod_period_type, rows[i].total);
 
     } else if (channelType === "直销队伍") {
       // 查工号产能表联表员工维度表
       var stArgs = JSON.parse(JSON.stringify(regionArgs));
       var stCond = scopeCond.replace(/branch_company/g, "c.branch_company").replace(/grid_name/g, "c.grid_name");
-      var rows = sql("SELECT c.product_name, c.prod_period_type, SUM(c.capacity) AS total FROM " + tables.staffCapacity + " c INNER JOIN " + "(SELECT d.* FROM " + tables.staff + " d JOIN (SELECT staff_no,MAX(id) AS latest_id FROM " + tables.staff + " GROUP BY staff_no) newest ON d.id=newest.latest_id) st ON c.staff_no = st.staff_no AND c.branch_company=st.branch AND c.grid_name=st.grid WHERE c.stat_date=#{cutoff}" + stCond + " GROUP BY c.product_name, c.prod_period_type", stArgs, true);
+      var rows = readCapacity("SELECT c.product_name, c.prod_period_type, SUM(c.capacity) AS total FROM " + tables.staffCapacity + " c INNER JOIN " + "(SELECT d.* FROM " + tables.staff + " d JOIN (SELECT staff_no,MAX(id) AS latest_id FROM " + tables.staff + " GROUP BY staff_no) newest ON d.id=newest.latest_id) st ON c.staff_no = st.staff_no AND c.branch_company=st.branch AND c.grid_name=st.grid WHERE c.stat_date=#{cutoff}" + stCond + " GROUP BY c.product_name, c.prod_period_type", stArgs, tables.staffCapacity);
       for (var i = 0; i < rows.length; i++) addCap(rows[i].product_name, rows[i].prod_period_type, rows[i].total);
     }
 
@@ -142,34 +192,49 @@ function init() {
       var targetArgs = { month: statDate.slice(0, 7), monthSlash: statDate.slice(0, 7).replace("-", "/") }, targetScope = "";
       if (scopeType === "branch") { targetArgs.branch = scopeId; targetScope = " AND branch=#{branch}"; }
       if (scopeType === "grid") { var targetParts = scopeId.split("::"); targetArgs.branch = targetParts[0]; targetArgs.grid = targetParts[1]; targetScope = " AND branch=#{branch} AND grid=#{grid}"; }
-      var targetRows = [], pageSize = 1000;
-      for (var offset = 0; ; offset += pageSize) {
-        var page = sql("SELECT id,branch,grid,product_id,month_min_target,month_base_target,month_challenge_target FROM " + tables.targets +
-          " WHERE target_month IN (#{month},#{monthSlash})" + targetScope + " ORDER BY id LIMIT 1000 OFFSET " + offset, targetArgs, true);
-        for (var pi = 0; pi < page.length; pi++) {
-          page[pi].product_id = productId(page[pi].product_id);
-          page[pi].branch = text(page[pi].branch);
-          page[pi].grid = text(page[pi].grid);
+      function loadTargetRows(targetDate) {
+        var monthArgs = JSON.parse(JSON.stringify(targetArgs));
+        monthArgs.month = targetDate.slice(0, 7);
+        monthArgs.monthSlash = monthArgs.month.replace("-", "/");
+        var targetRows = [], pageSize = 1000;
+        for (var offset = 0; ; offset += pageSize) {
+          var page = sql("SELECT id,branch,grid,product_id,month_min_target,month_base_target,month_challenge_target FROM " + tables.targets +
+            " WHERE target_month IN (#{month},#{monthSlash})" + targetScope + " ORDER BY id LIMIT 1000 OFFSET " + offset, monthArgs, true);
+          for (var pi = 0; pi < page.length; pi++) {
+            page[pi].product_id = productId(page[pi].product_id);
+            page[pi].branch = text(page[pi].branch);
+            page[pi].grid = text(page[pi].grid);
+          }
+          targetRows = targetRows.concat(page);
+          if (page.length < pageSize) break;
+          if (offset >= 999000) throw new Error("目标结果过多，请缩小范围");
         }
-        targetRows = targetRows.concat(page);
-        if (page.length < pageSize) break;
-        if (offset >= 999000) throw new Error("目标结果过多，请缩小范围");
+        return targetRows;
       }
+      var targetRows = loadTargetRows(statDate);
+      var dailyTargetRows = !dailyStatDate ? [] : dailyStatDate.slice(0, 7) === statDate.slice(0, 7) ? targetRows : loadTargetRows(dailyStatDate);
       var expectedGrids = sql("SELECT DISTINCT branch_company,grid_name FROM " + tables.region + " WHERE stat_date=#{cutoff}" + scopeCond +
         " AND branch_company<>'全市' AND (grid_name<>branch_company OR grid_name IN ('未知','市统筹'))", regionArgs, true);
+      var dailyExpectedGrids = dailyStatDate ? sql("SELECT DISTINCT branch_company,grid_name FROM " + tables.dailyRegion +
+        " WHERE " + dailyBatchSql("stat_date") + scopeCond +
+        " AND branch_company<>'全市' AND (grid_name<>branch_company OR grid_name IN ('未知','市统筹'))",
+        dailyBatchArgs, true) : [];
       function validTarget(v) { return v === null || v === undefined || text(v) === "" ? null : num(v); }
       function targetSum(pid, field, daily) {
+        if (daily && !dailyStatDate) return null;
+        var rowsForTarget = daily ? dailyTargetRows : targetRows;
+        var targetDate = daily ? dailyStatDate : statDate;
         var chosen = [], summaryBranch = scopeType === "city" ? "全市" : scopeId;
-        if (scopeType !== "grid") for (var ti = 0; ti < targetRows.length; ti++) {
-          var candidate = targetRows[ti];
+        if (scopeType !== "grid") for (var ti = 0; ti < rowsForTarget.length; ti++) {
+          var candidate = rowsForTarget[ti];
           if (candidate.product_id === pid && candidate.branch === summaryBranch && candidate.grid === summaryBranch) chosen.push(candidate);
         }
         if (!chosen.length) {
-          var expected = scopeType === "grid" ? [{ branch_company: regionArgs.branch, grid_name: regionArgs.grid }] : expectedGrids;
+          var expected = scopeType === "grid" ? [{ branch_company: regionArgs.branch, grid_name: regionArgs.grid }] : (daily ? dailyExpectedGrids : expectedGrids);
           if (!expected.length) return null;
           for (var gi = 0; gi < expected.length; gi++) {
             var matches = [];
-            for (var ri = 0; ri < targetRows.length; ri++) if (targetRows[ri].product_id === pid && targetRows[ri].branch === expected[gi].branch_company && targetRows[ri].grid === expected[gi].grid_name) matches.push(targetRows[ri]);
+            for (var ri = 0; ri < rowsForTarget.length; ri++) if (rowsForTarget[ri].product_id === pid && rowsForTarget[ri].branch === expected[gi].branch_company && rowsForTarget[ri].grid === expected[gi].grid_name) matches.push(rowsForTarget[ri]);
             if (matches.length !== 1) return null;
             chosen.push(matches[0]);
           }
@@ -178,7 +243,7 @@ function init() {
         for (var ci = 0; ci < chosen.length; ci++) {
           var value = validTarget(chosen[ci][daily ? field.replace(/^day_/, "month_") : field]);
           if (value === null) return null;
-          total += daily ? value / new Date(Date.UTC(Number(statDate.slice(0, 4)), Number(statDate.slice(5, 7)), 0)).getUTCDate() : value;
+          total += daily ? value / new Date(Date.UTC(Number(targetDate.slice(0, 4)), Number(targetDate.slice(5, 7)), 0)).getUTCDate() : value;
         }
         return total;
       }
@@ -196,6 +261,13 @@ function init() {
     for (var i = 0; i < products.length; i++) {
       var p = products[i];
       var c = capacityMap[p.productId] || { day: null, mon: null, week: null, last_mon: null };
+      // A known reference batch omits zero-production objects/products entirely.
+      if (dailyStatDate && c.day === null) c.day = 0;
+      if (statDate) {
+        if (c.mon === null) c.mon = 0;
+        if (c.week === null) c.week = 0;
+        if (c.last_mon === null) c.last_mon = 0;
+      }
       var tg = targetMap[p.productId] || { monthTarget: null, dayTarget: null };
       var monthAverage = c.mon === null ? null : Math.round(c.mon / elapsed * 100) / 100;
       var weekAverage  = c.week === null ? null : Math.round(c.week / 7 * 100) / 100;
@@ -237,12 +309,15 @@ function init() {
     }
 
     return {
-      statDate: statDate, 
+      statDate: statDate,
+      dailyStatDate: dailyStatDate,
+      dailyStatHour: dailyStatHour,
+      dailySource: { table: dailyTable, dateTable: tables.dailyRegion, statDate: dailyStatDate, statHour: dailyStatHour, hasData: dailyHasData },
       scopeType: scopeType, 
       scopeId: scopeId, 
       scopeName: scopeType === "city" ? "全市" : scopeId,
       channelType: channelType,
-      dataQuality: { sourceDates: { region: statDate }, timeProgress: timeProgress,
+      dataQuality: { sourceDates: { region: statDate, dailyRegion: dailyStatDate, dailyCapacity: dailyHasData ? dailyStatDate : null }, timeProgress: timeProgress,
         warnings: channelType === "全部类型" ? [] : ["类型专属目标未配置，完成率及目标缺口未知，不套用区域总体目标"] },
       products: productData, 
       alerts: alerts,

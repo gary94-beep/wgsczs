@@ -34,6 +34,7 @@ export function visibleDashboard(data) {
 
 export function visibleSearchResults(data) {
   return { ...data, results: (data.results || []).filter(isVisibleProduct).map(item => ({ ...displayProduct(item),
+    ...(Array.isArray(item.children) ? {children:visibleSearchResults({results:item.children}).results} : {}),
     ...(Array.isArray(item.values) ? { values: item.values.filter(isVisibleProduct).map(displayProduct) } : {})
   })).filter(item => !Array.isArray(item.values) || item.values.length > 0) }
 }

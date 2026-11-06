@@ -2,6 +2,9 @@
 function init() {
   // ========== 表名 ==========
   var tables = {
+    regionDay: "app_open_api_c002_wgsc_reg_capacity_d_1",
+    channelDay: "app_open_api_c002_wgsc_chn_capacity_d_1",
+    staffDay: "app_open_api_c002_wgsc_stf_capacity_d_1",
     region: "app_open_api_c003_wgsc_region_capacity_1",
     channel: "app_open_api_c001_wgsc_chn_capacity_1",
     staffCapacity: "app_open_api_c003_wgsc_staff_capacity_1",
@@ -11,6 +14,9 @@ function init() {
     permission: "app_open_api_c003_wgsc_permission_1",
     targets: "app_open_api_c003_wgsc_target_1",
     staffTargets: "app_open_api_c001_wgsc_staff_target_m_1",
+    ownStaff: "app_open_api_c001_wgsc_staff_own_team_1",
+    selfTeam: "app_open_api_c001_wgsc_self_team_1",
+    chnManager: "app_open_api_c001_wgsc_chn_manager_1",
     scripts: "app_open_api_c001_wgsc_script_1"
   };
 
@@ -94,6 +100,7 @@ function init() {
   function product(v) {
     v = text(v);
     if (v === "129+高套" || v === "119+套餐") v = "plan119";
+    if (v === "手宽归档") v = "homeBroadband";
     for (var i = 0; i < products.length; i++) {
       if (products[i].productName === v || products[i].productId === v) return products[i];
     }
@@ -173,6 +180,16 @@ function init() {
     }
   }
 
+  function dailyStamp(column) {
+    return "CASE WHEN SUBSTRING("+column+",5,1) IN ('-','/') THEN CONCAT(REPLACE(REPLACE(SUBSTRING("+column+",1,10),'/',''),'-',''),CASE WHEN LENGTH("+column+")>=13 THEN SUBSTRING("+column+",12,2) ELSE '' END) ELSE SUBSTRING("+column+",1,10) END";
+  }
+  function latestDaily(table) {
+    var args={}, rows=sql("SELECT MAX("+dailyStamp("stat_date")+") AS stat_date FROM "+table+" WHERE 1=1"+scope("branch_company","grid_name",args),args,true);
+    var stamp=rows[0] && rows[0].stat_date ? text(rows[0].stat_date) : "";
+    if(stamp && !/^\d{8}(\d{2})?$/.test(stamp))throw new Error("日表统计日期格式异常");
+    if(stamp.length===10 && Number(stamp.slice(8))>23)throw new Error("日表统计小时无效");
+    return {date:stamp?date(stamp.slice(0,8)):"",hour:stamp.length===10?stamp.slice(8):"",stamp:stamp};
+  }
   // ============================================================
   // filtered
   // ============================================================
@@ -211,7 +228,7 @@ function init() {
     }
     people.sort(function (a, b) { return a.production - b.production; });
     channels.sort(function (a, b) { return a.production - b.production; });
-    return { people: people, channels: channels, statDate: data.statDate, totals: populationTotals(data), totalSource: "dimension" };
+    return { people: people, channels: channels, statDate: Params.period === "day" ? data.dailyStatDate : data.statDate, dailyStatDate: data.dailyStatDate, dailyStatHour: data.dailyStatHour, comparisonStatDate: data.statDate, totals: populationTotals(data), totalSource: "dimension" };
   }
 
   // ============================================================
@@ -237,7 +254,106 @@ function init() {
     return goals;
   }
 
+
+  // Query only matched managers and their distinct current links; never load these at login.
+  function ownSearch(data) {
+    var q=text(Params.query).toLowerCase();
+    if(!q || q.length>100)throw new Error("查询参数无效");
+    var args={ownQuery:q}, managers={}, result=[], ids=[];
+    var chosen=selectedGridClause(args,data,"d");
+    var selector="SELECT d.* FROM "+latestDimension(tables.ownStaff,"staff_no")+" d WHERE 1=1"+
+      scope("d.branch","d.grid",args)+chosen+
+      " AND LOCATE(#{ownQuery},LOWER(CONCAT(COALESCE(d.staff_name,''),' ',COALESCE(d.staff_no,''))))>0";
+    var roster=pagedSql(selector,args,"staff_no");
+    var ps=Params.productId?[product(Params.productId)]:products;
+    function metrics(){return ps.map(function(p){return {productId:p.productId,productName:p.productName,unit:p.unit,
+      day:data.dailyStatDate?0:null,month:data.statDate?0:null,previous:data.statDate?0:null};});}
+    function addChild(g,code,name,role,kind,branch,grid){
+      code=text(code);if(!code)return;
+      var key=JSON.stringify([kind,code]);
+      if(g.childMap[key])return;
+      var self=kind==="staff" && code===g.code;
+      var child={key:key,code:code,name:text(name)||code,role:text(role),entityType:kind,
+        relation:self?"本人":kind==="staff"?"所管人员":"所管渠道",branchId:branch,gridId:gridId(branch,grid),values:metrics()};
+      g.childMap[key]=child;g.children.push(child);
+    }
+    for(var i=0;i<roster.length;i++){
+      var r=roster[i],code=text(r.staff_no);if(!code)continue;
+      var g={key:"own:"+code,code:code,name:text(r.staff_name)||code,role:text(r.team),isOwn:true,
+        branchId:r.branch,gridId:gridId(r.branch,r.grid),values:metrics(),children:[],childMap:{}};
+      managers[code]=g;ids.push(code);result.push(g);
+      addChild(g,code,g.name,g.role,"staff",r.branch,r.grid);
+    }
+    if(!ids.length)return result;
+    var placeholders=ids.map(function(code,i){args["ownManager"+i]=code;return "#{ownManager"+i+"}";}).join(",");
+    var links=pagedSql("SELECT * FROM "+tables.selfTeam+" WHERE manager_no IN ("+placeholders+")"+
+      scope("branch_company","grid_name",args),args,"id");
+    for(i=0;i<links.length;i++){
+      r=links[i];addChild(managers[text(r.manager_no)],r.staff_no,r.staff_name,r.team_type,"staff",r.branch_company,r.grid_name);
+    }
+    links=pagedSql("SELECT * FROM "+tables.chnManager+" WHERE manager_no IN ("+placeholders+")",args,"id");
+    // Resolve channel geography where available; an omitted zero-channel inherits its authorized manager's location.
+    var channels={}, channelIds=[];
+    for(i=0;i<links.length;i++)if(text(links[i].channel_code) && !channels[text(links[i].channel_code)]){
+      channels[text(links[i].channel_code)]={};channelIds.push(text(links[i].channel_code));
+    }
+    if(channelIds.length){
+      var cp=channelIds.map(function(code,i){args["ownChannel"+i]=code;return "#{ownChannel"+i+"}";}).join(",");
+      var chns=pagedSql("SELECT chn_code,branch,grid FROM "+latestDimension(tables.channelInfo,"chn_code")+" d WHERE chn_code IN ("+cp+")",args,"chn_code");
+      for(i=0;i<chns.length;i++)channels[text(chns[i].chn_code)]=chns[i];
+      // Some contractor/tail codes exist only in capacity tables. Read distinct scoped locations, not production rows.
+      var locations=[];
+      var sources=[tables.channel,tables.channelDay];
+      for(var si=0;si<sources.length;si++)locations=locations.concat(pagedSql("SELECT DISTINCT channel_code AS chn_code,branch_company AS branch,grid_name AS grid FROM "+sources[si]+" WHERE channel_code IN ("+cp+")"+scope("branch_company","grid_name",args),args,"chn_code,branch,grid"));
+      for(i=0;i<locations.length;i++)if(!channels[text(locations[i].chn_code)].branch)channels[text(locations[i].chn_code)]=locations[i];
+      for(i=0;i<links.length;i++){
+        r=links[i];g=managers[text(r.manager_no)];var loc=channels[text(r.channel_code)]||{};
+        if(user.role!=="city" && loc.branch && (loc.branch!==user.branchName || user.role==="grid" && loc.grid!==user.gridName))continue;
+        addChild(g,r.channel_code,r.channel_name,r.channel_type,"channel",loc.branch||g.branchId,loc.grid||g.gridId.split("::").slice(1).join("::"));
+      }
+    }
+    var wanted={staff:{},channel:{}}, values={staff:{},channel:{}};
+    for(i=0;i<result.length;i++)for(var j=0;j<result[i].children.length;j++){
+      var child=result[i].children[j];wanted[child.entityType][child.code]=true;
+    }
+    function readCapacity(kind,daily){
+      if(daily?!data.dailyStatDate:!data.statDate)return;
+      var codes=Object.keys(wanted[kind]);if(!codes.length)return;
+      var key=kind==="staff"?"staff_no":"channel_code",a={ownCutoff:daily?data.dailyStamp:data.statDate};
+      var fields=codes.map(function(code,i){a["ownCode"+i]=code;return "#{ownCode"+i+"}";}).join(",");
+      var table=daily?(kind==="staff"?tables.staffDay:tables.channelDay):(kind==="staff"?tables.staffCapacity:tables.channel);
+      var where=" WHERE "+key+" IN ("+fields+") AND "+(daily?"("+dailyStamp("stat_date")+")":"stat_date")+"=#{ownCutoff}"+
+        scope("branch_company","grid_name",a)+(daily?"":" AND prod_period_type IN ('mon','last_mon')")+
+        " AND product_name IN ("+ps.map(capacityProductNames).join(",")+")";
+      var measured=pagedSql("SELECT "+key+" AS code,product_name,"+(daily?"'day'":"prod_period_type")+" AS period,SUM(capacity) AS capacity,"+
+        "SUM(CASE WHEN capacity IS NULL OR capacity<0 THEN 1 ELSE 0 END) AS invalid_count FROM "+table+where+
+        " GROUP BY "+key+",product_name"+(daily?"":",prod_period_type"),a,"code,product_name,period");
+      for(var x=0;x<measured.length;x++){
+        var row=measured[x];if(Number(row.invalid_count)>0)throw new Error("产能包含空值或负数，请修正源数据");
+        var k=JSON.stringify([text(row.code),product(row.product_name).productId,row.period]);
+        values[kind][k]=(values[kind][k]||0)+num(row.capacity);
+      }
+    }
+    readCapacity("staff",false);readCapacity("staff",true);readCapacity("channel",false);readCapacity("channel",true);
+    for(i=0;i<result.length;i++){
+      g=result[i];
+      for(j=0;j<g.children.length;j++){
+        child=g.children[j];
+        for(var m=0;m<child.values.length;m++)for(var v=0;v<3;v++){
+          var field=["day","month","previous"][v],period=["day","mon","last_mon"][v];
+          if(child.values[m][field]===null)continue;
+          var amount=values[child.entityType][JSON.stringify([child.code,child.values[m].productId,period])]||0;
+          child.values[m][field]=amount;g.values[m][field]+=amount;
+        }
+      }
+      delete g.childMap;
+      g.children.sort(function(a,b){return (a.relation==="本人"?-1:b.relation==="本人"?1:0)||a.name.localeCompare(b.name);});
+    }
+    return result;
+  }
+
   function search() {
+    if(Params.kind === "own"){var ownData=metadata();return {results:ownSearch(ownData),statDate:ownData.statDate,dailyStatDate:ownData.dailyStatDate,dailyStatHour:ownData.dailyStatHour};}
     var data = dashboard();
     var q = text(Params.query).toLowerCase();
     var groups = {};
@@ -287,7 +403,8 @@ function init() {
       }
       result.push(groups[key]);
     }
-    return { results: result, statDate: data.statDate };
+    if(Params.kind === "people")result=ownSearch(data).concat(result);
+    return { results: result, statDate: data.statDate, dailyStatDate: data.dailyStatDate, dailyStatHour: data.dailyStatHour };
   }
 
   // ============================================================
@@ -330,7 +447,7 @@ function init() {
         var match = null;
         for (var k = 0; k < data.targets.length; k++) {
           var t = data.targets[k];
-          if (t.gridId === key && t.productId === productId) { match = t; break; }
+          if (t.gridId === key && t.productId === productId && t.targetMonth === (daily ? data.dailyStatDate : data.statDate).slice(0,7)) { match = t; break; }
         }
         if (!match || (!daily && match.target === null) || (daily && match.dailyTarget === null)) return null;
         value += daily ? match.dailyTarget : match.target; count++;
@@ -343,7 +460,7 @@ function init() {
     function change(value, base) {
       return { value: value === null || base === null ? null : value - base, rate: value === null || base === null || base === 0 ? null : (value - base) / base * 100 };
     }
-    var summary = { scope: user.role === "city" ? "中山市" : user.gridName || user.branchName, statDate: data.statDate, demo: false, channelType: category || "全部类型", weekBasis: "rolling7", products: [] };
+    var summary = { scope: user.role === "city" ? "中山市" : user.gridName || user.branchName, statDate: data.statDate, dailyStatDate: data.dailyStatDate, dailyStatHour: data.dailyStatHour, demo: false, channelType: category || "全部类型", weekBasis: "rolling7", products: [] };
     for (i = 0; i < selectedProducts.length; i++) {
       var p = selectedProducts[i], day = sum("day", p.productId), month = sum("mon", p.productId), week = sum("week", p.productId), last = sum("last_mon", p.productId);
       var weeklyAverage = week === null ? null : week / 7, monthAverage = month === null ? null : month / elapsed, previousAverage = last === null ? null : last / previousDays;
@@ -390,25 +507,32 @@ function init() {
       if (!Object.prototype.hasOwnProperty.call(allowed, ids[i])) throw new Error("无权访问该网格");
       var parts = ids[i].split("::");
       args["selectedBranch" + i] = parts[0]; args["selectedGrid" + i] = parts.slice(1).join("::");
-      terms.push("(" + alias + ".branch_company=#{selectedBranch" + i + "} AND " + alias + ".grid_name=#{selectedGrid" + i + "})");
+      terms.push("(" + alias + (alias === "d" ? ".branch" : ".branch_company") + "=#{selectedBranch" + i + "} AND " + alias + (alias === "d" ? ".grid" : ".grid_name") + "=#{selectedGrid" + i + "})");
     }
     return terms.length ? " AND (" + terms.join(" OR ") + ")" : "";
   }
-  function capacityQuery(data, detail, args, periods) {
-    args.cutoff = data.statDate;
-    var clause = " WHERE c.stat_date=#{cutoff}" + scope("c.branch_company", "c.grid_name", args);
-    if (detail) clause += selectedGridClause(args, data, "c");
-    if (detail && Params.productId) { args.selectedProduct = product(Params.productId).productName; clause += " AND c.product_name=#{selectedProduct}"; }
-    if (periods) {
-      clause += " AND c.prod_period_type IN (" + periods.map(function (p) { return "'" + p + "'"; }).join(",") + ")";
-    } else if (detail) {
-      if (Params.funCode === "wgsc_fetchChangeAlerts") clause += " AND c.prod_period_type IN ('mon','last_mon')";
-      else if (Params.funCode === "wgsc_searchCapacity") clause += " AND c.prod_period_type IN ('mon','day','last_mon')";
-      else if (Params.funCode === "wgsc_fetchAlerts" || Params.funCode === "wgsc_fetchChannelOptions") {
-        args.selectedPeriod = Params.period === "day" ? "day" : "mon";
-        clause += " AND c.prod_period_type=#{selectedPeriod}";
-      }
+  function emptyCapacityQuery() { return "SELECT '' AS branchId,'' AS gridId,'' AS productName,'' AS period,'' AS channelType,0 AS production,0 AS invalidCount,'' AS staffId,'' AS staffName,'' AS staffRole,'' AS channel,'' AS channelCode,'' AS star,'' AS microChannelName,'' AS serviceProvider,NULL AS staffCount WHERE 1=0"; }
+  function capacityProductNames(p) {
+    var names = [p.productName, p.productId];
+    if (p.productId === "homeBroadband") names.push("手宽归档");
+    if (p.productId === "plan119") names = names.concat(["129+高套", "119+套餐"]);
+    return names.map(function (name) { return "'" + name + "'"; }).join(",");
+  }
+  function capacityQuery(data, detail, args, periods, daily) {
+    if (daily === undefined) {
+      var wanted=periods || (detail && Params.funCode==="wgsc_fetchChangeAlerts" ? ["mon","last_mon"] :
+        detail && Params.funCode==="wgsc_searchCapacity" ? ["mon","last_mon","day"] :
+        detail && ["wgsc_fetchAlerts","wgsc_fetchChannelOptions"].indexOf(Params.funCode)>=0 ? [Params.period==="day"?"day":"mon"] : ["mon","week","last_mon","day"]);
+      var historical=wanted.filter(function(p){return p!=="day";}), queries=[];
+      if(historical.length && data.statDate)queries.push(capacityQuery(data,detail,args,historical,false));
+      if(wanted.indexOf("day")>=0 && data.dailyStatDate)queries.push(capacityQuery(data,detail,args,[],true));
+      return queries.length?queries.join(" UNION ALL "):emptyCapacityQuery();
     }
+    args.cutoff = data.statDate;
+    args.dailyCutoff = data.dailyStamp;
+    var clause = " WHERE " + (daily ? "("+dailyStamp("c.stat_date")+")=#{dailyCutoff}" : "c.stat_date=#{cutoff}") + scope("c.branch_company", "c.grid_name", args);
+    if (detail) clause += selectedGridClause(args, data, "c");
+    if (!daily) clause += " AND c.prod_period_type IN (" + periods.map(function(p){return "'"+p+"'";}).join(",") + ")";
     var channelType = text(Params.channelType), selectedTypes = ["三星+渠道", "直销队伍", "末梢渠道", "营业厅"];
     if (channelType === "3星+渠道") channelType = "三星+渠道";
     if (channelType === "全部类型") channelType = "";
@@ -418,41 +542,83 @@ function init() {
     if (detail && Params.funCode === "wgsc_searchCapacity" && Params.kind === "people") selectedTypes = selectedTypes.filter(function (v) { return v === "直销队伍"; });
     if (detail && Params.funCode === "wgsc_searchCapacity" && Params.kind === "channels") selectedTypes = selectedTypes.filter(function (v) { return v !== "直销队伍"; });
     if (detail && Params.funCode === "wgsc_searchCapacity" && Params.kind === "channels" && !channelType) selectedTypes = selectedTypes.filter(function (v) { return v !== "营业厅"; });
+    var requestedProducts = detail && Params.productId ? [product(Params.productId)] : products;
+    if (detail && Params.productId) clause += " AND c.product_name IN (" + capacityProductNames(requestedProducts[0]) + ")";
+    var productQuery = requestedProducts.map(function(p){return "SELECT '"+p.productId+"' AS productId,'"+p.productName+"' AS productName";}).join(" UNION ALL ");
+    var periodQuery = (daily ? ["day"] : periods).map(function(p){return "SELECT '"+p+"' AS period";}).join(" UNION ALL ");
     var blocks = [];
     for (var i = 0; i < selectedTypes.length; i++) {
-      var type = selectedTypes[i], stars = type === "三星+渠道" || type === "营业厅", tail = type === "末梢渠道";
-      var table = stars ? tables.channel : tables.staffCapacity;
-      var dimension = stars ? tables.channelInfo : tail ? tables.terminal : tables.staff;
-      var key = stars ? "chn_code" : "staff_no";
-      var join = " INNER JOIN " + latestDimension(dimension, key) + " d ON c." + (stars ? "channel_code" : "staff_no") + "=d." + key;
-      join += " AND c.branch_company=d.branch AND c.grid_name=d.grid";
-      var condition = clause + (stars ? (type === "营业厅" ? " AND d.star_level='营业厅'" : " AND d.star_level='三星+'") : "");
-      if (!stars) condition += " AND NOT EXISTS (SELECT 1 FROM " + (tail ? tables.staff : tables.terminal) + " conflict WHERE conflict.staff_no=c.staff_no)";
-      var identity = stars ? "d.chn_code" : tail ? "JSON_ARRAY(d.agent,d.chn_name)" : "d.staff_no";
-      var label = stars || tail ? "d.chn_name" : "c.channel_name";
-      if (detail && Params.funCode === "wgsc_searchCapacity") {
-        args.searchQuery = text(Params.query).toLowerCase();
-        if (!args.searchQuery || args.searchQuery.length > 100 || ["people", "channels"].indexOf(Params.kind) < 0) throw new Error("查询参数无效");
-        var name = stars || tail ? "d.chn_name" : "d.staff_name";
-        condition += " AND LOCATE(#{searchQuery},LOWER(CONCAT(COALESCE(" + name + ",''),' ',COALESCE(" + identity + ",''))))>0";
+      var type=selectedTypes[i], stars=type==="三星+渠道" || type==="营业厅", tail=type==="末梢渠道";
+      var table=daily ? (stars?tables.channelDay:tables.staffDay) : (stars?tables.channel:tables.staffCapacity);
+      var dimension=stars?tables.channelInfo:tail?tables.terminal:tables.staff, key=stars?"chn_code":"staff_no", capacityKey=stars?"channel_code":"staff_no";
+      var condition=" WHERE 1=1"+scope("d.branch","d.grid",args);
+      if(detail)condition+=selectedGridClause(args,data,"d");
+      if(stars)condition+=type==="营业厅"?" AND d.star_level='营业厅'":" AND d.star_level='三星+'";
+      else condition+=" AND NOT EXISTS (SELECT 1 FROM "+(tail?tables.staff:tables.terminal)+" conflict WHERE conflict.staff_no=d.staff_no)";
+      var identity=stars?"d.chn_code":tail?"JSON_ARRAY(d.agent,d.chn_name)":"d.staff_no";
+      if(detail && Params.funCode==="wgsc_searchCapacity"){
+        args.searchQuery=text(Params.query).toLowerCase();
+        if(!args.searchQuery || args.searchQuery.length>100 || ["people","channels"].indexOf(Params.kind)<0)throw new Error("查询参数无效");
+        var name=stars||tail?"d.chn_name":"d.staff_name";
+        condition+=" AND LOCATE(#{searchQuery},LOWER(CONCAT(COALESCE("+name+",''),' ',COALESCE("+identity+",''))))>0";
       }
-      var cols = "c.branch_company AS branchId,CONCAT(c.branch_company,'::',c.grid_name) AS gridId," +
-        "c.product_name AS productName,c.prod_period_type AS period,'" + type + "' AS channelType," +
-        "SUM(c.capacity) AS production,SUM(CASE WHEN c.capacity IS NULL OR c.capacity<0 THEN 1 ELSE 0 END) AS invalidCount,";
-      if (detail) cols += (stars || tail ? "''" : "MAX(d.staff_no)") + " AS staffId," +
-        (stars || tail ? "''" : "MAX(d.staff_name)") + " AS staffName," +
-        (stars || tail ? "''" : "MAX(d.team_type)") + " AS staffRole," +
-        "MIN(" + label + ") AS channel," + (stars ? "MAX(d.chn_code)" : "''") + " AS channelCode," +
-        (stars ? "MAX(d.star)" : "''") + " AS star," +
-        (tail ? "MAX(d.chn_name)" : "''") + " AS microChannelName," +
-        (tail ? "MAX(d.agent)" : "''") + " AS serviceProvider," +
-        (stars ? "NULL" : "COUNT(*)") + " AS staffCount";
-      else cols += "'' AS staffId,'' AS staffName,'' AS staffRole,'' AS channel,'' AS channelCode,'' AS star,'' AS microChannelName,'' AS serviceProvider,NULL AS staffCount";
-      blocks.push("SELECT " + cols + " FROM " + table + " c" + join + condition +
-        " GROUP BY c.branch_company,c.grid_name,c.product_name,c.prod_period_type" + (detail ? "," + identity : ""));
+      var matchIdentity = "c."+capacityKey+"=d."+key+" AND c.branch_company=d.branch AND c.grid_name=d.grid";
+      if (!detail) {
+        // Summarize only measured records. Never enumerate a personnel/product/period matrix at login.
+        var normalizedProduct = "CASE " + products.map(function (p) {
+          return "WHEN c.product_name IN ("+capacityProductNames(p)+") THEN '"+p.productName+"'";
+        }).join(" ") + " END";
+        blocks.push("SELECT c.branch_company AS branchId,CONCAT(c.branch_company,'::',c.grid_name) AS gridId,"+
+          normalizedProduct+" AS productName,"+(daily?"'day'":"c.prod_period_type")+" AS period,'"+type+"' AS channelType,"+
+          "SUM(c.capacity) AS production,SUM(CASE WHEN c.capacity IS NULL OR c.capacity<0 THEN 1 ELSE 0 END) AS invalidCount,"+
+          "'' AS staffId,'' AS staffName,'' AS staffRole,'' AS channel,'' AS channelCode,'' AS star,'' AS microChannelName,'' AS serviceProvider,NULL AS staffCount"+
+          " FROM "+table+" c INNER JOIN "+latestDimension(dimension,key)+" d ON "+matchIdentity+condition+
+          clause.replace(" WHERE "," AND ")+" AND ("+normalizedProduct+") IS NOT NULL"+
+          " GROUP BY c.branch_company,c.grid_name,"+normalizedProduct+(daily?"":",c.prod_period_type"));
+        continue;
+      }
+      // Filter matching roster identities before source aggregation; retain the outer roster for absent records.
+      var sourceClause = clause;
+      if (Params.funCode === "wgsc_searchCapacity") sourceClause += " AND EXISTS (SELECT 1 FROM "+
+        latestDimension(dimension,key)+" d"+condition+" AND "+matchIdentity+")";
+      var measured="SELECT c.branch_company,c.grid_name,c."+capacityKey+" AS identity,c.product_name,"+(daily?"'day'":"c.prod_period_type")+" AS period,"+
+        "SUM(c.capacity) AS production,SUM(CASE WHEN c.capacity IS NULL OR c.capacity<0 THEN 1 ELSE 0 END) AS invalidCount,MIN(c.channel_name) AS channel"+
+        " FROM "+table+" c"+sourceClause+
+        " GROUP BY c.branch_company,c.grid_name,c."+capacityKey+",c.product_name"+(daily?"":",c.prod_period_type");
+      var columns="d.branch AS branchId,CONCAT(d.branch,'::',d.grid) AS gridId,p.productName,v.period,'"+type+"' AS channelType,"+
+        "SUM(COALESCE(m.production,0)) AS production,SUM(COALESCE(m.invalidCount,0)) AS invalidCount,";
+      if(detail)columns+=(stars||tail?"''":"MAX(d.staff_no)")+" AS staffId,"+(stars||tail?"''":"MAX(d.staff_name)")+" AS staffName,"+
+        (stars||tail?"''":"MAX(d.team_type)")+" AS staffRole,"+(stars||tail?"MAX(d.chn_name)":"COALESCE(MIN(m.channel),'')")+" AS channel,"+
+        (stars?"MAX(d.chn_code)":"''")+" AS channelCode,"+(stars?"MAX(d.star)":"''")+" AS star,"+
+        (tail?"MAX(d.chn_name)":"''")+" AS microChannelName,"+(tail?"MAX(d.agent)":"''")+" AS serviceProvider,"+
+        (stars?"NULL":"COUNT(DISTINCT d.staff_no)")+" AS staffCount";
+      else columns+="'' AS staffId,'' AS staffName,'' AS staffRole,'' AS channel,'' AS channelCode,'' AS star,'' AS microChannelName,'' AS serviceProvider,NULL AS staffCount";
+      var productMatch="(m.product_name=p.productName OR m.product_name=p.productId OR (p.productId='homeBroadband' AND m.product_name='手宽归档') OR (p.productId='plan119' AND m.product_name IN ('129+高套','119+套餐')))";
+      blocks.push("SELECT "+columns+" FROM "+latestDimension(dimension,key)+" d CROSS JOIN ("+productQuery+") p CROSS JOIN ("+periodQuery+") v"+
+        " LEFT JOIN ("+measured+") m ON m.identity=d."+key+" AND m.branch_company=d.branch AND m.grid_name=d.grid AND m.period=v.period AND "+productMatch+condition+
+        " GROUP BY d.branch,d.grid,p.productName,v.period"+(detail?","+identity:""));
     }
-    if (!blocks.length) return "SELECT '' AS branchId,'' AS gridId,'' AS productName,'' AS period,'' AS channelType,0 AS production,0 AS invalidCount,'' AS staffId,'' AS staffName,'' AS staffRole,'' AS channel,'' AS channelCode,'' AS star,'' AS microChannelName,'' AS serviceProvider,NULL AS staffCount WHERE 1=0";
-    return blocks.join(" UNION ALL ");
+    return blocks.length?blocks.join(" UNION ALL "):emptyCapacityQuery();
+  }
+  function fillSummaryZeros(data, selected) {
+    var seen = {}, types = ["三星+渠道", "直销队伍", "末梢渠道", "营业厅"], periods = [];
+    if (data.statDate) periods = ["mon", "week", "last_mon"];
+    if (data.dailyStatDate) periods.push("day");
+    function key(grid, type, name, period) { return JSON.stringify([grid, type, name, period]); }
+    for (var i = 0; i < selected.length; i++) {
+      var r = selected[i];
+      seen[key(r.gridId, r.channelType, r.productName, r.period)] = true;
+    }
+    for (i = 0; i < data.organization.grids.length; i++) {
+      var grid = data.organization.grids[i];
+      for (var t = 0; t < types.length; t++) for (var p = 0; p < products.length; p++) for (var v = 0; v < periods.length; v++) {
+        if (!seen[key(grid.gridId, types[t], products[p].productName, periods[v])]) selected.push({
+          branchId: grid.branchId, gridId: grid.gridId, channelType: types[t], productName: products[p].productName,
+          period: periods[v], production: 0, invalidCount: 0, staffCount: null
+        });
+      }
+    }
+    return selected;
   }
   function mapCapacity(r, statDate) {
     if (Number(r.invalidCount) > 0) throw new Error("产能包含空值或负数，不能作为零聚合，请修正源数据");
@@ -473,16 +639,25 @@ function init() {
     return out;
   }
   function metadata() {
-    var cutoff = latest(tables.region);
-    var data = { organization: { cityName: "中山市", branches: [], grids: [] }, statDate: cutoff,
+    var cutoff = latest(tables.region), dailyBatch = latestDaily(tables.regionDay), dailyCutoff = dailyBatch.date;
+    var data = { organization: { cityName: "中山市", branches: [], grids: [] }, statDate: cutoff, dailyStatDate: dailyCutoff, dailyStatHour: dailyBatch.hour, dailyStamp: dailyBatch.stamp,
       products: products, targets: [], rows: [], dailyRows: [], periodRows: [], regionRows: [],
-      salesScripts: [], warnings: [], weekBasis: "rolling7", permission: user, aggregated: true };
-    if (!cutoff) { data.warnings.push("当前范围没有区域产能数据"); return data; }
+      salesScripts: [], warnings: [], missingCapacityIsZero: true, weekBasis: "rolling7", permission: user, aggregated: true };
+    if (!cutoff) data.warnings.push("当前范围没有区域周期产能数据");
+    if (!dailyCutoff) data.warnings.push("当前范围没有区域日产能数据");
+    if (!cutoff && !dailyCutoff) return data;
     var args = { cutoff: cutoff }, regionClause = scope("branch_company", "grid_name", args);
     var region = pagedSql("SELECT branch_company,grid_name,product_name,prod_period_type,SUM(capacity) AS capacity," +
       "SUM(CASE WHEN capacity IS NULL OR capacity<0 THEN 1 ELSE 0 END) AS invalid_count,MAX(snapshot_time) AS snapshot_time FROM " +
-      tables.region + " WHERE stat_date=#{cutoff}" + regionClause + " GROUP BY branch_company,grid_name,product_name,prod_period_type", args,
+      tables.region + " WHERE stat_date=#{cutoff} AND prod_period_type IN ('mon','week','last_mon')" + regionClause + " GROUP BY branch_company,grid_name,product_name,prod_period_type", args,
       "branch_company,grid_name,product_name,prod_period_type");
+    if (dailyCutoff) {
+      var dayArgs={dailyCutoff:dailyBatch.stamp}, dayClause=scope("branch_company","grid_name",dayArgs);
+      var dailyRegion=pagedSql("SELECT branch_company,grid_name,product_name,'day' AS prod_period_type,SUM(capacity) AS capacity,"+
+        "SUM(CASE WHEN capacity IS NULL OR capacity<0 THEN 1 ELSE 0 END) AS invalid_count,MAX(snapshot_time) AS snapshot_time FROM "+tables.regionDay+
+        " WHERE "+"("+dailyStamp("stat_date")+")=#{dailyCutoff}"+dayClause+" GROUP BY branch_company,grid_name,product_name",dayArgs,"branch_company,grid_name,product_name");
+      region=region.concat(dailyRegion);
+    }
     var branches = {}, grids = {};
      function org(b, g) {
       var excludeNames = ["全市", "市统筹", "未知", "中山", "中山市", "市公司"];
@@ -500,7 +675,7 @@ function init() {
       org(r.branch_company, r.grid_name);
       data.regionRows.push({ branchId: r.branch_company, gridId: gridId(r.branch_company, r.grid_name),
         level: r.branch_company === "全市" ? "city" : r.branch_company === r.grid_name && ["未知", "市统筹"].indexOf(r.grid_name) < 0 ? "branch" : "grid",
-        productId: product(r.product_name).productId, period: r.prod_period_type, production: num(r.capacity), snapshotTime: r.snapshot_time });
+        productId: product(r.product_name).productId, period: r.prod_period_type, production: num(r.capacity), snapshotTime: r.snapshot_time, statDate: r.prod_period_type === "day" ? dailyCutoff : cutoff });
     }
     // Distinct organization pairs, never the full personnel/channel dimensions.
     var dimensions = [tables.channelInfo, tables.terminal, tables.staff], orgParts = [], orgArgs = {};
@@ -509,12 +684,14 @@ function init() {
     for (i = 0; i < orgs.length; i++) org(orgs[i].branch, orgs[i].grid);
     data.organization.branches = Object.keys(branches).sort().map(function (k) { return branches[k]; });
     data.organization.grids = Object.keys(grids).sort().map(function (k) { return grids[k]; });
-    var targetMonth = cutoff.slice(0, 7);
-    var targetArgs = { month: targetMonth, monthSlash: targetMonth.replace("-", "/") };
-    var goals = pagedSql("SELECT * FROM " + tables.targets + " WHERE target_month IN (#{month},#{monthSlash})" + scope("branch", "grid", targetArgs), targetArgs, "id");
-    var targetMonthDays = new Date(Date.UTC(Number(cutoff.slice(0, 4)), Number(cutoff.slice(5, 7)), 0)).getUTCDate();
+    var targetMonth = (cutoff || dailyCutoff).slice(0, 7), dailyMonth = (dailyCutoff || cutoff).slice(0, 7);
+    var targetArgs = { month: targetMonth, monthSlash: targetMonth.replace("-", "/"), dailyMonth: dailyMonth, dailyMonthSlash: dailyMonth.replace("-", "/") };
+    var goals = pagedSql("SELECT * FROM " + tables.targets + " WHERE target_month IN (#{month},#{monthSlash},#{dailyMonth},#{dailyMonthSlash})" + scope("branch", "grid", targetArgs), targetArgs, "id");
+    var targetMonthDays;
     for (i = 0; i < goals.length; i++) {
       r = goals[i]; var base = optionalTarget(r.month_base_target), challenge = optionalTarget(r.month_challenge_target), minimum = optionalTarget(r.month_min_target);
+      var goalMonth = text(r.target_month).replace("/", "-");
+      targetMonthDays = new Date(Date.UTC(Number(goalMonth.slice(0,4)),Number(goalMonth.slice(5,7)),0)).getUTCDate();
       var daily = base === null ? null : base / targetMonthDays;
       data.targets.push({ gridId: gridId(text(r.branch), text(r.grid)), productId: product(r.product_id).productId,
         target: base, dailyTarget: daily, monthBaseTarget: base, monthChallengeTarget: challenge,
@@ -525,7 +702,10 @@ function init() {
     var scripts = pagedSql("SELECT product_id,content,updated_at FROM " + tables.scripts, {}, "product_id,id");
     for (i = 0; i < scripts.length; i++) data.salesScripts.push({ productId: scripts[i].product_id, content: scripts[i].content, updatedAt: scripts[i].updated_at, status: "maintained", source: "超级管理员维护" });
     var channelDate = latest(tables.channel), staffDate = latest(tables.staffCapacity);
-    data.sourceDates = { region: cutoff, channel: channelDate, staff: staffDate };
+    var channelBatch=latestDaily(tables.channelDay), staffBatch=latestDaily(tables.staffDay);
+    data.sourceDates = { region: cutoff, channel: channelDate, staff: staffDate, daily: {region: dailyCutoff, channel: channelBatch.date, staff: staffBatch.date}, dailyHours: {region: dailyBatch.hour, channel: channelBatch.hour, staff: staffBatch.hour} };
+    if(dailyCutoff && channelBatch.stamp!==dailyBatch.stamp)data.warnings.push("渠道日表与区域日表批次不一致，日数据统一按"+dailyCutoff+(dailyBatch.hour?" "+dailyBatch.hour+"时":"")+"读取，未出现的工号或渠道按0统计");
+    if(dailyCutoff && staffBatch.stamp!==dailyBatch.stamp)data.warnings.push("工号日表与区域日表批次不一致，日数据统一按"+dailyCutoff+(dailyBatch.hour?" "+dailyBatch.hour+"时":"")+"读取，未出现的工号或渠道按0统计");
     if (channelDate !== cutoff) data.warnings.push("渠道产能表最新日期（" + (channelDate || "无") + "）与区域产能表（" + cutoff + "）不一致，本次按区域表日期读取");
     if (staffDate !== cutoff) data.warnings.push("工号产能表最新日期（" + (staffDate || "无") + "）与区域产能表（" + cutoff + "）不一致，本次按区域表日期读取");
     return data;
@@ -533,7 +713,7 @@ function init() {
   function dashboard() {
     if (dashboardMemo) return dashboardMemo;
     var data = metadata();
-    if (!data.statDate) { dashboardMemo = data; return data; }
+    if (!data.statDate && !data.dailyStatDate) { dashboardMemo = data; return data; }
     var args = {}, detail = ["wgsc_fetchAlerts", "wgsc_fetchChangeAlerts", "wgsc_searchCapacity", "wgsc_fetchChannelOptions"].indexOf(Params.funCode) >= 0;
     var conflictArgs = { cutoff: data.statDate };
     var conflicts = sql("SELECT 1 AS found FROM " + tables.staffCapacity + " c WHERE c.stat_date=#{cutoff}" +
@@ -560,6 +740,7 @@ function init() {
     }
     var selected = pagedSql(selectedQuery, args,
       "branchId,gridId,productName,period,channelType,staffId,channelCode,microChannelName,serviceProvider");
+    if (!detail) selected = fillSummaryZeros(data, selected);
     function copyRow(row) {
       var out = {};
       for (var key in row) if (Object.prototype.hasOwnProperty.call(row, key)) out[key] = row[key];
@@ -572,7 +753,7 @@ function init() {
         productId: mapped.productId, period: mapped.period, production: mapped.production, channelType: mapped.channelType };
       data.periodRows.push(copyRow(row));
       if (row.period === "mon") data.rows.push(copyRow(row));
-      if (row.period === "day") { var dailyRow = copyRow(row); dailyRow.date = data.statDate; data.dailyRows.push(dailyRow); }
+      if (row.period === "day") { var dailyRow = copyRow(row); dailyRow.date = data.dailyStatDate; data.dailyRows.push(dailyRow); }
     }
     if (Params.funCode === "wgsc_fetchDashboard") {
       data.capacityDiagnostics = categoryDiagnostics(data);
@@ -649,10 +830,10 @@ function init() {
   }
   function channelOptions() {
     var data = metadata(), args = {};
-    if (!data.statDate) return { channels: [], statDate: "" };
+    if (!(Params.period === "day" ? data.dailyStatDate : data.statDate)) return { channels: [], statDate: "", dailyStatDate: data.dailyStatDate };
     var query = capacityQuery(data, true, args);
     var rows = pagedSql("SELECT DISTINCT channel FROM (" + query + ") channel_groups WHERE channel IS NOT NULL AND channel<>''", args, "channel");
-    return { channels: rows.map(function (r) { return r.channel; }), statDate: data.statDate };
+    return { channels: rows.map(function (r) { return r.channel; }), statDate: Params.period === "day" ? data.dailyStatDate : data.statDate, dailyStatDate: data.dailyStatDate };
   }
   function aiAlertCounts(data) {
     var args = {}, relation = capacityQuery(data, true, args, [Params.period === "day" ? "day" : "mon"]);
