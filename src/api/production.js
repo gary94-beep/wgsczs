@@ -86,9 +86,18 @@ export async function importSalesScripts(rows, permission, token) {
   checkAdmin(permission)
   return isMock ? mockImportSalesScripts(rows, permission) : gateway('imports', 'wgsc_importSalesScripts', { rows: JSON.stringify(rows) }, token)
 }
-export async function importCapacity(target, rows, token) {
-  return isMock ? mockImportCapacity(target, rows) : gateway('imports', 'wgsc_importCapacity', { target, rows: JSON.stringify(rows) }, token)
+
+// 【修改点】：新增 isDaily 参数，并传给 gateway
+export async function importCapacity(target, rows, token, isDaily = false) {
+  return isMock 
+    ? mockImportCapacity(target, rows) 
+    : gateway('imports', 'wgsc_importCapacity', { 
+        target, 
+        isDaily, 
+        rows: JSON.stringify(rows) 
+      }, token)
 }
+
 export async function importRows(target, rows, token, permission) {
   checkAdmin(permission)
   return isMock ? mockImportRows(target, rows, permission) : gateway('imports', 'wgsc_importRows', { target, rows: JSON.stringify(rows) }, token)

@@ -421,6 +421,9 @@ import { permissionRows, permissionTemplateCsv } from './utils/imports/permissio
 import { validateScriptImport, scriptTemplateCsv } from './utils/imports/salesScript.js'
 import { parseTargetFile, targetTemplateCsv } from './utils/imports/targets.js'
 import { staffOwnRows, staffOwnTemplateCsv } from './utils/imports/staffOwn.js'
+import { regionCapacityDailyRows, regionCapacityDailyTemplateCsv } from './utils/imports/regionCapacityDaily.js'
+import { channelCapacityDailyRows, channelCapacityDailyTemplateCsv } from './utils/imports/channelCapacityDaily.js'
+import { staffCapacityDailyRows, staffCapacityDailyTemplateCsv } from './utils/imports/staffCapacityDaily.js'
 
 // ==================== 图标与样式 ====================
 const warningIcons = {
@@ -501,11 +504,14 @@ const importConfig = [
   {
     title: '产能数据',
     items: [
-      { key: 'region', label: '区域产能', icon: '区', color: 'green', parse: regionCapacityRows, isCapacity: true },
-      { key: 'channel', label: '渠道产能', icon: '渠', color: 'green', parse: channelCapacityRows, isCapacity: true },
-      { key: 'staffCapacity', label: '工号产能', icon: '工', color: 'green', parse: staffCapacityRows, isCapacity: true }
+      { key: 'region', label: '区域总产能', icon: '区', color: 'green', parse: regionCapacityRows, isCapacity: true },
+      { key: 'channel', label: '渠道总产能', icon: '渠', color: 'green', parse: channelCapacityRows, isCapacity: true },
+      { key: 'staffCapacity', label: '工号总产能', icon: '工', color: 'green', parse: staffCapacityRows, isCapacity: true },
+      { key: 'regionDay', label: '区域日产能', icon: '区', color: 'green', parse: regionCapacityDailyRows, isCapacity: true, isDaily: true },
+      { key: 'channelDay', label: '渠道日产能', icon: '渠', color: 'green', parse: channelCapacityDailyRows, isCapacity: true, isDaily: true },
+      { key: 'staffDay', label: '工号日产能', icon: '工', color: 'green', parse: staffCapacityDailyRows, isCapacity: true, isDaily: true }
     ],
-     show: false
+     show: true
   },
   {
     title: '目标管理',
@@ -529,6 +535,9 @@ const templateGetters = {
   region: () => ['区域汇总产能表导入模板.csv', regionCapacityTemplateCsv()],
   channel: () => ['渠道汇总产能表导入模板.csv', channelCapacityTemplateCsv()],
   staffCapacity: () => ['工号汇总产能表导入模板.csv', staffCapacityTemplateCsv()],
+  regionDay: () => ['区域日产能表导入模板.csv', regionCapacityDailyTemplateCsv()],
+  channelDay: () => ['渠道日产能表导入模板.csv', channelCapacityDailyTemplateCsv()],
+  staffDay: () => ['工号日产能表导入模板.csv', staffCapacityDailyTemplateCsv()],
   target: () => ['产能目标表导入模板.csv', targetTemplateCsv(dashboard)],
   staffBroadbandTarget: () => ['营业员终端员-手宽月度目标表导入模板.csv', staffBroadbandTemplateCsv()],
   staffCategoryTarget: () => ['人员分类月度目标表导入模板.csv', staffCategoryTemplateCsv()],
@@ -576,9 +585,18 @@ async function handleUnifiedFileChange(event) {
   try {
     const data = await parseExcelFile(file)
     let rows = item.parse(data)
+    
     if (item.isCapacity) {
       rows = normalizeCapacityRows(rows)
-      const result = await importCapacity(item.key, rows, token.value)
+      
+      // 【新增逻辑】：为了兼容后端的统一入口，将日表Key转换为基础表Key
+      let targetKey = item.key
+      if (item.key === 'regionDay') targetKey = 'region'
+      if (item.key === 'channelDay') targetKey = 'channel'
+      if (item.key === 'staffDay') targetKey = 'staffCapacity'
+
+      // 调用接口时，传入 isDaily 标识
+      const result = await importCapacity(targetKey, rows, token.value, item.isDaily === true)
       await refreshAfterImport()
       handleImportResult(result)
     } else {
