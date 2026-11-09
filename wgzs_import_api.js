@@ -274,9 +274,10 @@ function init() {
     throw new Error("月份须为YYYY-MM" + (shortMonth ? "，兼容10月" : ""));
   }
 
-  function imports(capacity, isDaily) {
+  function imports(capacity, isDaily, isAppend) {
     admin();
     isDaily = isDaily === true || isDaily === 1 || text(isDaily) === "true" || text(isDaily) === "1";
+    isAppend = isAppend === true || isAppend === 1 || text(isAppend) === "true" || text(isAppend) === "1";
     var configs = capacity
       ? (isDaily
         ? {
@@ -408,10 +409,12 @@ function init() {
       }
     } else {
       var tableName = tables[config[0]];
-      try {
-        sql("DELETE FROM " + tableName, {}, false);
-      } catch (delErr) {
-        throw new Error("清空表 " + tableName + " 失败，终止导入。原因：" + delErr.message);
+      if (!isAppend) {
+        try {
+          sql("DELETE FROM " + tableName, {}, false);
+        } catch (delErr) {
+          throw new Error("清空表 " + tableName + " 失败，终止导入。原因：" + delErr.message);
+        }
       }
       var fields = config[1];
       var BATCH_SIZE = 500; 
@@ -437,7 +440,13 @@ function init() {
         }
       }
     }
-    return { total: rows.length, success: success, failed: rows.length - success, errors: errors, mode: config[2] || target === "permission" ? "upsert" : "replace" };
+    return {
+      total: rows.length,
+      success: success,
+      failed: rows.length - success,
+      errors: errors,
+      mode: (config[2] || target === "permission") ? "upsert" : (capacity && isAppend ? "append" : "replace")
+    };
   }
 
   function importTargets() {
@@ -528,7 +537,7 @@ function init() {
   }
 
   var handlers = {
-    wgsc_importCapacity: function () { return imports(true, Params.isDaily); },
+    wgsc_importCapacity: function () { return imports(true, Params.isDaily, Params.isAppend); },
     wgsc_importRows: function () { return imports(false); },
     wgsc_importTargets: importTargets,
     wgsc_importSalesScripts: function () { return importScripts(false); },

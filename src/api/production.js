@@ -89,12 +89,13 @@ export async function importSalesScripts(rows, permission, token) {
   return isMock ? mockImportSalesScripts(rows, permission) : gateway('imports', 'wgsc_importSalesScripts', { rows: JSON.stringify(rows) }, token)
 }
 
-export async function importCapacity(target, rows, token, isDaily = false) {
+export async function importCapacity(target, rows, token, isDaily = false, isAppend = false) {
   return isMock
-    ? mockImportCapacity(target, rows)
+    ? mockImportCapacity(target, rows, isDaily, isAppend)
     : gateway('imports', 'wgsc_importCapacity', {
         target,
         isDaily,
+        isAppend,
         rows: JSON.stringify(rows)
       }, token)
 }

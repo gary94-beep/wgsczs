@@ -174,7 +174,7 @@ export async function mockImportTargets(rows, permission) {
  * @param {Object[]} rows
  * @returns {Promise<{total:number, success:number, failed:number, errors:string[]}>}
  */
-export async function mockImportCapacity(target, rows) {
+export async function mockImportCapacity(target, rows, isDaily = false, isAppend = false) {
   await delay(300)
 
   if (!['region', 'channel', 'staff'].includes(target)) {
@@ -206,7 +206,7 @@ export async function mockImportCapacity(target, rows) {
       errors.push(`第${line}行 capacity 不能为负数：${row.capacity}`)
       return
     }
-    if (!row.branch_company || !row.grid_name || !row.prod_period_type || !row.product_name || !row.stat_date) {
+    if (!row.branch_company || !row.grid_name || (!isDaily && !row.prod_period_type) || !row.product_name || !row.stat_date) {
       failed++
       errors.push(`第${line}行缺少必填字段`)
       return
@@ -214,7 +214,7 @@ export async function mockImportCapacity(target, rows) {
     success++
   })
 
-  if (success < 10) {
+  if (!isAppend && success < 10) {
     return {
       total: list.length,
       success: 0,
@@ -224,9 +224,9 @@ export async function mockImportCapacity(target, rows) {
   }
 
   // eslint-disable-next-line no-console
-  console.log(`[Mock] 导入 ${target} 产能，共 ${list.length} 条，成功 ${success}，失败 ${failed}`, list)
+  console.log(`[Mock] ${isAppend ? '追加' : '替换'}导入 ${target} 产能，共 ${list.length} 条，成功 ${success}，失败 ${failed}`, list)
 
-  return { total: list.length, success, failed, errors }
+  return { total: list.length, success, failed, errors, mode: isAppend ? 'append' : 'replace' }
 }
 
 /**
