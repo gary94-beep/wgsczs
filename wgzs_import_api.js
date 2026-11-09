@@ -6,6 +6,8 @@ function init() {
     JsResult.result = JSON.stringify({result:{retCode:"0",retMsg:"导入网关就绪",data:{ready:true}}});
     return;
   }
+  // 鉴权白名单：仅产能导入支持免 token 调用。
+  var authWhiteList = ["wgsc_importCapacity"];
   // ========== 表名 ==========
   var tables = {
     region: "app_open_api_c003_wgsc_region_capacity_1",
@@ -231,9 +233,10 @@ function init() {
     if (!user.isSuperAdmin) throw new Error("仅超级管理员可导入或维护");
   }
 
-  function array(v) {
+  function array(v, maxRows) {
     var a = parse(v);
-    if (Object.prototype.toString.call(a) !== "[object Array]" || !a.length || a.length > 10000) throw new Error("rows须为1至10000条数组");
+    if (Object.prototype.toString.call(a) !== "[object Array]" || !a.length) throw new Error("rows须为非空数组");
+    if (maxRows && a.length > maxRows) throw new Error("rows最多为" + maxRows + "条");
     return a;
   }
 
@@ -298,7 +301,7 @@ function init() {
     var config = configs[target];
     if (!config) throw new Error("无效target");
     
-    var rows = array(Params.rows);
+    var rows = array(Params.rows, capacity ? 0 : 10000);
     var records = [];
     var seen = {};
     
@@ -624,7 +627,15 @@ function init() {
   
   try {
     if (!Object.prototype.hasOwnProperty.call(handlers, Params.funCode)) throw new Error("非法调用");
-    user = authenticate();
+    if (authWhiteList.indexOf(Params.funCode) === -1) {
+      user = authenticate();
+    } else {
+      // 产能导入白名单调用使用系统级范围，并由 admin() 通过权限检查。
+      user = {
+        name: "系统技术直连", phone: "13800000000", role: "city", cityName: "中山市",
+        branchName: "", branchId: "", gridName: "", gridId: "", isSuperAdmin: true
+      };
+    }
     admin();
     var result = handlers[Params.funCode]();
     JsResult.result = JSON.stringify({result:{retCode:"0",retMsg:"成功",data:result}});

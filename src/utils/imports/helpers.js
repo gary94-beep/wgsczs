@@ -16,13 +16,14 @@ export function findHeaderRow(data) {
   const header = data.findIndex(row => {
     const set = new Set(row.map(cell => String(cell ?? '').replace(/^\ufeff/, '').trim().toLowerCase()))
     const isBizTable = set.has('branch_company') && set.has('grid_name') && set.has('prod_period_type') && set.has('product_name')
+    const isDailyCapacityTable = set.has('branch_company') && set.has('grid_name') && set.has('product_name') && set.has('capacity') && set.has('stat_date')
     const isChannelInfoTable = set.has('chn_code') && set.has('chn_name')
     const isDimensionTable = set.has('staff_no') && set.has('branch') && set.has('grid')
     const isPermissionTable = set.has('name') && set.has('phone') && set.has('role')
     const isStaffBroadbandTable = set.has('ngboss_id') && set.has('type') && set.has('monthly_kd_target')
     const isStaffCategoryTable = set.has('target_month') && set.has('team_type') && set.has('product_id')
     const isContractorTable = set.has('chn_code') && set.has('mon') && set.has('monthly_kd_target')
-    return isBizTable || isChannelInfoTable || isDimensionTable || isPermissionTable || isStaffBroadbandTable || isStaffCategoryTable || isContractorTable
+    return isBizTable || isDailyCapacityTable || isChannelInfoTable || isDimensionTable || isPermissionTable || isStaffBroadbandTable || isStaffCategoryTable || isContractorTable
   })
   if (header < 0) throw new Error('没有找到有效表头')
   return data.slice(header).filter((row,index) => !String(row[0] || '').startsWith('仅供联调') && !(index === 1 && /^(说明（导入自动跳过）|必填（导入时请删除示例行）)/.test(String(row[0] || ''))))
