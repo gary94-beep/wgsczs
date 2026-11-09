@@ -1,24 +1,25 @@
 // Import gateway servicecode: F539bcaeec30686a. Standalone Handle2 ES5 script.
 // Handle2 globals: Params, JsResult, CustomizeUtil. Keep ES5 syntax for platform execution.
 function init() {
-  // Save-time validation must not authenticate or access business tables.
   if (typeof Params === "undefined" || !Params || !Params.funCode) {
     JsResult.result = JSON.stringify({result:{retCode:"0",retMsg:"导入网关就绪",data:{ready:true}}});
     return;
   }
-  // 鉴权白名单：仅产能导入支持免 token 调用。
-  var authWhiteList = ["wgsc_importCapacity"];
+
+  // ========== 鉴权白名单配置 ==========
+  // 仅放开产能导入，给技术人员使用（无需 Token）
+  var authWhiteList = [
+    'wgsc_importCapacity'
+  ];
+  
+  var isAuthPassed = false;
+  var user = null;
+
   // ========== 表名 ==========
   var tables = {
     region: "app_open_api_c003_wgsc_region_capacity_1",
     channel: "app_open_api_c001_wgsc_chn_capacity_1",
     staffCapacity: "app_open_api_c003_wgsc_staff_capacity_1",
-    
-    // 新增的日产能表
-    regionDay: "app_open_api_c002_wgsc_reg_capacity_d_1",
-    channelDay: "app_open_api_c002_wgsc_chn_capacity_d_1",
-    staffDay: "app_open_api_c002_wgsc_stf_capacity_d_1",
-
     channelInfo: "app_open_api_c003_wgsc_chn_level_1",
     terminal: "app_open_api_c002_wgsc_staff_terminal_1",
     staff: "app_open_api_c003_wgsc_staff_1",
@@ -28,7 +29,11 @@ function init() {
     staffBroadbandTarget: "app_open_api_c001_wgsc_stf_bb_target_m_1",
     staffCategoryTarget: "app_open_api_c001_wgsc_staff_target_m_1",
     areaContractor: "app_open_api_c002_wgsc_area_contractor_1",
-    staffOwn: "app_open_api_c001_wgsc_staff_own_team_1"
+    staffOwn: "app_open_api_c001_wgsc_staff_own_team_1",
+    // 新增的日产能表
+    regionDay: "app_open_api_c002_wgsc_reg_capacity_d_1",
+    channelDay: "app_open_api_c002_wgsc_chn_capacity_d_1",
+    staffDay: "app_open_api_c002_wgsc_stf_capacity_d_1"
   };
 
   // ========== 产品 ==========
@@ -120,6 +125,7 @@ function init() {
   function product(v) {
     v = text(v);
     if (v === "129+高套" || v === "119+套餐") v = "plan119";
+    if (v === "手宽归档") v = "homeBroadband";
     for (var i = 0; i < products.length; i++) {
       if (products[i].productName === v || products[i].productId === v) return products[i];
     }
@@ -177,11 +183,11 @@ function init() {
 
   function scope(b, g, args) {
     var s = "";
-    if (user.role !== "city") {
+    if (user && user.role !== "city") {
       args.authBranch = user.branchName;
       s += " AND " + b + "=#{authBranch}";
     }
-    if (user.role === "grid") {
+    if (user && user.role === "grid") {
       args.authGrid = user.gridName;
       s += " AND " + g + "=#{authGrid}";
     }
@@ -211,7 +217,6 @@ function init() {
     }
   }
 
-  var user;
   function now() {
     var d = new Date(new Date().getTime() + 8 * 3600000);
     return formatDate(d) + " " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":" + pad(d.getUTCSeconds());
@@ -222,7 +227,13 @@ function init() {
       var d = new Date(v + 8 * 3600000);
       return d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()) + " " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":" + pad(d.getUTCSeconds());
     }
-    var s = text(v).replace(/^(\d{4})(\d{2})(\d{2})\s+(\d{2})(\d{2})(\d{2})$/, "$1-$2-$3 $4:$5:$6").replace("T", " ").slice(0, 19);
+    var s = text(v)
+      .replace(/^(\d{4})(\d{2})(\d{2})(\d{2})$/, "$1-$2-$3 $4:00:00")
+      .replace(/^(\d{4})(\d{2})(\d{2})\s+(\d{2})(\d{2})(\d{2})$/, "$1-$2-$3 $4:$5:$6")
+      .replace(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(\s+)/, function (_, y, m, d, separator) {
+        return y + "-" + pad(Number(m)) + "-" + pad(Number(d)) + separator;
+      })
+      .replace("T", " ").slice(0, 19);
     if (!s) return now();
     date(s);
     if (!/^\d{4}-\d{2}-\d{2} (?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(s)) throw new Error("无效取数时间");
@@ -230,19 +241,17 @@ function init() {
   }
 
   function admin() {
-    if (!user.isSuperAdmin) throw new Error("仅超级管理员可导入或维护");
+    if (user && !user.isSuperAdmin) throw new Error("仅超级管理员可导入或维护");
   }
 
-  function array(v, maxRows) {
+  function array(v) {
     var a = parse(v);
-    if (Object.prototype.toString.call(a) !== "[object Array]" || !a.length) throw new Error("rows须为非空数组");
-    if (maxRows && a.length > maxRows) throw new Error("rows最多为" + maxRows + "条");
+    if (Object.prototype.toString.call(a) !== "[object Array]" || !a.length) throw new Error("rows须为1至10000条数组");
     return a;
   }
 
   function upsert(table, fields, record) {
-    var vals = [];
-    var updates = [];
+    var vals = [], updates = [];
     for (var i = 0; i < fields.length; i++) {
       vals.push("#{" + fields[i] + "}");
       updates.push(fields[i] + "=VALUES(" + fields[i] + ")");
@@ -267,25 +276,19 @@ function init() {
 
   function imports(capacity, isDaily) {
     admin();
-    
-    var targetTableRegion = isDaily ? tables.regionDay : tables.region;
-    var targetTableChannel = isDaily ? tables.channelDay : tables.channel;
-    var targetTableStaff = isDaily ? tables.staffDay : tables.staffCapacity;
-
+    isDaily = isDaily === true || isDaily === 1 || text(isDaily) === "true" || text(isDaily) === "1";
     var configs = capacity
-      ? {
-          region: [targetTableRegion, isDaily 
-            ? ["branch_company", "grid_name", "product_name", "capacity", "stat_date", "snapshot_time"]
-            : ["branch_company", "grid_name", "prod_period_type", "product_name", "capacity", "stat_date", "snapshot_time"]],
-            
-          channel: [targetTableChannel, isDaily
-            ? ["branch_company", "grid_name", "channel_code", "channel_name", "product_name", "capacity", "stat_date", "snapshot_time"]
-            : ["branch_company", "grid_name", "channel_code", "channel_name", "prod_period_type", "product_name", "capacity", "stat_date", "snapshot_time"]],
-            
-          staff: [targetTableStaff, isDaily
-            ? ["branch_company", "grid_name", "channel_code", "channel_name", "staff_no", "product_name", "capacity", "stat_date", "snapshot_time"]
-            : ["branch_company", "grid_name", "channel_code", "channel_name", "staff_no", "prod_period_type", "product_name", "capacity", "stat_date", "snapshot_time"]]
-        }
+      ? (isDaily
+        ? {
+            region: ["regionDay", ["branch_company", "grid_name", "product_name", "capacity", "stat_date", "snapshot_time"]],
+            channel: ["channelDay", ["branch_company", "grid_name", "channel_code", "channel_name", "product_name", "capacity", "stat_date", "snapshot_time"]],
+            staff: ["staffDay", ["branch_company", "grid_name", "channel_code", "channel_name", "staff_no", "product_name", "capacity", "stat_date", "snapshot_time"]]
+          }
+        : {
+            region: ["region", ["branch_company", "grid_name", "prod_period_type", "product_name", "capacity", "stat_date", "snapshot_time"]],
+            channel: ["channel", ["branch_company", "grid_name", "channel_code", "channel_name", "prod_period_type", "product_name", "capacity", "stat_date", "snapshot_time"]],
+            staff: ["staffCapacity", ["branch_company", "grid_name", "channel_code", "channel_name", "staff_no", "prod_period_type", "product_name", "capacity", "stat_date", "snapshot_time"]]
+          })
       : {
           channelInfo: ["channelInfo", ["chn_code", "chn_name", "branch", "grid_code", "grid", "star", "star_level", "monthly_kd_target"]],
           terminal: ["terminal", ["staff_no", "staff_name", "agent", "branch", "grid", "chn_name"]],
@@ -293,38 +296,28 @@ function init() {
           staffBroadbandTarget: ["staffBroadbandTarget", ["type","name","branch","grid","business_hall","ngboss_id","monthly_kd_target"], ["ngboss_id"]],
           staffCategoryTarget: ["staffCategoryTarget", ["target_month","team_type","product_id","product_name","month_base_target","month_challenge_target"], ["target_month","team_type","product_id"]],
           areaContractor: ["areaContractor", ["branch","grid","chn_name","chn_code","monthly_kd_target","mon"], ["chn_code","mon"]],
-          staffOwn: ["staffOwn", ["branch", "grid", "staff_no", "staff_name", "team"]], 
+          staffOwn: ["staffOwn", ["branch", "grid", "staff_no", "staff_name", "team"]],
           permission: ["permission", ["name", "phone", "role", "branch", "grid", "super_admin", "enabled"]]
         };
-        
     var target = text(Params.target);
     var config = configs[target];
     if (!config) throw new Error("无效target");
-    
-    var rows = array(Params.rows, capacity ? 0 : 10000);
+    var rows = array(Params.rows);
     var records = [];
     var seen = {};
-    
     for (var i = 0; i < rows.length; i++) {
       var r = {};
       var fields = config[1];
       for (var j = 0; j < fields.length; j++) r[fields[j]] = text(rows[i][fields[j]]);
       if (target === "permission") r.is_super_admin = text(rows[i].is_super_admin === undefined ? rows[i].super_admin : rows[i].is_super_admin);
-      
       if (capacity) {
         r.capacity = num(rows[i].capacity);
-        r.stat_date = date(r.stat_date);
+        // 日产能来源的 stat_date 按原始字符串入库；区域、渠道、工号日产能统一处理。
+        r.stat_date = isDaily ? text(r.stat_date) : date(r.stat_date);
         r.snapshot_time = snapshot(r.snapshot_time);
-        
-        if (!isDaily) {
-          r.prod_period_type = period(r.prod_period_type);
-        }
-        
+        if (!isDaily) r.prod_period_type = period(r.prod_period_type);
         r.product_name = product(r.product_name).productName;
-        
-        if (!r.branch_company || !r.grid_name || (target !== "region" && (!r.channel_code || !r.channel_name)) || (target === "staff" && !r.staff_no)) {
-          throw new Error("第" + (i + 1) + "行缺必填字段");
-        }
+        if (!r.branch_company || !r.grid_name || !r.stat_date || (target !== "region" && (!r.channel_code || !r.channel_name)) || (target === "staff" && !r.staff_no)) throw new Error("第" + (i + 1) + "行缺必填字段");
       } else {
         if (config[2]) {
           if (target === "staffCategoryTarget") {
@@ -346,7 +339,7 @@ function init() {
         } else if (target === "permission") {
           if (!r.name || !/^1\d{10}$/.test(r.phone) || ["city", "branch", "grid"].indexOf(r.role) < 0 || !/^[01]$/.test(r.is_super_admin) || !/^[01]$/.test(r.enabled)) throw new Error("权限姓名/手机号/角色/标志无效");
           if ((r.role !== "city" && !r.branch) || (r.role === "grid" && !r.grid) || (r.role === "city" && (r.branch || r.grid)) || (r.role === "branch" && r.grid)) throw new Error("权限组织范围无效");
-          if (r.phone === user.phone && (r.is_super_admin !== "1" || r.enabled !== "1")) throw new Error("不能禁用或降级当前超级管理员");
+          if (user && r.phone === user.phone && (r.is_super_admin !== "1" || r.enabled !== "1")) throw new Error("不能禁用或降级当前超级管理员");
           r.role = { city: 1, branch: 2, grid: 3 }[r.role];
           r.super_admin = Number(r.is_super_admin);
           delete r.is_super_admin;
@@ -367,16 +360,15 @@ function init() {
         if (target === "staff") { r.job = r.job || r.team_type; r.team_type = r.team_type || r.job; if (!r.job || (["行销经理","商企经理","装维随销"].indexOf(r.job) >= 0 && r.job !== r.team_type)) throw new Error("岗位和队伍类别不一致"); }
         if (target === "staff" && ["行销经理", "商企经理", "装维随销"].indexOf(r.team_type) < 0) throw new Error("队伍类型须为行销经理/商企经理/装维随销");
       }
-      
       var key = capacity
-        ? JSON.stringify([r.stat_date, r.branch_company, r.grid_name, r.channel_code, r.staff_no, r.prod_period_type || "", r.product_name])
+        ? JSON.stringify(isDaily
+          ? [r.stat_date, r.branch_company, r.grid_name, r.channel_code, r.staff_no, r.product_name]
+          : [r.stat_date, r.branch_company, r.grid_name, r.channel_code, r.staff_no, r.prod_period_type, r.product_name])
         : config[2] ? JSON.stringify(config[2].map(function (field) { return r[field]; })) : (r.phone || r.chn_code || r.staff_no);
-        
       if (seen[key]) throw new Error("第" + (i + 1) + "行重复唯一键");
       seen[key] = true;
       records.push(r);
     }
-    
     var errors = [];
     var success = 0;
 
@@ -416,21 +408,17 @@ function init() {
       }
     } else {
       var tableName = tables[config[0]];
-      
       try {
         sql("DELETE FROM " + tableName, {}, false);
       } catch (delErr) {
         throw new Error("清空表 " + tableName + " 失败，终止导入。原因：" + delErr.message);
       }
-
       var fields = config[1];
       var BATCH_SIZE = 500; 
-      
       for (var b = 0; b < records.length; b += BATCH_SIZE) {
         var batch = records.slice(b, b + BATCH_SIZE);
         var args = {};
         var valueParts = [];
-
         for (var bi = 0; bi < batch.length; bi++) {
           var placeholders = [];
           for (var fi = 0; fi < fields.length; fi++) {
@@ -440,9 +428,7 @@ function init() {
           }
           valueParts.push("(" + placeholders.join(",") + ")");
         }
-
         var insertSql = "INSERT INTO " + tableName + " (" + fields.join(",") + ") VALUES " + valueParts.join(",");
-
         try {
           sql(insertSql, args, false);
           success += batch.length;
@@ -451,7 +437,6 @@ function init() {
         }
       }
     }
-
     return { total: rows.length, success: success, failed: rows.length - success, errors: errors, mode: config[2] || target === "permission" ? "upsert" : "replace" };
   }
 
@@ -462,7 +447,6 @@ function init() {
     var seen = {};
     var prepared = [];
     if (!rows.length || rows.length > 20000) throw new Error("目标导入记录数量无效");
-
     var currentMonth = data.statDate.slice(0, 7); 
     if (!/^\d{4}-\d{2}$/.test(currentMonth)) throw new Error("当前统计日期无效：" + data.statDate);
 
@@ -478,127 +462,58 @@ function init() {
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
       var key = r.gridId + "|" + r.productId;
-
       if (seen[key]) throw new Error("目标有重复键：" + key);
       seen[key] = true;
-
       var parts = String(r.gridId).split("::");
       if (parts.length !== 2 || !parts[0] || !parts[1]) throw new Error("第" + (i + 1) + "行 gridId 格式无效：" + r.gridId);
-
       var validGrid = false;
-      if (r.gridId === "全市::全市" || parts[0] === parts[1]) {
-        validGrid = true;
-      } else {
-        for (var gi = 0; gi < data.organization.grids.length; gi++) {
-          if (data.organization.grids[gi].gridId === r.gridId) { validGrid = true; break; }
-        }
-      }
+      if (r.gridId === "全市::全市" || parts[0] === parts[1]) { validGrid = true; } 
+      else { for (var gi = 0; gi < data.organization.grids.length; gi++) { if (data.organization.grids[gi].gridId === r.gridId) { validGrid = true; break; } } }
       if (!validGrid) throw new Error("第" + (i + 1) + "行网格无效：" + r.gridId);
-
       var productInfo;
-      try { productInfo = product(r.productId); }
-      catch (e) { throw new Error("第" + (i + 1) + "行产品无效：" + r.productId); }
-
+      try { productInfo = product(r.productId); } catch (e) { throw new Error("第" + (i + 1) + "行产品无效：" + r.productId); }
       var rowMonth = normalizeMonth(r.targetMonth || currentMonth);
-      if (rowMonth !== currentMonth) {
-        throw new Error("第" + (i + 1) + "行目标月份须为当前数据月份（" + currentMonth + "），实际：" + r.targetMonth);
-      }
-
-      var mb = optionalTarget(r.monthBaseTarget), mc = optionalTarget(r.monthChallengeTarget);
-      var mm = optionalTarget(r.monthMinTarget);
+      if (rowMonth !== currentMonth) throw new Error("第" + (i + 1) + "行目标月份须为当前数据月份（" + currentMonth + "），实际：" + r.targetMonth);
+      var mb = optionalTarget(r.monthBaseTarget), mc = optionalTarget(r.monthChallengeTarget), mm = optionalTarget(r.monthMinTarget);
       if (mm !== null && ((mb !== null && mm > mb) || (mc !== null && mm > mc))) throw new Error("第" + (i + 1) + "行底线目标不能大于基础或挑战目标");
-      if (mb !== null && mc !== null && mc < mb) {
-        throw new Error("第" + (i + 1) + "行挑战目标不能小于基础目标");
-      }
-      if (mm === null && mb === null && mc === null) {
-        throw new Error("第" + (i + 1) + "行至少填写一个目标值");
-      }
-
-      prepared.push({
-        branch: parts[0],
-        grid: parts[1],
-        product_id: productInfo.productId,
-        target_month: currentMonth,
-        month_min_target: mm,
-        month_base_target: mb,
-        month_challenge_target: mc
-      });
+      if (mb !== null && mc !== null && mc < mb) throw new Error("第" + (i + 1) + "行挑战目标不能小于基础目标");
+      if (mm === null && mb === null && mc === null) throw new Error("第" + (i + 1) + "行至少填写一个目标值");
+      prepared.push({ branch: parts[0], grid: parts[1], product_id: productInfo.productId, target_month: currentMonth, month_min_target: mm, month_base_target: mb, month_challenge_target: mc });
     }
-
-    var fields = [
-      "branch", "grid", "product_id", "target_month",
-      "month_min_target", "month_base_target", "month_challenge_target"
-    ];
-    var BATCH_SIZE = 500;
-    var errors = [];
-    var success = 0;
-
+    var fields = ["branch", "grid", "product_id", "target_month", "month_min_target", "month_base_target", "month_challenge_target"];
+    var BATCH_SIZE = 500, errors = [], success = 0;
     for (var b = 0; b < prepared.length; b += BATCH_SIZE) {
-      var batch = prepared.slice(b, b + BATCH_SIZE);
-      var args = {};
-      var valueParts = [];
-
+      var batch = prepared.slice(b, b + BATCH_SIZE), args = {}, valueParts = [];
       for (var bi = 0; bi < batch.length; bi++) {
         var placeholders = [];
-        for (var fi = 0; fi < fields.length; fi++) {
-          var paramName = "v_" + bi + "_" + fi;
-          args[paramName] = batch[bi][fields[fi]];
-          placeholders.push("#{" + paramName + "}");
-        }
+        for (var fi = 0; fi < fields.length; fi++) { var paramName = "v_" + bi + "_" + fi; args[paramName] = batch[bi][fields[fi]]; placeholders.push("#{" + paramName + "}"); }
         valueParts.push("(" + placeholders.join(",") + ")");
       }
-
-      var insertSql = "INSERT INTO " + tables.targets + " (" + fields.join(",") + ") VALUES " + valueParts.join(",") +
-        " ON DUPLICATE KEY UPDATE " +
-        "month_min_target=VALUES(month_min_target)," +
-        "month_base_target=VALUES(month_base_target)," +
-        "month_challenge_target=VALUES(month_challenge_target)";
-
-      try {
-        sql(insertSql, args, false);
-        success += batch.length;
-      } catch (e) {
-        errors.push("第 " + (b + 1) + "~" + (b + batch.length) + " 行写入失败：" + e.message);
-      }
+      var insertSql = "INSERT INTO " + tables.targets + " (" + fields.join(",") + ") VALUES " + valueParts.join(",") + " ON DUPLICATE KEY UPDATE month_min_target=VALUES(month_min_target),month_base_target=VALUES(month_base_target),month_challenge_target=VALUES(month_challenge_target)";
+      try { sql(insertSql, args, false); success += batch.length; } catch (e) { errors.push("第 " + (b + 1) + "~" + (b + batch.length) + " 行写入失败：" + e.message); }
     }
-
-    return {
-      imported: success,
-      success: success,
-      failed: prepared.length - success,
-      errors: errors,
-      mode: "upsert",
-      targetMonth: currentMonth
-    };
+    return { imported: success, success: success, failed: prepared.length - success, errors: errors, mode: "upsert", targetMonth: currentMonth };
   }
 
   function importScripts(single) {
     admin();
     var rows = single ? [parse(Params.script)] : array(Params.rows);
-    var prepared = [];
-    var seen = {};
+    var prepared = [], seen = {};
     for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
-      var id = product(r.productId).productId;
-      var content = text(r.content);
+      var r = rows[i], id = product(r.productId).productId, content = text(r.content);
       if (seen[id] || !content || content.length > 4000) throw new Error("话术产品重复或内容无效");
       seen[id] = true;
-      prepared.push({ product_id: id, content: content, updated_at: now(), updated_by: user.phone });
+      prepared.push({ product_id: id, content: content, updated_at: now(), updated_by: user ? user.phone : "system" });
     }
-    for (i = 0; i < prepared.length; i++) {
-      upsert(tables.scripts, ["product_id", "content", "updated_at", "updated_by"], prepared[i]);
-    }
-    return single
-      ? { productId: prepared[0].product_id, content: prepared[0].content, updatedAt: prepared[0].updated_at, status: "maintained" }
-      : { imported: prepared.length };
+    for (i = 0; i < prepared.length; i++) { upsert(tables.scripts, ["product_id", "content", "updated_at", "updated_by"], prepared[i]); }
+    return single ? { productId: prepared[0].product_id, content: prepared[0].content, updatedAt: prepared[0].updated_at, status: "maintained" } : { imported: prepared.length };
   }
 
   function importMetadata() {
     var cutoff = latest(tables.region);
     if (!cutoff) throw new Error("当前范围没有区域产能数据，无法确认目标月份");
     var args = {cutoff:cutoff};
-    var pairs = pagedSql("SELECT DISTINCT branch_company AS branch,grid_name AS grid FROM " + tables.region +
-      " WHERE stat_date=#{cutoff}" + scope("branch_company", "grid_name", args), args, "branch,grid");
+    var pairs = pagedSql("SELECT DISTINCT branch_company AS branch,grid_name AS grid FROM " + tables.region + " WHERE stat_date=#{cutoff}" + scope("branch_company", "grid_name", args), args, "branch,grid");
     var dimensions = [tables.channelInfo,tables.terminal,tables.staff], parts = [], orgArgs = {};
     for (var i = 0; i < dimensions.length; i++) parts.push("SELECT DISTINCT branch,grid FROM " + dimensions[i] + " WHERE 1=1" + scope("branch", "grid", orgArgs));
     pairs = pairs.concat(pagedSql("SELECT branch,grid FROM (" + parts.join(" UNION ") + ") orgs", orgArgs, "branch,grid"));
@@ -613,13 +528,8 @@ function init() {
   }
 
   var handlers = {
-    // 产能导入统一入口，根据 Params.isDaily 动态区分
-    wgsc_importCapacity: function () { 
-      // 兼容 boolean true 及字符串 "true"、"1"
-      var isDaily = Params.isDaily === true || String(Params.isDaily) === "true" || String(Params.isDaily) === "1";
-      return imports(true, isDaily); 
-    },
-    wgsc_importRows: function () { return imports(false, false); },
+    wgsc_importCapacity: function () { return imports(true, Params.isDaily); },
+    wgsc_importRows: function () { return imports(false); },
     wgsc_importTargets: importTargets,
     wgsc_importSalesScripts: function () { return importScripts(false); },
     wgsc_saveSalesScript: function () { return importScripts(true); }
@@ -627,16 +537,21 @@ function init() {
   
   try {
     if (!Object.prototype.hasOwnProperty.call(handlers, Params.funCode)) throw new Error("非法调用");
+    
+    // ========== 核心修改：精准鉴权拦截 ==========
     if (authWhiteList.indexOf(Params.funCode) === -1) {
+      // 不在白名单里，必须校验 token
       user = authenticate();
     } else {
-      // 产能导入白名单调用使用系统级范围，并由 admin() 通过权限检查。
+      // 在白名单里，给一个默认的超级管理员身份供底层逻辑使用，避免各种空指针报错
       user = {
         name: "系统技术直连", phone: "13800000000", role: "city", cityName: "中山市",
         branchName: "", branchId: "", gridName: "", gridId: "", isSuperAdmin: true
       };
     }
-    admin();
+    
+    admin(); // 如果是白名单，上面的 isSuperAdmin 为 true，这里直接放行
+    
     var result = handlers[Params.funCode]();
     JsResult.result = JSON.stringify({result:{retCode:"0",retMsg:"成功",data:result}});
   } catch (e) {

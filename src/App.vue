@@ -593,7 +593,7 @@ async function handleUnifiedFileChange(event) {
       let targetKey = item.key
       if (item.key === 'regionDay') targetKey = 'region'
       if (item.key === 'channelDay') targetKey = 'channel'
-      if (item.key === 'staffDay') targetKey = 'staffCapacity'
+      if (item.key === 'staffDay') targetKey = 'staff'
       // 调用接口时，传入 isDaily 标识
       const result = await importCapacity(targetKey, rows, token.value, item.isDaily === true)
       await refreshAfterImport()
