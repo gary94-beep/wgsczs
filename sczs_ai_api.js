@@ -366,11 +366,46 @@ function init() {
   // ============================================================
   // 接口 3：读分析结果（前端调用）
   // ============================================================
+  function analysisReadScope(scopeType,scopeId){
+    // Batch jobs retain their existing secret authentication; browser reads require a user token.
+    if(text(Params.secret)){checkAuth();return {type:scopeType,id:scopeId};}
+    var token=text(Params.token);if(!token)throw new Error("00008: token不能为空");
+    function phoneOf(value,depth){
+      value=parse(value);if(depth>4||value===null||value===undefined)return "";
+      if(typeof value==="string")return /^1\d{10}$/.test(text(value))?text(value):"";
+      if(typeof value!=="object")return "";
+      var keys=["userphone","phone","mobile","userPhone","mobileno","phoneNumber"],i,p;
+      for(i=0;i<keys.length;i++){p=text(value[keys[i]]);if(/^1\d{10}$/.test(p))return p;}
+      for(var key in value)if(Object.prototype.hasOwnProperty.call(value,key)){p=phoneOf(value[key],depth+1);if(p)return p;}
+      return "";
+    }
+    var session=parse(CustomizeUtil.redisGet({key:token})),raw=parse(session&&session.data!==undefined?session.data:session);
+    raw=parse(raw&&raw.value!==undefined?raw.value:raw);if(!raw)throw new Error("00008: token已过期");
+    var phone=phoneOf(raw,0);if(!phone)phone=phoneOf(CustomizeUtil.getMobile(token),0);
+    if(!phone)throw new Error("00008: token未解析到手机号");
+    var rows=sql("SELECT role,branch,grid FROM app_open_api_c003_wgsc_permission_1 WHERE phone=#{phone} AND enabled=1 ORDER BY id DESC LIMIT 1",{phone:phone},true);
+    if(!rows.length)throw new Error("无有效查看权限");
+    var user=rows[0],role={1:"city",2:"branch",3:"grid"}[String(user.role)],branch=text(user.branch),grid=text(user.grid);
+    if(!role||role!=="city"&&!branch||role==="grid"&&!grid)throw new Error("权限记录缺少组织范围");
+    if(role==="grid"){
+      var own=branch+"::"+grid;
+      if(scopeType&&scopeType!=="grid"||scopeId&&scopeId!==own)throw new Error("无权查看该区域分析");
+      return {type:"grid",id:own};
+    }
+    if(role==="branch"){
+      if(!scopeType){if(scopeId&&scopeId!==branch)throw new Error("无权查看该区域分析");return scopeId?{type:"branch",id:branch}:{type:"",id:"",branch:branch};}
+      if(scopeType==="branch"&&scopeId===branch||scopeType==="grid"&&scopeId.indexOf(branch+"::")===0&&scopeId.length>branch.length+2)return {type:scopeType,id:scopeId};
+      throw new Error("无权查看该区域分析");
+    }
+    return {type:scopeType,id:scopeId};
+  }
+
   function getAnalysisResult() {
     var statDate = text(Params.statDate);
     var scopeType = text(Params.scopeType);
     var scopeId = text(Params.scopeId);
     var channelType = text(Params.channelType);
+    var authorized=analysisReadScope(scopeType,scopeId);scopeType=authorized.type;scopeId=authorized.id;
 
     if (statDate) statDate = date(statDate);
     if (scopeType && ["city", "branch", "grid"].indexOf(scopeType) < 0) throw new Error("scopeType 无效");
@@ -379,6 +414,7 @@ function init() {
     var where = " WHERE 1=1 ";
     var args = {};
 
+    if(authorized.branch){args.authBranch=authorized.branch;args.authGridPrefix=authorized.branch+"::";where+=" AND ((scope_type='branch' AND scope_id=#{authBranch}) OR (scope_type='grid' AND LOCATE(#{authGridPrefix},scope_id)=1)) ";}
     if (statDate) { args.statDate = statDate; where += " AND stat_date=#{statDate} "; }
     if (scopeType) { args.scopeType = scopeType; args.scopeId = scopeId; where += " AND scope_type=#{scopeType} AND scope_id=#{scopeId} "; }
     
@@ -483,7 +519,7 @@ function init() {
   } catch (e) {
     var errDetail;
     try { errDetail = JSON.stringify({ name: e && e.name, message: e && e.message, stack: e && e.stack }); } catch (ee) { errDetail = String(e); }
-    JsResult.result = JSON.stringify({ result: { retCode: "1", retMsg: errDetail, data: null } });
+    JsResult.result = JSON.stringify({ result: { retCode: String(e.message).indexOf("00008:")===0?"00008":"1", retMsg: errDetail, data: null } });
   }
 }
 init();

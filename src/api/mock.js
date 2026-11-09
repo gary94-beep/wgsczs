@@ -174,7 +174,7 @@ export async function mockImportTargets(rows, permission) {
  * @param {Object[]} rows
  * @returns {Promise<{total:number, success:number, failed:number, errors:string[]}>}
  */
-export async function mockImportCapacity(target, rows, isDaily = false) {
+export async function mockImportCapacity(target, rows) {
   await delay(300)
 
   if (!['region', 'channel', 'staff'].includes(target)) {
@@ -206,7 +206,7 @@ export async function mockImportCapacity(target, rows, isDaily = false) {
       errors.push(`第${line}行 capacity 不能为负数：${row.capacity}`)
       return
     }
-    if (!row.branch_company || !row.grid_name || (!isDaily && !row.prod_period_type) || !row.product_name || !row.stat_date) {
+    if (!row.branch_company || !row.grid_name || !row.prod_period_type || !row.product_name || !row.stat_date) {
       failed++
       errors.push(`第${line}行缺少必填字段`)
       return

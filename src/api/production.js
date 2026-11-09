@@ -1,3 +1,4 @@
+import {mockTeamControl} from './mockTeamControl.js'
 import { isMock, postHandle2 } from './client.js'
 import {mockBroadbandOverview,mockBroadbandRegions,mockBroadbandDetails} from './mockBroadband.js'
 import { visibleDashboard, visibleSearchResults, visibleAnalysis } from '../utils/productVisibility.js'
@@ -91,7 +92,7 @@ export async function importSalesScripts(rows, permission, token) {
 // 【修改点】：新增 isDaily 参数，并传给 gateway
 export async function importCapacity(target, rows, token, isDaily = false) {
   return isMock 
-    ? mockImportCapacity(target, rows, isDaily) 
+    ? mockImportCapacity(target, rows) 
     : gateway('imports', 'wgsc_importCapacity', { 
         target, 
         isDaily, 
@@ -138,4 +139,20 @@ export async function fetchAiAnalysis(params, token) {
     channelType: params.channelType || ''
   }, token)
   return visibleAnalysis(data)
+}
+function teamControlError(error){
+  if(/非法调用/.test(error.message||''))error.message='队伍盯控接口尚未发布，请更新 sczs_search_api.js';
+  else error.message=(error.message||'队伍盯控请求失败').replace(/，已有验证码可直接尝试登录|；已有验证码可直接尝试登录/g,'');
+  return error;
+}
+export async function fetchTeamControlMeta(params,token){
+  try{if(isMock){const data=await mockTeamControl(params);return {statDate:data.statDate,organization:data.organization};}
+    return await gateway('search','wgsc_teamControlMeta',{},token);
+  }catch(error){throw teamControlError(error)}
+}
+export async function fetchTeamControl(params,token){
+  if(isMock)return mockTeamControl(params)
+  const {phone,...request}=params
+  try{return await gateway('search','wgsc_teamControl',request,token)}
+  catch(error){throw teamControlError(error)}
 }
