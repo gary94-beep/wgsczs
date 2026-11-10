@@ -488,7 +488,7 @@ function init() {
         return; 
       }
       branches[b] = { branchId: b, branchName: b };
-      if (b !== g && !/统筹|^(未知|全市|市公司|中山市|其他)$/.test(g)) {
+      if (b !== g && !/统筹|^(未知|全市|市公司|中山市)$/.test(g)) {
         grids[gridId(b, g)] = { gridId: gridId(b, g), gridName: g, branchId: b };
       }
     }
