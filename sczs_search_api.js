@@ -317,7 +317,7 @@ function capacityQuery(o,a,c,s,f){if(f===void 0){var N=s||(a&&Params.funCode==="
     var rows=pagedSql("SELECT branch,grid FROM ("+parts.join(" UNION ")+") orgs",args,"branch,grid"),branches={};
     for(i=0;i<rows.length;i++){
       var b=text(rows[i].branch),g=text(rows[i].grid);
-      if(!b || !g || /统筹|^(未知|全市|市公司|中山市)$/.test(g) || b===g)continue;
+      if(!b || !g || /统筹|^(未知|全市|市公司|中山市|其他)$/.test(g) || b===g)continue;
       if(!branches[b]){data.organization.branches.push({branchId:b,branchName:b});branches[b]=true;}
       data.organization.grids.push({branchId:b,gridId:gridId(b,g),gridName:g});
     }

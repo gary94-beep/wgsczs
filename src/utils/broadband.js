@@ -131,7 +131,7 @@ export function createBroadbandEngine() {
   function rankingAnalysis(rows, clock) {
     function candidates(level) {
       return regions(rows,level,clock).filter(function (r) {
-        return r.name && !/统筹|^(未知|全市|市公司|中山市)$/.test(r.name) && (level !== 'grid' || r.name !== r.branch) && r.stats.completionRate !== null && isFinite(r.stats.completionRate) && r.stats.monthlyTarget > 0;
+        return r.name && !/统筹|^(未知|全市|市公司|中山市|其他)$/.test(r.name) && (level !== 'grid' || r.name !== r.branch) && r.stats.completionRate !== null && isFinite(r.stats.completionRate) && r.stats.monthlyTarget > 0;
       }).map(function (r) {
         return {name:r.name,branch:r.branch,grid:r.grid,completionRate:r.stats.completionRate,production:r.stats.production,monthlyTarget:r.stats.monthlyTarget};
       });
@@ -143,7 +143,7 @@ export function createBroadbandEngine() {
       var sorted=list.slice().sort(order), best=list.slice().sort(function (a,b) {return b.completionRate-a.completionRate || order(a,b);});
       return {count:list.length,best:best.length?best[0]:null,worst:sorted.slice(0,count)};
     }
-    var branches=ranked(candidates('branch').filter(function (r) {return !/统筹|未知|全市/.test(r.name);}),1), grids=candidates('grid'), classified=[], unknown=0;
+    var branches=ranked(candidates('branch').filter(function (r) {return !/统筹|未知|其他|全市/.test(r.name);}),1), grids=candidates('grid'), classified=[], unknown=0;
     for (var i=0;i<grids.length;i++) if (!gridClass(grids[i].grid)) unknown++;
     ['A','B','C'].forEach(function (type,index) {
       var selected=grids.filter(function (r) {return gridClass(r.grid)===type;});
