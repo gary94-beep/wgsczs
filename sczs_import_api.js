@@ -308,10 +308,22 @@ function init() {
     var rows = array(Params.rows);
     var records = [];
     var seen = {};
+    var skipped = 0; // 记录跳过的条数
+
     for (var i = 0; i < rows.length; i++) {
       var r = {};
       var fields = config[1];
       for (var j = 0; j < fields.length; j++) r[fields[j]] = text(rows[i][fields[j]]);
+      
+      // ========== 核心修改：产能数据跳过“未知” ==========
+      if (capacity) {
+        if (r.branch_company === "未知" || r.grid_name === "未知") {
+          skipped++;
+          continue; 
+        }
+      }
+      // =====================================================
+
       if (target === "permission") r.is_super_admin = text(rows[i].is_super_admin === undefined ? rows[i].super_admin : rows[i].is_super_admin);
       if (capacity) {
         r.capacity = num(rows[i].capacity);
@@ -442,10 +454,20 @@ function init() {
         }
       }
     }
+    
+    // ========== 核心修改：拼接一段可读的提示信息 ==========
+    var finalFailed = rows.length - success - skipped;
+    var msg = "导入执行完毕：成功 " + success + " 条，跳过 " + skipped + " 条，失败 " + finalFailed + " 条。";
+    if (skipped > 0) {
+      msg += "（注：分公司或网格为“未知”的记录已被跳过）";
+    }
+
     return {
       total: rows.length,
       success: success,
-      failed: rows.length - success,
+      skipped: skipped,
+      failed: finalFailed,
+      msg: msg,
       errors: errors,
       mode: (config[2] || target === "permission") ? "upsert" : (capacity && isAppend ? "append" : "replace")
     };
