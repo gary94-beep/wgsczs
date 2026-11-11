@@ -15,7 +15,6 @@ function init() {
     targets: "app_open_api_c003_wgsc_target_1",
     scripts: "app_open_api_c001_wgsc_script_1"
   };
-
   // ========== 产品 ==========
   var products = [
     { productId: "newNumbers", productName: "放号", unit: "户" },
@@ -24,7 +23,6 @@ function init() {
     { productId: "homeBroadband", productName: "手宽新增", unit: "户" },
     { productId: "gigabit", productName: "千兆运营", unit: "户" }
   ];
-
   // ========== 工具函数 ==========
   function text(v) {
     return String(v === null || v === undefined ? "" : v).replace(/^\s+|\s+$/g, "");
@@ -116,14 +114,12 @@ function init() {
   function gridId(b, g) {
     return b + "::" + g;
   }
-
   // 手机号清洗，与 sczs_common_api.js 保持一致
   function normalizeMobile(value) {
     var s = String(value || '').replace(/^\s+|\s+$/g, '').replace(/^['"]+|['"]+$/g, '').replace(/\s/g, '');
     var m = s.match(/1\d{10}/);
     return m ? m[0] : s;
   }
-
   function permission(phone) {
     var a = sql("SELECT name,phone,role,branch,grid,super_admin FROM " + tables.permission + " WHERE phone=#{phone} AND enabled=1 ORDER BY id DESC LIMIT 1", { phone: phone }, true);
     if (!a || a.length === 0) throw new Error("该手机号无有效权限");
@@ -163,7 +159,6 @@ function init() {
     }
     return s;
   }
-
   function latest(table) {
     var args = {};
     var a = sql("SELECT MAX(stat_date) AS stat_date FROM " + table + " WHERE 1=1" + scope("branch_company", "grid_name", args), args, true);
@@ -175,7 +170,6 @@ function init() {
       throw new Error("latest()失败：table=" + table + " raw=" + JSON.stringify(raw) + " type=" + typeof raw + " message=" + e.message);
     }
   }
-
   function dailyStamp(column) {
     return "CASE WHEN SUBSTRING("+column+",5,1) IN ('-','/') THEN CONCAT(REPLACE(REPLACE(SUBSTRING("+column+",1,10),'/',''),'-',''),CASE WHEN LENGTH("+column+")>=13 THEN SUBSTRING("+column+",12,2) ELSE '' END) ELSE SUBSTRING("+column+",1,10) END";
   }
@@ -202,12 +196,9 @@ function init() {
     }
     return out;
   }
-
   // ============================================================
   // alerts
   // ============================================================
-
-
   function alerts() {
     if (["month", "day"].indexOf(Params.period) < 0) throw new Error("预警周期无效");
     product(Params.productId);
@@ -226,22 +217,11 @@ function init() {
     channels.sort(function (a, b) { return a.production - b.production; });
     return { people: people, channels: channels, statDate: Params.period === "day" ? data.dailyStatDate : data.statDate, dailyStatDate: data.dailyStatDate, dailyStatHour: data.dailyStatHour, comparisonStatDate: data.statDate, totals: populationTotals(data), totalSource: "dimension" };
   }
-
   // ============================================================
   // search
   // ============================================================
   // Monthly staff goals are read only for matching personnel search results.
-  
-
-
   // Query only matched managers and their distinct current links; never load these at login.
-  
-
-
-  
-
-  
-
   // ============================================================
   // buildAiSummary
   // ============================================================
@@ -314,9 +294,6 @@ function init() {
     }
     return summary;
   }
-
-
-
   // SQL aggregation boundary: never select raw capacity tables into JavaScript.
   var dashboardMemo = null;
   function pagedSql(query, args, order) {
@@ -445,12 +422,15 @@ function init() {
   }
   function mapCapacity(r, statDate) {
     if (Number(r.invalidCount) > 0) throw new Error("产能包含空值或负数，不能作为零聚合，请修正源数据");
-    var star = String(r.star || "").match(/([0-9三四五])\s*星/), stars = { "三": 3, "四": 4, "五": 5 };
+    // 过滤 Handle2 网关把 null 转成的空对象 {}，如果是纯文本则保留
+    var rawStar = (typeof r.star === 'object' && r.star !== null) ? null : r.star;
+    if (rawStar === "") rawStar = null;
     var out = { branchId: r.branchId, gridId: r.gridId, productId: product(r.productName).productId,
       period: r.period, production: num(r.production), channelType: r.channelType,
       staffId: r.staffId || "", staffName: r.staffName || "", staffRole: r.staffRole || "",
       channel: r.channel || "", channelCode: r.channelType === "末梢渠道" ? "tail:" + JSON.stringify([r.serviceProvider || "", r.microChannelName || ""]) : r.channelCode || "",
-      channelStar: star ? stars[star[1]] || Number(star[1]) : null,
+      // 直接返回原始文本（如"六星C"），如果为空则返回 null
+      channelStar: rawStar,
       microChannelName: r.microChannelName || "", serviceProvider: r.serviceProvider || "",
       staffCount: r.staffCount === null ? null : Number(r.staffCount) };
     if (r.monthProduction !== undefined) {
@@ -724,7 +704,6 @@ function init() {
     result.pagination = { page: page, pageSize: size, total: total, hasMore: offset + size < total };
     return result;
   }
-
   var handlers = {
     wgsc_fetchSession: function () { return { permission: user }; },
     wgsc_fetchChannelOptions: channelOptions,
@@ -732,9 +711,7 @@ function init() {
     wgsc_fetchAiSummary: buildAiSummary,
     wgsc_fetchDashboard: dashboard,
     wgsc_fetchAlerts: alerts
-
   };
-
   try {
     if (!Object.prototype.hasOwnProperty.call(handlers, Params.funCode)) throw new Error("非法调用");
     user = authenticate();

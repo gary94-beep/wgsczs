@@ -6,13 +6,15 @@ function init() {
     return;
   }
 
-  // ========== 鉴权白名单配置 ==========
-  // 仅放开产能导入，给技术人员使用（无需 Token）
+  // ========== 鉴权与安全配置 ==========
+  // 仅放开特定接口免 Token 校验（给技术人员使用）
   var authWhiteList = [
-    'wgsc_importCapacity'
+    // 'wgsc_importCapacity'
   ];
   
-  var isAuthPassed = false;
+  // 技术人员导数专属密钥（请在此处填入你的32位密钥）
+  var IMPORT_SECRET = "a3dE5gH7jK9mWgSCzSpQ4sTyZ0cF2J";
+  
   var user = null;
 
   // ========== 表名 ==========
@@ -547,19 +549,29 @@ function init() {
   try {
     if (!Object.prototype.hasOwnProperty.call(handlers, Params.funCode)) throw new Error("非法调用");
     
-    // ========== 核心修改：精准鉴权拦截 ==========
-    if (authWhiteList.indexOf(Params.funCode) === -1) {
-      // 不在白名单里，必须校验 token
-      user = authenticate();
-    } else {
-      // 在白名单里，给一个默认的超级管理员身份供底层逻辑使用，避免各种空指针报错
+    // ========== 核心修改：精准鉴权与 Secret 分流 ==========
+    var reqSecret = text(Params.secret);
+    
+    // 1. 如果传了 Secret 并且和配置的匹配，直接放行（供后台技术人员跑批）
+    if (IMPORT_SECRET && reqSecret === IMPORT_SECRET) {
       user = {
         name: "系统技术直连", phone: "13800000000", role: "city", cityName: "中山市",
         branchName: "", branchId: "", gridName: "", gridId: "", isSuperAdmin: true
       };
+    } 
+    // 2. 如果在白名单里，放行（预留的扩展位置，目前为空）
+    else if (authWhiteList.indexOf(Params.funCode) !== -1) {
+      user = {
+        name: "白名单直连", phone: "13800000000", role: "city", cityName: "中山市",
+        branchName: "", branchId: "", gridName: "", gridId: "", isSuperAdmin: true
+      };
+    } 
+    // 3. 其余情况（前端页面调用），必须校验 Token
+    else {
+      user = authenticate();
     }
     
-    admin(); // 如果是白名单，上面的 isSuperAdmin 为 true，这里直接放行
+    admin(); // 校验是否为超管，Secret 和 白名单身份会被直接放行
     
     var result = handlers[Params.funCode]();
     JsResult.result = JSON.stringify({result:{retCode:"0",retMsg:"成功",data:result}});
