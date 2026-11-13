@@ -1,5 +1,5 @@
 import { isMock, postHandle2, loadExternalScript } from './client.js'
-import { fetchPermission, getMobileByToken } from './production.js'
+import { getMobileByToken } from './production.js'
 
 const sdkScripts = [
   'https://gd.10086.cn/apph5/openapi/static/js/jquery.min.js',
@@ -39,8 +39,7 @@ export function findAuthValue(value, keys) {
 }
 export async function sendLoginCode(phone) {
   if (!/^1\d{10}$/.test(phone)) throw new Error('请输入正确的11位手机号')
-  const permission = await fetchPermission(phone)
-  if (!permission?.role) throw new Error('该手机号暂无使用权限')
+  // Permission lookup runs only after platform authentication in completeLogin.
   if (isMock) return
   const result = await postHandle2('ability_acquire_send_code', { mobile: phone }, { version: '2.0', encryptMobile: true, responseType: 'sendCode' })
   if (result !== null) checkAuthResult(result, false)
