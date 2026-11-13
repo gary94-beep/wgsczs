@@ -9,3 +9,5 @@ import './styles/overview.css'
 createApp(App).mount('#app')
 
 import './styles/session-alerts.css'
+
+import './styles/workbench-layout.css'

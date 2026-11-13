@@ -34,7 +34,7 @@
             @click="loginPhone = '13800000003'">网格长</button></div>
       </section>
     </main>
-    <main v-else class="dashboard-page" :class="{'production-overview-page':stage === 'overview','broadband-page':stage === 'broadband'}">
+    <main v-else class="dashboard-page" :class="{'workbench-page':stage === 'workbench','production-overview-page':stage === 'overview','broadband-page':stage === 'broadband'}">
       <header v-if="stage === 'workbench'" class="top-bar">
         <div>
           <BrandHeading compact />
@@ -49,6 +49,7 @@
         <template v-else-if="stage === 'campus'"><strong>校园生产管理</strong></template>
         <template v-else-if="stage === 'search'"><strong>产能速查</strong></template>
         <template v-else-if="stage === 'broadband'"><strong>宽带一号工程专项</strong></template>
+        <template v-else-if="stage === 'rollout'"><strong>宽带攻坚调度</strong></template>
         <template v-else-if="stage === 'imports'"><strong>数据导入</strong></template>
         <template v-else-if="stage === 'scripts'"><button type="button"
             @click="returnFromScripts">队伍盯控</button><span>›</span><strong>经典话术库</strong></template>
@@ -71,17 +72,20 @@
           <h2>工作台</h2><button type="button" class="workbench-logout" :disabled="logoutBusy" @click="handleLogout" aria-label="退出登录"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5m5-12 4 4-4 4m-7-4h11"/></svg>{{ logoutBusy ? '登出中…' : '登出' }}</button>
         </section>
         <section class="workbench-menu" aria-label="工作台菜单">
-          <button type="button" @click="openBroadband"><span class="menu-icon menu-icon-blue"><i class="broadband-icon" :style="broadbandIconStyle" aria-hidden="true"></i></span><span class="menu-copy"><strong>宽带一号工程专项</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button type="button" @click="openMonitor"><span class="menu-icon menu-icon-green"><i
+          <h3 class="workbench-group-title">宽带专项</h3>
+          <button class="workbench-feature" type="button" @click="openBroadband"><span class="menu-icon menu-icon-blue"><i class="broadband-icon" :style="broadbandIconStyle" aria-hidden="true"></i></span><span class="menu-copy"><strong>宽带一号工程</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+          <button class="workbench-feature" type="button" @click="openRollout"><span class="menu-icon menu-icon-blue"><i class="menu-glyph menu-glyph-alert" :style="rolloutDispatchStyle" aria-hidden="true"></i></span><span class="menu-copy"><strong>宽带攻坚调度</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+          <h3 class="workbench-group-title">生产管理</h3>
+          <button class="workbench-half" type="button" @click="openMonitor"><span class="menu-icon menu-icon-green"><i
                 class="menu-glyph menu-glyph-alert" :style="teamNavIconStyle" aria-hidden="true"></i></span><span
               class="menu-copy"><strong>队伍盯控</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button type="button" @click="goOverview"><span class="menu-icon menu-icon-blue"><i
-                class="menu-glyph menu-glyph-overview" aria-hidden="true"></i></span><span
-              class="menu-copy"><strong>生产总览</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button type="button" @click="openSearch"><span class="menu-icon menu-icon-green"><i
+          <button class="workbench-half" type="button" @click="openSearch"><span class="menu-icon menu-icon-green"><i
                 class="menu-glyph menu-glyph-search" aria-hidden="true"></i></span><span
               class="menu-copy"><strong>产能速查</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
-          <button v-if="user.isSuperAdmin" type="button" @click="openImports"><span class="menu-icon menu-icon-blue"><i class="data-import-icon" :style="dataImportIconStyle" aria-hidden="true"></i></span><span class="menu-copy"><strong>数据导入</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+          <button class="workbench-wide" type="button" @click="goOverview"><span class="menu-icon menu-icon-blue"><i
+                class="menu-glyph menu-glyph-overview" aria-hidden="true"></i></span><span
+              class="menu-copy"><strong>生产总览</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
+          <button class="workbench-admin" v-if="user.isSuperAdmin" type="button" @click="openImports"><span class="menu-icon menu-icon-blue"><i class="data-import-icon" :style="dataImportIconStyle" aria-hidden="true"></i></span><span class="menu-copy"><strong>数据导入</strong></span><i class="menu-chevron" aria-hidden="true"></i></button>
         </section>
       </template>
       <template v-else-if="stage === 'imports' && user.isSuperAdmin">
@@ -325,6 +329,9 @@
       <template v-else-if="stage === 'campus'">
         <CampusAnalysis :phone="user.phone" :token="token" />
       </template>
+      <template v-else-if="stage === 'rollout'">
+        <BroadbandRollout :permission="user" :token="token" :navigation-state="rolloutNavigation" @navigation-change="rolloutNavigation=$event" />
+      </template>
       <template v-else-if="stage === 'broadband'">
         <BroadbandAnalysis :navigation-state="broadbandNavigation" @navigation-change="broadbandNavigation = $event" @back-to-workbench="goWorkbench" :permission="user" :organization="dashboard.organization" :stat-date="dashboard.statDate" :scope="scopeName" :token="token" />
       </template>
@@ -362,12 +369,14 @@ import {createSessionPersistence,isExpiredSessionError} from './utils/sessionPer
 import lowWarningIcon from './assets/warning-icons/triangle-alert.svg'
 import changeWarningIcon from './assets/warning-icons/chart-no-axes-combined.svg'
 import broadbandIcon from './assets/product-icons/wifi.svg'
+import rolloutDispatchIcon from './assets/ui-icons/board-dispatch.svg'
 import { isMock } from './api/client'
 import { sendLoginCode, loginWithCode, loginWithOneClick, logoutSession, loginWithWechatCode } from './api/auth.js'
 import { fetchChannelOptions, fetchChangeAlerts, fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts, fetchAiAnalysis } from './api/production'
 import { monitorBranchOptions } from './utils/monitorBranches.js'
 import ChannelTypeFilter from './components/ChannelTypeFilter.vue'
 import BroadbandAnalysis from './components/BroadbandAnalysis.vue'
+import BroadbandRollout from './components/BroadbandRollout.vue'
 import { normalizeChannelType } from './utils/channelTypes.js'
 import CapacityCard from './components/CapacityCard.vue'
 import SalesScriptPanel from './components/SalesScriptPanel.vue'
@@ -406,6 +415,7 @@ const warningIcons = {
   change: { '--warning-icon': `url(${JSON.stringify(changeWarningIcon)})` }
 }
 const exportIconStyle = { '--export-icon': `url(${JSON.stringify(downloadIcon)})` }
+const rolloutDispatchStyle={mask:'url("'+rolloutDispatchIcon+'") center / contain no-repeat',"-webkit-mask":'url("'+rolloutDispatchIcon+'") center / contain no-repeat'}
 const broadbandIconStyle = { '--broadband-icon': `url("${broadbandIcon}")` }
 const channelWarningIconStyle = { '--channel-warning-icon': `url("${channelWarningIcon}")` }
 const dataImportIconStyle = { '--import-icon': `url(${JSON.stringify(uploadIcon)})` }
@@ -714,6 +724,7 @@ function displayNumber(value) { return Number(value || 0).toLocaleString('zh-CN'
 function productIcon(id) { return ({ newNumbers: 'contact', plan119: 'gift', terminal: 'smartphone', homeBroadband: 'house', gigabit: 'wifi' })[id] || 'chart-no-axes-combined' }
 function gridName(id) { return dashboard.organization.grids.find(item => item.gridId === id)?.gridName || '' }
 function branchName(id) { return dashboard.organization.branches.find(item => item.branchId === id)?.branchName || '分公司未提供' }
+const rolloutNavigation = ref(null)
 const broadbandNavigation = ref(null)
 const teamNavigation = ref(null)
 function navigationSnapshot() {
@@ -721,9 +732,10 @@ function navigationSnapshot() {
   channel:selectedChannel.value,channelType:selectedChannelType.value,tab:tab.value,alertMode:alertMode.value,
   monitorBranch:monitorBranchId.value,monitorGrid:monitorGridId.value,monitorProduct:monitorProductId.value,
   period:alertPeriod.value,threshold:threshold.value,declineRate:declineRate.value,declineValue:declineValue.value,
-  overviewPeriod:overviewPeriod.value,broadband:broadbandNavigation.value,teamControl:teamNavigation.value}
+  overviewPeriod:overviewPeriod.value,rollout:rolloutNavigation.value,broadband:broadbandNavigation.value,teamControl:teamNavigation.value}
 }
 function navigationKey(state) {
+ if(state.stage==='rollout'){const r=state.rollout||{};return JSON.stringify(['rollout',r.branch||'',r.grid||''])}
  if(state.stage==='warnings'){const t=state.teamControl||{};return JSON.stringify(['warnings',t.team||'',t.managerCode||'',t.branchId||'',t.gridId||''])}
  if(state.stage==='broadband'){
   const b=state.broadband||{view:'overview'}
@@ -734,12 +746,12 @@ function navigationKey(state) {
 }
 const browserNavigation=createBrowserNavigation({onExitHint:()=>showToast('再返回一次退出','warning'),restore:async state=>{
  if(page.value!=='dashboard')return
- if(!['workbench','overview','branches','grids','alerts','warnings','monitor','search','broadband','imports','scripts','campus'].includes(state.stage) || (state.stage==='imports' && !user.isSuperAdmin))state={stage:'workbench'}
+ if(!['workbench','overview','branches','grids','alerts','warnings','monitor','search','broadband','rollout','imports','scripts','campus'].includes(state.stage) || (state.stage==='imports' && !user.isSuperAdmin))state={stage:'workbench'}
  selectedProductId.value=state.product||'';selectedBranchId.value=state.branch||'';selectedGridId.value=state.grid||''
  selectedChannel.value=state.channel||'';selectedChannelType.value=state.channelType||'';tab.value=state.tab||'people'
  alertMode.value=state.alertMode||'low';monitorBranchId.value=state.monitorBranch||'';monitorGridId.value=state.monitorGrid||'';monitorProductId.value=state.monitorProduct||''
  alertPeriod.value=state.period||'month';threshold.value=state.threshold??1;declineRate.value=state.declineRate??30;declineValue.value=state.declineValue??5
- overviewPeriod.value=state.overviewPeriod||'month';broadbandNavigation.value=state.broadband||null;teamNavigation.value=state.teamControl||null;stage.value=state.stage
+ rolloutNavigation.value=state.rollout||null;overviewPeriod.value=state.overviewPeriod||'month';broadbandNavigation.value=state.broadband||null;teamNavigation.value=state.teamControl||null;stage.value=state.stage
  await nextTick();window.scrollTo(0,0)
 }})
 provide('wgsc-browser-navigation',{back:()=>browserNavigation.back()})
@@ -766,6 +778,7 @@ function openMonitor() { if(stage.value!=='warnings')teamNavigation.value=null;s
 function openAlertMonitor(mode) { alertMode.value = mode; monitorBranchId.value = user.role === 'city' ? '' : user.branchId; monitorGridId.value = user.role === 'grid' ? user.gridId : ''; monitorProductId.value = dashboard.products[0]?.productId || ''; selectedChannel.value = ''; threshold.value = 1; tab.value = 'people'; stage.value = 'monitor'; scrollTop() }
 function openCampus() { stage.value = 'campus'; scrollTop() }
 function openSearch() { stage.value = 'search'; scrollTop() }
+function openRollout() { rolloutNavigation.value=null;stage.value='rollout';scrollTop() }
 function openBroadband() { broadbandNavigation.value=null;stage.value = 'broadband'; scrollTop() }
 function openImports() { if (user.isSuperAdmin !== true) return showToast('仅超级管理员可导入数据', 'warning'); stage.value = 'imports'; scrollTop() }
 function openScriptLibrary() { scriptReturnStage.value = stage.value; scriptProductId.value = activeProduct.value?.productId || dashboard.products[0]?.productId || ''; stage.value = 'scripts'; scrollTop() }
@@ -836,7 +849,7 @@ function resetLocalSession(clearStored=true) {
  loginPhone.value='';loginCode.value='';agreedToTerms.value=false;clearInterval(codeTimer);codeCountdown.value=0
  alertSequence++;alertResult.value=null;alertSnapshot.value=null;alertLoading.value=false;alertError.value=''
  aiAnalysis.byScope={};aiAnalysis.error='';aiAnalysis.loading=false
- selectedProductId.value='';selectedBranchId.value='';selectedGridId.value='';selectedChannel.value='';selectedChannelType.value='';broadbandNavigation.value=null;teamNavigation.value=null
+ selectedProductId.value='';selectedBranchId.value='';selectedGridId.value='';selectedChannel.value='';selectedChannelType.value='';broadbandNavigation.value=null;rolloutNavigation.value=null;teamNavigation.value=null
  Object.assign(user,{name:'',phone:'',role:'',branchId:'',branchName:'',gridId:'',gridName:'',cityName:'',isSuperAdmin:false})
  Object.assign(dashboard,{organization:{cityName:'',branches:[],grids:[]},statDate:'',missingCapacityIsZero:false,dailyStatDate:undefined,dailyStatHour:'',rows:[],dailyRows:[],targets:[],products:[],regionRows:undefined,periodRows:[],salesScripts:[]})
 }

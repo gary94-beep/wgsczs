@@ -1,0 +1,56 @@
+/* Scoped to the workbench; other module layouts keep their existing styles. */
+
+.dashboard-page.workbench-page{background:#f1faff url('/images/city-concept-background.png') center top / 100% 330px no-repeat;padding-bottom:22px}
+
+.workbench-page .top-bar{min-height:125px;margin:0 -14px;padding:26px 20px 10px;align-items:flex-start;background:transparent}
+
+.workbench-page .top-bar p{margin:8px 0 0 5px;font-size:13px;font-weight:600}
+
+.workbench-page .top-bar button{flex:0 0 34px;width:34px;height:34px;margin-top:3px}
+
+.workbench-page .workbench-heading{min-height:62px;margin:0;padding:8px 6px 16px;gap:12px;border-bottom:1px solid #d8eafa}
+
+.workbench-page .workbench-heading h2{margin:0;font-size:25px;line-height:1.2}
+
+.workbench-page .workbench-heading h2::after{display:none}
+
+.workbench-page .workbench-logout{padding:7px 11px;font-size:13px;border-radius:9px;background:#ffffffbc}
+
+.workbench-page .workbench-menu{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin:0;padding:0;background:transparent}
+
+.workbench-page .workbench-group-title{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin:7px 3px 0;padding:7px 0 1px;font-size:17px;font-weight:750;color:#18365b;line-height:1.3}
+
+.workbench-page .workbench-group-title::before{content:'';width:4px;height:17px;border-radius:3px;background:linear-gradient(#05b8e2,#0876fa)}
+
+.workbench-page .workbench-menu button{grid-column:1/-1;display:flex;align-items:center;gap:14px;min-width:0;min-height:78px;padding:14px;border:1px solid #d1e5f8;border-radius:14px;background:#fff;box-shadow:0 4px 14px #22629b09}
+
+.workbench-page .workbench-menu .workbench-feature{min-height:78px;background:#fff;border-color:#d1e5f8}
+
+.workbench-page .workbench-menu .workbench-half{grid-column:auto;min-height:78px;padding:10px;gap:7px}
+
+.workbench-page .menu-icon{width:48px;height:48px;flex:0 0 48px;border-radius:13px}
+
+.workbench-page .menu-copy{min-width:0;flex:1}
+
+.workbench-page .menu-copy strong{font-size:18px;font-weight:750;line-height:1.4;white-space:normal}
+
+.workbench-page .menu-chevron{flex:0 0 7px;width:7px;height:7px;margin:0 3px 0 auto}
+
+
+
+.workbench-page .menu-icon i{width:28px;height:28px}
+
+.workbench-page .workbench-half .menu-copy strong{white-space:nowrap}
+
+
+
+.workbench-page .workbench-menu .workbench-admin{min-height:78px;background:#fff}
+
+
+
+
+
+@media(max-width:360px){.workbench-page .top-bar{margin:0 -11px;padding:24px 15px 10px;min-height:118px}.workbench-page .workbench-menu{gap:9px}.workbench-page .menu-icon{width:38px;height:38px;flex-basis:38px;border-radius:10px}.workbench-page .menu-icon i{width:26px;height:26px}.workbench-page .menu-copy strong{font-size:16px}}
+
+
+@media(max-width:360px){.workbench-page .workbench-menu .workbench-half{padding:10px 8px;gap:6px}}

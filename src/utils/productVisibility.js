@@ -1,5 +1,5 @@
 // Presentation-only switch. Keep stored production and targets intact for restoration.
-const hiddenProducts = [{ id: 'gigabit', name: '千兆运营' }]
+const hiddenProducts = [{ id: 'gigabit', name: '千兆运营' }, { id: 'terminal', name: '终端合约' }]
 
 // Display names only: retain the existing product ID for queries and imports.
 export function productDisplayText(value) {
