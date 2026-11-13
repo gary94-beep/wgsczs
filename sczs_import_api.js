@@ -476,10 +476,11 @@ function init() {
     };
   }
 
-  // ========== 新增：导入日产能目标 (bb_progress) 固定全量覆盖 ==========
+  // ========== 新增：导入日产能目标 (bb_progress) 支持全量/增量 ==========
   function importBbProgressDay() {
     admin();
     var rows = array(Params.rows);
+    var isAppend = Params.isAppend === true || Params.isAppend === 1 || text(Params.isAppend) === "true" || text(Params.isAppend) === "1";
     
     var tableName = tables.bbProgressDay; 
     var fields = ["branch_company", "grid_name", "prod_period_type", "product_name", "day_target", "capacity", "stat_date", "snapshot_time"];
@@ -552,13 +553,16 @@ function init() {
     }
     
     if (prepared.length === 0) {
-      return { total: rows.length, success: 0, skipped: skipped, failed: 0, msg: "没有有效数据可导入", errors: [], mode: "replace" };
+      return { total: rows.length, success: 0, skipped: skipped, failed: 0, msg: "没有有效数据可导入", errors: [], mode: isAppend ? "append" : "replace" };
     }
     
-    try {
-      sql("DELETE FROM " + tableName, {}, false);
-    } catch (delErr) {
-      throw new Error("清空表 " + tableName + " 失败，终止导入。原因：" + delErr.message);
+    // 如果不是增量追加，则先清空表
+    if (!isAppend) {
+      try {
+        sql("DELETE FROM " + tableName, {}, false);
+      } catch (delErr) {
+        throw new Error("清空表 " + tableName + " 失败，终止导入。原因：" + delErr.message);
+      }
     }
     
     var BATCH_SIZE = 500;
@@ -582,6 +586,11 @@ function init() {
       
       var insertSql = "INSERT INTO " + tableName + " (" + fields.join(",") + ") VALUES " + valueParts.join(",");
       
+      // ★ 如果是增量追加，遇到唯一键冲突则覆盖更新（需确保数据库建了唯一索引）
+      if (isAppend) {
+        insertSql += " ON DUPLICATE KEY UPDATE day_target=VALUES(day_target), capacity=VALUES(capacity), snapshot_time=VALUES(snapshot_time)";
+      }
+      
       try {
         sql(insertSql, args, false);
         success += batch.length;
@@ -598,7 +607,7 @@ function init() {
     
     return {
       total: rows.length, success: success, skipped: skipped, failed: finalFailed,
-      msg: msg, errors: errors, mode: "replace"
+      msg: msg, errors: errors, mode: isAppend ? "append/upsert" : "replace"
     };
   }
 
