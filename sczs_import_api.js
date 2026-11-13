@@ -44,9 +44,7 @@ function init() {
   var products = [
     { productId: "newNumbers", productName: "放号", unit: "户" },
     { productId: "plan119", productName: "高套（129+）", unit: "户" },
-    { productId: "terminal", productName: "终端合约", unit: "单" },
-    { productId: "homeBroadband", productName: "手宽新增", unit: "户" },
-    { productId: "gigabit", productName: "千兆运营", unit: "户" }
+    { productId: "homeBroadband", productName: "手宽新增", unit: "户" }
   ];
 
   // ========== 工具函数 ==========
