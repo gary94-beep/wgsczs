@@ -35,7 +35,9 @@ function init() {
     // 新增的日产能表
     regionDay: "app_open_api_c002_wgsc_reg_capacity_d_1",
     channelDay: "app_open_api_c002_wgsc_chn_capacity_d_1",
-    staffDay: "app_open_api_c002_wgsc_stf_capacity_d_1"
+    staffDay: "app_open_api_c002_wgsc_stf_capacity_d_1",
+    // ★ 截图对应的新表
+    bbProgressDay: "app_open_api_c001_wgsc_bb_progress_d_1"
   };
 
   // ========== 产品 ==========
@@ -138,11 +140,12 @@ function init() {
     var map = {
       "月产能（mon）": "mon",
       "日产能（day）": "day",
+      "小时产能（hour）": "hour",
       "7天产能（week）": "week",
       "上月同期产能（last mon）": "last_mon"
     };
     v = map[text(v)] || text(v);
-    if (["mon", "day", "week", "last_mon"].indexOf(v) < 0) throw new Error("无效周期");
+    if (["mon", "day", "hour", "week", "last_mon"].indexOf(v) < 0) throw new Error("无效产能周期");
     return v;
   }
 
@@ -473,6 +476,132 @@ function init() {
     };
   }
 
+  // ========== 新增：导入日产能目标 (bb_progress) 固定全量覆盖 ==========
+  function importBbProgressDay() {
+    admin();
+    var rows = array(Params.rows);
+    
+    var tableName = tables.bbProgressDay; 
+    var fields = ["branch_company", "grid_name", "prod_period_type", "product_name", "day_target", "capacity", "stat_date", "snapshot_time"];
+    
+    var prepared = [];
+    var seen = {};
+    var skipped = 0;
+    
+    // 定义一个极其宽容的时间处理函数
+    function safeSnapshot(v) {
+      var s = text(v);
+      
+      // 1. 为空直接取当前时间
+      if (!s) return now();
+      
+      // 2. 纯数字格式挽救
+      if (/^\d+$/.test(s)) {
+        if (s.length === 14) {
+          // YYYYMMDDHHmmss -> YYYY-MM-DD HH:mm:ss
+          return s.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/, "$1-$2-$3 $4:$5:$6");
+        } else if (s.length === 10) {
+          // YYYYMMDDHH -> YYYY-MM-DD HH:00:00
+          return s.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})$/, "$1-$2-$3 $4:00:00");
+        } else if (s.length === 13) {
+          // 13位毫秒时间戳处理
+          var d = new Date(Number(s) + 8 * 3600000);
+          return formatDate(d) + " " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":" + pad(d.getUTCSeconds());
+        }
+      }
+      
+      // 3. 带符号的格式（如 2026/11/11 15:36:00）
+      var parsedTime = Date.parse(s.replace(/-/g, "/")); // 兼容 Safari/部分环境
+      if (!isNaN(parsedTime)) {
+        var d2 = new Date(parsedTime + 8 * 3600000); // 假设输入是东八区
+        return formatDate(d2) + " " + pad(d2.getUTCHours()) + ":" + pad(d2.getUTCMinutes()) + ":" + pad(d2.getUTCSeconds());
+      }
+      
+      // 4. 实在解析不了，兜底取当前时间
+      return now();
+    }
+    
+    for (var i = 0; i < rows.length; i++) {
+      var r = {};
+      for (var j = 0; j < fields.length; j++) r[fields[j]] = text(rows[i][fields[j]]);
+      
+      if (r.branch_company === "未知" || r.grid_name === "未知") {
+        skipped++;
+        continue; 
+      }
+      
+      r.capacity = num(rows[i].capacity);
+      r.day_target = optionalTarget(rows[i].day_target);
+      r.stat_date = text(rows[i].stat_date); // 按原样存字符串
+      
+      // ★ 使用智能防崩的 snapshot 处理
+      r.snapshot_time = safeSnapshot(rows[i].snapshot_time);
+      
+      r.prod_period_type = period(r.prod_period_type);
+      r.product_name = product(r.product_name).productName;
+      
+      if (!r.branch_company || !r.grid_name || !r.stat_date) {
+        throw new Error("第" + (i + 1) + "行缺必填字段(branch_company/grid_name/stat_date)");
+      }
+      
+      var key = JSON.stringify([r.branch_company, r.grid_name, r.prod_period_type, r.product_name, r.stat_date]);
+      if (seen[key]) throw new Error("第" + (i + 1) + "行重复唯一键");
+      seen[key] = true;
+      
+      prepared.push(r);
+    }
+    
+    if (prepared.length === 0) {
+      return { total: rows.length, success: 0, skipped: skipped, failed: 0, msg: "没有有效数据可导入", errors: [], mode: "replace" };
+    }
+    
+    try {
+      sql("DELETE FROM " + tableName, {}, false);
+    } catch (delErr) {
+      throw new Error("清空表 " + tableName + " 失败，终止导入。原因：" + delErr.message);
+    }
+    
+    var BATCH_SIZE = 500;
+    var errors = [];
+    var success = 0;
+    
+    for (var b = 0; b < prepared.length; b += BATCH_SIZE) {
+      var batch = prepared.slice(b, b + BATCH_SIZE);
+      var args = {};
+      var valueParts = [];
+      
+      for (var bi = 0; bi < batch.length; bi++) {
+        var placeholders = [];
+        for (var fi = 0; fi < fields.length; fi++) {
+          var paramName = "v_" + bi + "_" + fi;
+          args[paramName] = batch[bi][fields[fi]];
+          placeholders.push("#{" + paramName + "}");
+        }
+        valueParts.push("(" + placeholders.join(",") + ")");
+      }
+      
+      var insertSql = "INSERT INTO " + tableName + " (" + fields.join(",") + ") VALUES " + valueParts.join(",");
+      
+      try {
+        sql(insertSql, args, false);
+        success += batch.length;
+      } catch (e) {
+        errors.push("第 " + (b + 1) + "~" + (b + batch.length) + " 行批量写入失败：" + e.message);
+      }
+    }
+    
+    var finalFailed = rows.length - success - skipped;
+    var msg = "导入执行完毕：成功 " + success + " 条，跳过 " + skipped + " 条，失败 " + finalFailed + " 条。";
+    if (skipped > 0) {
+      msg += "（注：分公司或网格为“未知”的记录已被跳过）";
+    }
+    
+    return {
+      total: rows.length, success: success, skipped: skipped, failed: finalFailed,
+      msg: msg, errors: errors, mode: "replace"
+    };
+  }
+
   function importTargets() {
     admin();
     var rows = array(Params.rows);
@@ -565,7 +694,8 @@ function init() {
     wgsc_importRows: function () { return imports(false); },
     wgsc_importTargets: importTargets,
     wgsc_importSalesScripts: function () { return importScripts(false); },
-    wgsc_saveSalesScript: function () { return importScripts(true); }
+    wgsc_saveSalesScript: function () { return importScripts(true); },
+    wgsc_importBbProgressDay: function () { return importBbProgressDay(); }
   };
   
   try {
