@@ -541,8 +541,8 @@ function init() {
       r.prod_period_type = period(r.prod_period_type);
       r.product_name = product(r.product_name).productName;
       
-      if (!r.branch_company || !r.grid_name || !r.stat_date) {
-        throw new Error("第" + (i + 1) + "行缺必填字段(branch_company/grid_name/stat_date)");
+      if (!r.branch_company || !r.grid_name || !r.stat_date || !r.prod_period_type || !r.product_name) {
+        throw new Error("第" + (i + 1) + "行缺必填字段(branch_company/grid_name/prod_period_type/product_name/stat_date)");
       }
       
       var key = JSON.stringify([r.branch_company, r.grid_name, r.prod_period_type, r.product_name, r.stat_date]);
