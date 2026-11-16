@@ -4,7 +4,17 @@ const isMock = import.meta.env.VITE_USE_MOCK === 'true'
 const apiBase = import.meta.env.VITE_API_BASE || ''
 const appId = import.meta.env.VITE_APP_ID || ''
 const activityId = import.meta.env.VITE_ACTIVITY_ID || ''
-const isTest = import.meta.env.VITE_IS_TEST
+const configuredIsTest = import.meta.env.VITE_IS_TEST
+// Protocol: test links use 1; production links use 0, even with the same build.
+function handle2TestMode(override) {
+  if (override !== undefined && override !== null && override !== '') {
+    if (![0, 1, '0', '1'].includes(override)) throw new Error('isTest必须为0或1')
+    return Number(override)
+  }
+  const pathname = typeof window !== 'undefined' ? window.location?.pathname : ''
+  if (pathname) return /_test(?:\/|$)/i.test(pathname) ? 1 : 0
+  return String(configuredIsTest) === '1' ? 1 : 0
+}
 
 /** 移动Handle2接口RSA公钥，用于加密AES密钥 */
 const HANDLE2_RSA_PUBLIC_KEY = `-----BEGIN RSA PUBLIC KEY-----
@@ -157,7 +167,7 @@ export async function buildHandle2Payload(serviceId, data, options = {}) {
       activityId: options.activityId || activityId || '',
       serviceId,
       version: options.version || import.meta.env.VITE_API_VERSION || '1.0',
-      isTest: options.isTest ?? isTest
+      isTest: handle2TestMode(options.isTest)
     },
     data
   }, aesKey)
