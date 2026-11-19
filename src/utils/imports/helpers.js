@@ -47,7 +47,7 @@ export async function parseExcelFile(file, sheetHint = '') {
 export function ensureXlsx() {
   if (window.XLSX) return Promise.resolve()
   return new Promise((resolve, reject) => {
-    const src = new URL(`${import.meta.env.BASE_URL}vendor/xlsx.full.min.js`, window.location.origin).href
+    const src = new URL(`${import.meta.env.BASE_URL}vendor/xlsx.full.min.js`, window.location.href).href
     const existing = document.querySelector(`script[src="${src}"]`)
     if (existing) {
       if (existing.dataset.loaded === 'true') resolve()

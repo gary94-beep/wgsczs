@@ -1,3 +1,4 @@
+import {assertHourlyCitywide} from '../utils/hourlyBroadbandAccess.js'
 import {normalizeHourlyBroadband} from '../utils/hourlyBroadbandDisplay.js'
 import {isMock,postHandle2} from './client.js'
 import {createHourlyBroadbandEngine} from '../utils/hourlyBroadband.js'
@@ -19,6 +20,7 @@ export async function fetchHourlyBroadband(params,token,refresh=false){
     data=await postHandle2('ability_customize',{servicecode:code,token,params:{branch:params.branch||'',grid:params.grid||'',token,funCode:'wgsc_bbRollout'}},{timeoutMs:30000})
   }
   if(!data?.asOf || !data?.options)throw new Error('宽带攻坚调度返回格式不完整，请检查新网关是否发布')
+  assertHourlyCitywide(data,params)
   data=normalizeHourlyBroadband(data)
   cache.clear();cache.set(key,{time:Date.now(),data});return data
 }

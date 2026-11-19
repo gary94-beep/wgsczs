@@ -33,7 +33,7 @@ const headersLength=rows=>rows[0].length
 export async function downloadTeamWorkbook(options){
   const fetchTeamControl=options.queryApi
   if(typeof fetchTeamControl!=='function')throw new Error('导出接口未配置')
-  const [data]=await Promise.all([fetchTeamControl({...options.params,exportMode:'1',managerCode:''},options.token),ensureXlsx()])
+  const [data]=await Promise.all([fetchTeamControl({...options.params,metricMode:'both',exportMode:'1',managerCode:''},options.token),ensureXlsx()])
   const model=teamExportModel(data,options)
   window.XLSX.writeFile(createTeamWorkbook(window.XLSX,model),model.filename,{compression:true})
 }

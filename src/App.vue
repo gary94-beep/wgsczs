@@ -125,7 +125,7 @@
           <div class="overview-source-tags"><span class="overview-source-capacity"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0M4 18c0 4 16 4 16 0"/></svg>产能 · 系统取数</span><span v-if="!selectedChannelType" class="overview-source-target"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="13" r="9"/><circle cx="11" cy="13" r="5"/><path d="m11 13 9-10m-5 0h5v5"/></svg>目标 · 市公司导入</span></div>
         </section>
         <ProductionBoard v-model:period="overviewPeriod" :items="overview" :scope="scopeName" :stat-date="dashboard.statDate" :daily-stat-date="dashboard.dailyStatDate" :daily-stat-hour="dashboard.dailyStatHour" :demo="isMock"
-          :show-targets="!selectedChannelType" @open="openProduct" />
+          :show-targets="!selectedChannelType" :clickable="user.role !== 'grid'" @open="openProduct" />
         <!-- AI 分析结果 -->
         <section v-if="aiAnalysis.loading || aiAnalysis.error || aiAnswerOverview" class="ai-analysis-card">
           <header class="ai-analysis-head">
@@ -138,13 +138,12 @@
         </section>
         <section class="product-section">
           <div class="section-head">
-            <h2>{{ selectedChannelType ? '产能表现' : '产能与目标' }}</h2><span>{{ user.role === 'grid' ? '点击查看预警' : '点击指标查看下级'
-            }}</span>
+            <h2>{{ selectedChannelType ? '产能表现' : '产能与目标' }}</h2><span v-if="user.role !== 'grid'">点击指标查看下级</span>
           </div>
           <p class="production-cutoff">{{ capacityCutoffLabel }}<span v-if="isMock"> · 演示数据</span></p>
           <CapacityCard :show-targets="!selectedChannelType" v-for="item in overview" :key="item.productId"
             :title="item.productName" :item="item" :unit="item.unit" :product-id="item.productId" :stat-date="dashboard.statDate"
-            :icon="productIcon(item.productId)" @open="openProduct(item.productId)" />
+            :icon="productIcon(item.productId)" :clickable="user.role !== 'grid'" @open="openProduct(item.productId)" />
         </section>
       </template>
       <template v-else-if="stage === 'branches'">
@@ -193,7 +192,7 @@
           </div>
           <CapacityCard :show-targets="!selectedChannelType" v-for="item in gridMetrics" :key="item.gridId"
             :title="item.gridName" :item="item" :unit="selectedProduct?.unit" :product-id="selectedProductId" :stat-date="dashboard.statDate"
-            @open="openGrid(item.gridId)" />
+            :clickable="false" />
         </section>
       </template>
       <template v-else-if="stage === 'warnings'">
@@ -249,10 +248,6 @@
             <label v-if="isChangeAlert" class="monitor-filter">日均减少值（{{ activeProduct?.unit }}/日）<input v-model.number="declineValue" type="number" min="0" step="0.1" aria-label="日均减少值" /></label>
             <div v-if="isChangeAlert" class="monitor-readonly"><span>统计周期</span><strong>本月与上月同期</strong></div>
           </div>
-          <label v-if="stage === 'alerts'" class="channel-filter">渠道<select v-model="selectedChannel">
-              <option value="">全部渠道</option>
-              <option v-for="channel in channelOptions" :key="channel" :value="channel">{{ channel }}</option>
-            </select></label>
           <p class="alert-data-date" style="color:#7188a0;font-size:12px;margin:12px 0 0">数据截至 {{ !isChangeAlert && alertPeriod === 'day' ? dailyLabel(dashboard) : dashboard.statDate || '暂无' }}</p><div class="filter-footer"><small v-if="isChangeAlert">日均下降 ≥ {{ declineRate }}%，且减少 ≥ {{ declineValue }} {{ activeProduct?.unit }}/日</small><small v-else>{{ tab === 'people' ? '直销人员' : '渠道合计' }}产能 ≤ {{ cleanThreshold }} {{
             activeProduct?.unit }}，0 为零产</small><div class="filter-actions"><button type="button" @click="applyFilters">筛选</button><button type="button" class="alert-export" :disabled="!alertResult || alertLoading || loading || exportBusy" title="导出当前筛选条件下全部预警分类" @click="exportAlerts"><i class="export-alert-icon" :style="exportIconStyle" aria-hidden="true"></i>{{ exportBusy ? '导出中' : '导出Excel' }}</button></div></div>
         </section>
@@ -372,8 +367,9 @@ import broadbandIcon from './assets/product-icons/wifi.svg'
 import rolloutDispatchIcon from './assets/ui-icons/board-dispatch.svg'
 import { isMock } from './api/client'
 import { sendLoginCode, loginWithCode, loginWithOneClick, logoutSession, loginWithWechatCode } from './api/auth.js'
-import { fetchChannelOptions, fetchChangeAlerts, fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts, fetchAiAnalysis } from './api/production'
+import { fetchChangeAlerts, fetchDashboard, fetchPermission, getMobileByToken, fetchAlerts, queryCapacity, importCapacity, importRows, importTargets, saveSalesScript, importSalesScripts, fetchAiAnalysis } from './api/production'
 import { monitorBranchOptions } from './utils/monitorBranches.js'
+import {productionDrillBranches,productionDrillGrids} from './utils/productionDrillOrganizations.js'
 import ChannelTypeFilter from './components/ChannelTypeFilter.vue'
 import BroadbandAnalysis from './components/BroadbandAnalysis.vue'
 import BroadbandRollout from './components/BroadbandRollout.vue'
@@ -689,25 +685,16 @@ const capacityCutoffLabel=computed(()=>dailyDate(dashboard)!==dashboard.statDate
 const overview = computed(() => dashboard.products.map(item => ({ ...item, ...metric(item.productId, scopeGridIds.value, { level: user.role, id: user.role === 'grid' ? user.gridId : user.branchId }) })))
 const cityMetric = computed(() => metric(selectedProductId.value, scopeGridIds.value, { level: 'city' }))
 const branchMetric = computed(() => metric(selectedProductId.value, gridsOf(selectedBranchId.value), { level: 'branch', id: selectedBranchId.value }))
-const branchMetrics = computed(() => dashboard.organization.branches.map(item => ({ ...item, ...metric(selectedProductId.value, gridsOf(item.branchId), { level: ['未知', '市统筹'].includes(item.branchId) ? 'grid' : 'branch', id: ['未知', '市统筹'].includes(item.branchId) ? `${item.branchId}::${item.branchId}` : item.branchId }) })))
-const gridMetrics = computed(() => dashboard.organization.grids.filter(item => item.branchId === selectedBranchId.value).map(item => ({ ...item, ...metric(selectedProductId.value, [item.gridId], { level: 'grid', id: item.gridId }) })))
+const branchMetrics = computed(() => productionDrillBranches(dashboard.organization.branches).map(item => ({ ...item, ...metric(selectedProductId.value, gridsOf(item.branchId), { level:'branch', id:item.branchId }) })))
+const gridMetrics = computed(() => productionDrillGrids(dashboard.organization,selectedBranchId.value).map(item => ({ ...item, ...metric(selectedProductId.value, [item.gridId], { level: 'grid', id: item.gridId }) })))
 const monitorBranches = computed(() => monitorBranchOptions(dashboard.organization.branches))
 const monitorGrids = computed(() => dashboard.organization.grids.filter(item => !monitorBranchId.value || item.branchId === monitorBranchId.value))
 const monitorGridIds = computed(() => monitorGridId.value ? [monitorGridId.value] : monitorGrids.value.map(item => item.gridId))
 const monitorScopeLabel = computed(() => monitorGridId.value ? gridName(monitorGridId.value) : monitorBranchId.value ? dashboard.organization.branches.find(item => item.branchId === monitorBranchId.value)?.branchName : scopeName.value)
-const channelOptions = ref([])
-let channelOptionsSequence = 0
-watch(() => JSON.stringify([stage.value, activeProduct.value?.productId, alertPeriod.value, stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value], dashboard.statDate, dashboard.dailyStatDate]), async () => {
-  const sequence = ++channelOptionsSequence
-  channelOptions.value = []
-  if (!['monitor', 'alerts'].includes(stage.value) || !activeProduct.value || !token.value) return
-  try {
-    const data = await fetchChannelOptions({ productId: activeProduct.value.productId, period: alertPeriod.value, phone: user.phone, gridIds: stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value] }, token.value)
-    if (sequence === channelOptionsSequence) channelOptions.value = (data.channels || []).sort((a, b) => a.localeCompare(b, 'zh-CN'))
-  } catch (error) { if (sequence === channelOptionsSequence) showToast(error.message || '渠道列表读取失败', 'warning') }
-})
+
 const lowPeople = computed(() => alertResult.value?.people || [])
 const lowChannels = computed(() => alertResult.value?.channels || [])
+
 const alertCategories = computed(() => [
   { id: 'people', label: '直销人员', count: alertResult.value ? lowPeople.value.length : null },
   { id: 'halls', label: '营业厅', count: alertResult.value ? lowChannels.value.filter(item => item.channelType === '营业厅').length : null },
@@ -747,8 +734,9 @@ function navigationKey(state) {
 const browserNavigation=createBrowserNavigation({onExitHint:()=>showToast('再返回一次退出','warning'),restore:async state=>{
  if(page.value!=='dashboard')return
  if(!['workbench','overview','branches','grids','alerts','warnings','monitor','search','broadband','rollout','imports','scripts','campus'].includes(state.stage) || (state.stage==='imports' && !user.isSuperAdmin))state={stage:'workbench'}
+ if(state.stage==='alerts')state={...state,stage:user.role==='grid'?'overview':'grids',grid:'',channel:''}
  selectedProductId.value=state.product||'';selectedBranchId.value=state.branch||'';selectedGridId.value=state.grid||''
- selectedChannel.value=state.channel||'';selectedChannelType.value=state.channelType||'';tab.value=state.tab||'people'
+ selectedChannel.value=state.stage==='alerts'?'':state.channel||'';selectedChannelType.value=state.channelType||'';tab.value=state.tab||'people'
  alertMode.value=state.alertMode||'low';monitorBranchId.value=state.monitorBranch||'';monitorGridId.value=state.monitorGrid||'';monitorProductId.value=state.monitorProduct||''
  alertPeriod.value=state.period||'month';threshold.value=state.threshold??1;declineRate.value=state.declineRate??30;declineValue.value=state.declineValue??5
  rolloutNavigation.value=state.rollout||null;overviewPeriod.value=state.overviewPeriod||'month';broadbandNavigation.value=state.broadband||null;teamNavigation.value=state.teamControl||null;stage.value=state.stage
@@ -771,9 +759,8 @@ function goWorkbench() { stage.value = 'workbench'; scrollTop() }
 function goOverview() { stage.value = 'overview'; selectedProductId.value = ''; selectedBranchId.value = ''; selectedGridId.value = ''; scrollTop() }
 function goProduct() { stage.value = user.role === 'city' ? 'branches' : user.role === 'branch' ? 'grids' : 'overview'; selectedBranchId.value = user.role === 'city' ? '' : user.branchId; selectedGridId.value = ''; scrollTop() }
 function goBranch() { stage.value = 'grids'; selectedGridId.value = ''; scrollTop() }
-function openProduct(id) { selectedProductId.value = id; selectedBranchId.value = user.role === 'city' ? '' : user.branchId; selectedGridId.value = user.role === 'grid' ? user.gridId : ''; selectedChannel.value = ''; threshold.value = 1; tab.value = 'people'; stage.value = user.role === 'city' ? 'branches' : user.role === 'branch' ? 'grids' : 'alerts'; scrollTop() }
+function openProduct(id) { if(user.role === 'grid')return;selectedProductId.value = id; selectedBranchId.value = user.role === 'city' ? '' : user.branchId; selectedGridId.value = user.role === 'grid' ? user.gridId : ''; selectedChannel.value = ''; threshold.value = 1; tab.value = 'people'; stage.value = user.role === 'city' ? 'branches' : 'grids'; scrollTop() }
 function openBranch(id) { selectedBranchId.value = id; stage.value = 'grids'; scrollTop() }
-function openGrid(id) { selectedGridId.value = id; selectedChannel.value = ''; threshold.value = 1; tab.value = 'people'; stage.value = 'alerts'; scrollTop() }
 function openMonitor() { if(stage.value!=='warnings')teamNavigation.value=null;stage.value = 'warnings'; scrollTop() }
 function openAlertMonitor(mode) { alertMode.value = mode; monitorBranchId.value = user.role === 'city' ? '' : user.branchId; monitorGridId.value = user.role === 'grid' ? user.gridId : ''; monitorProductId.value = dashboard.products[0]?.productId || ''; selectedChannel.value = ''; threshold.value = 1; tab.value = 'people'; stage.value = 'monitor'; scrollTop() }
 function openCampus() { stage.value = 'campus'; scrollTop() }
@@ -794,7 +781,7 @@ async function loadAlerts() {
   if (!['monitor', 'alerts'].includes(stage.value) || !activeProduct.value) return
   alertLoading.value = true
   try {
-    const params = { declineRate: declineRate.value, declineValue: declineValue.value, phone: user.phone, productId: activeProduct.value.productId, gridIds: [...(stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value])], threshold: cleanThreshold.value, period: alertPeriod.value, channel: selectedChannel.value }
+    const params = { declineRate: declineRate.value, declineValue: declineValue.value, phone: user.phone, productId: activeProduct.value.productId, gridIds: [...(stage.value === 'monitor' ? monitorGridIds.value : [selectedGridId.value])], threshold: cleanThreshold.value, period: alertPeriod.value, channel: stage.value === 'alerts' ? '' : selectedChannel.value }
     const snapshot = { ...params, product: { ...activeProduct.value }, kind: isChangeAlert.value ? 'change' : 'low', scope: stage.value === 'monitor' ? monitorScopeLabel.value : selectedGrid.value?.gridName }
     const data = await (isChangeAlert.value ? fetchChangeAlerts : fetchAlerts)(params, token.value)
     if (id === alertSequence) { alertResult.value = data; alertSnapshot.value = snapshot }

@@ -3,10 +3,18 @@ import {ensureXlsx} from './imports/helpers.js'
 export function hourlyReport(data){
   const f=hourlyFormat,pct=hourlyPercent
   const scope=data.scope.grid||data.scope.branch||'全市',s=data.summary
-  const lines=[`宽带攻坚调度｜${scope}`,`手宽归档数据截至 ${data.asOf.label}`,`已归档${f(s.capacity)}条，日目标${f(s.target)}条，完成率${pct(s.rate)}，缺口${f(s.gap)}条。`]
-  const behind=hourlyBelowCity(data);if(behind.length)lines.push(`低于全市完成率${pct(s.rate)}：${behind.map(r=>`${r.branch} ${pct(r.rate)}（低${f(r.behind)}个百分点）`).join('；')}。`)
-  for(const c of ['A','B','C']){const rows=data.focus.filter(r=>r.category===c);if(rows.length)lines.push(`${c}类：${rows.map(r=>`${r.grid} ${pct(r.rate)}（差${f(r.gap)}条）`).join('；')}`)}
-  lines.push('按全市同类日目标完成率选取：A类2个、B类3个、C类4个；只展示当前可查看范围。')
+  const lines=[`【宽带攻坚调度】手宽归档数据截至 ${data.asOf.label}`,'',`①${scope}整体情况：已归档${f(s.capacity)}条，日目标${f(s.target)}条，完成率${pct(s.rate)}，缺口${f(s.gap)}条。`,'']
+  if(!data.scope.branch && !data.scope.grid){
+    const behind=hourlyBelowCity(data)
+    lines.push(hourlyNumber(s.rate)===null?'②市公司：全市完成率暂无，暂不比较':`②市公司：低于全市完成率${pct(s.rate)}`)
+    if(behind.length)lines.push(...behind.map(r=>`${r.branch} ${pct(r.rate)}（低${f(r.behind)}个百分点）`))
+    else if(hourlyNumber(s.rate)!==null)lines.push('暂无低于全市完成率的分公司。')
+  }else lines.push(`②当前范围：${scope}（分公司对比请切换至全市查看）`)
+  lines.push('','③网格：完成率A类后2、B类后3、C类后4')
+  for(const c of ['A','B','C']){
+    const rows=(data.focus||[]).filter(r=>r.category===c)
+    lines.push(`${c}类：${rows.length?rows.map(r=>`${r.grid} ${pct(r.rate)}（差${f(r.gap)}条）`).join('；'):'暂无'}`)
+  }
   return lines.join('\n')
 }
 export async function exportHourlyBroadband(data,demo){

@@ -1,12 +1,12 @@
 <template>
   <section class="production-board" :class="{ 'capacity-only': !showTargets }" aria-label="产能总看板">
     <header><div><h2>产能总看板</h2><p><time>{{ period === 'day' ? dailyLabel({statDate,dailyStatDate,dailyStatHour}) : statDate }}</time><span v-if="demo" class="board-demo">演示数据</span></p></div><div class="board-period" role="group" aria-label="看板统计周期"><button v-for="option in periods" :key="option.id" type="button" :aria-pressed="period === option.id" :class="{ active: period === option.id }" @click="$emit('update:period', option.id)">{{ option.label }}</button></div></header>
-    <button v-for="item in items" :key="item.productId" type="button" class="board-row" :aria-label="`${item.productName}，${period === 'day' ? '当日产能' : '本月累计'}${format(value(item).production)}${item.unit}，查看详情`" @click="$emit('open', item.productId)">
+    <component :is="clickable ? 'button' : 'div'" v-for="item in items" :key="item.productId" :type="clickable ? 'button' : undefined" class="board-row" :aria-label="`${item.productName}，${period === 'day' ? '当日产能' : '本月累计'}${format(value(item).production)}${item.unit}${clickable ? '，查看详情' : ''}`" @click="clickable && $emit('open', item.productId)">
       <span class="board-product"><span class="board-product-icon" :style="iconStyle(item.productId)" aria-hidden="true"></span><strong>{{ item.productName }}</strong></span>
       <span class="board-value">{{ format(value(item).production) }}<small>{{ item.unit }}</small></span>
 
       <span v-if="showTargets" class="board-targets"><span v-for="kind in targetKinds" :key="kind.id" class="board-target-chip" :class="`board-target-${kind.id}`"><span>{{ kind.label }}</span><b :class="{ 'board-rate-status': !rate(value(item), kind.id).endsWith('%') }">{{ rate(value(item), kind.id) }}</b></span></span>
-    </button>
+    </component>
   </section>
 </template>
 <script setup>
@@ -17,7 +17,7 @@ import giftIcon from '../assets/product-icons/gift.svg'
 import smartphoneIcon from '../assets/product-icons/smartphone.svg'
 import wifiIcon from '../assets/product-icons/wifi.svg'
 import buildingIcon from '../assets/product-icons/building-2.svg'
-const props = defineProps({ items: { type: Array, default: () => [] }, scope: String, statDate: String, dailyStatDate: String, dailyStatHour: String, demo: Boolean, showTargets: { type: Boolean, default: true }, period: { type: String, default: 'month' } })
+const props = defineProps({ items: { type: Array, default: () => [] }, clickable: { type: Boolean, default: true }, scope: String, statDate: String, dailyStatDate: String, dailyStatHour: String, demo: Boolean, showTargets: { type: Boolean, default: true }, period: { type: String, default: 'month' } })
 defineEmits(['open', 'update:period'])
 const periods = [{ id: 'day', label: '日' }, { id: 'month', label: '月' }]
 const value = item => props.period === 'day' ? item.daily : item
