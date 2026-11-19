@@ -41,7 +41,7 @@ body { background: #e8f3f8; }
 .top-bar p { margin-top: 5px; color: #71868d; font-size: 12px; font-weight: 600; }
 .top-bar em { color: #a87546; font-weight: 700; }
 .top-bar button { display: grid; flex: 0 0 36px; place-items: center; width: 36px; height: 36px; border: 1px solid #d2e6f2; border-radius: 8px; color: #2e79c4; background: #eef8ff; }
-.toolbar-icon { display: block; width: 19px; height: 19px; background: currentColor; -webkit-mask: url('/icons/refresh-cw.svg') center / contain no-repeat; mask: url('/icons/refresh-cw.svg') center / contain no-repeat; }
+.toolbar-icon { display: block; width: 19px; height: 19px; background: currentColor; -webkit-mask: url('../assets/static-icons/refresh-cw.svg') center / contain no-repeat; mask: url('../assets/static-icons/refresh-cw.svg') center / contain no-repeat; }
 
 .breadcrumbs { min-height: 38px; margin: 0 -16px 0; padding: 7px 16px; border-bottom: 1px solid #e8eef0; color: #8aa0a6; background: #fff; font-size: 12px; }
 .breadcrumbs button { color: #4a7383; font-weight: 700; }
@@ -57,10 +57,10 @@ body { background: #e8f3f8; }
 .menu-icon { display: grid; flex: 0 0 54px; place-items: center; width: 54px; height: 54px; border-radius: 8px; color: #347fec; background: #eaf4ff; }
 .menu-icon-green { color: #16a889; background: #e4f9f3; }
 .menu-glyph { display: block; width: 28px; height: 28px; background: currentColor; }
-.menu-glyph-overview { -webkit-mask: url('/icons/chart-no-axes-combined.svg') center / contain no-repeat; mask: url('/icons/chart-no-axes-combined.svg') center / contain no-repeat; }
-.menu-glyph-alert { -webkit-mask: url('/icons/triangle-alert.svg') center / contain no-repeat; mask: url('/icons/triangle-alert.svg') center / contain no-repeat; }
-.menu-glyph-campus { -webkit-mask: url('/icons/graduation-cap.svg') center / contain no-repeat; mask: url('/icons/graduation-cap.svg') center / contain no-repeat; }
-.menu-chevron, .product-chevron { display: block; flex: 0 0 18px; width: 18px; height: 18px; background: #7e9caf; -webkit-mask: url('/icons/chevron-right.svg') center / contain no-repeat; mask: url('/icons/chevron-right.svg') center / contain no-repeat; }
+.menu-glyph-overview { -webkit-mask: url('../assets/static-icons/chart-no-axes-combined.svg') center / contain no-repeat; mask: url('../assets/static-icons/chart-no-axes-combined.svg') center / contain no-repeat; }
+.menu-glyph-alert { -webkit-mask: url('../assets/static-icons/triangle-alert.svg') center / contain no-repeat; mask: url('../assets/static-icons/triangle-alert.svg') center / contain no-repeat; }
+.menu-glyph-campus { -webkit-mask: url('../assets/static-icons/graduation-cap.svg') center / contain no-repeat; mask: url('../assets/static-icons/graduation-cap.svg') center / contain no-repeat; }
+.menu-chevron, .product-chevron { display: block; flex: 0 0 18px; width: 18px; height: 18px; background: #7e9caf; -webkit-mask: url('../assets/static-icons/chevron-right.svg') center / contain no-repeat; mask: url('../assets/static-icons/chevron-right.svg') center / contain no-repeat; }
 .menu-copy { gap: 5px; }
 .menu-copy strong { color: #153d63; font-size: 17px; font-weight: 800; }
 .menu-copy small { color: #8295a7; font-size: 12px; }

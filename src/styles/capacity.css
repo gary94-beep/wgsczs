@@ -64,7 +64,7 @@ button.capacity-card-heading:focus-visible { outline: 2px solid #287bff; outline
 .script-library-entry strong { display: block; font-size: 18px; }
 .script-library-entry small { display: block; margin-top: 7px; color: #6b86a3; font-size: 12px; }
 .script-library-icon { width: 42px; height: 42px; flex-shrink: 0; background: #e0f5f1; border-radius: 8px; display: grid; place-items: center; }
-.script-library-icon::before { content: ''; display: block; width: 25px; height: 25px; background: #099d87; mask: url('/icons/contact.svg') center / contain no-repeat; -webkit-mask: url('/icons/contact.svg') center / contain no-repeat; }
+.script-library-icon::before { content: ''; display: block; width: 25px; height: 25px; background: #099d87; mask: url('../assets/static-icons/contact.svg') center / contain no-repeat; -webkit-mask: url('../assets/static-icons/contact.svg') center / contain no-repeat; }
 .script-product-tabs { display: flex; flex-wrap: nowrap; gap: 22px; margin: 0 20px 20px; padding: 4px 0 0; overflow-x: auto; border-bottom: 1px solid #d8e7f5; scrollbar-width: thin; scrollbar-color: #c1d8ef transparent; }
 .script-product-tabs button { flex: 0 0 auto; min-height: 48px; padding: 12px 0; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; white-space: nowrap; color: #69809c; font: inherit; font-size: 14px; cursor: pointer; }
 .script-product-tabs .active { color: #216cde; background: transparent; border-bottom-color: #2874ed; font-weight: 700; }
@@ -76,7 +76,7 @@ button.capacity-card-heading:focus-visible { outline: 2px solid #287bff; outline
 .script-library-panel .sales-script-content { font-size: 16px; line-height: 1.9; color: #264663; }
 .script-library-panel .sales-script-meta { font-size: 12px; line-height: 1.7; }
 .script-library-panel .sales-script-actions button { min-height: 42px; padding: 10px 18px; font-size: 14px; }
-.menu-glyph-search { mask-image: url('/icons/contact.svg'); -webkit-mask-image: url('/icons/contact.svg'); }
+.menu-glyph-search { mask-image: url('../assets/static-icons/contact.svg'); -webkit-mask-image: url('../assets/static-icons/contact.svg'); }
 .alert-summary small { color: #72839b; font-size: 10px; }
 .alert-category-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
 .alert-summary { grid-template-columns: repeat(2,minmax(0,1fr)); row-gap: 18px; }

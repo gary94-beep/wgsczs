@@ -94,15 +94,15 @@ body, .app-shell { background: var(--bg); color: var(--text); }
 .target-management { gap: 16px; margin: 24px -14px 0; padding: 22px 18px 28px; border-top: 1px solid #d6e8fc; background: #f7fcff; }
 .target-heading { display: flex; align-items: center; gap: 12px; }
 .target-icon { display: grid; flex: 0 0 40px; place-items: center; width: 40px; height: 40px; border-radius: 8px; background: #e8f2ff; }
-.target-icon::before { content: ''; width: 21px; height: 21px; background: var(--brand); -webkit-mask: url('/icons/chart-no-axes-combined.svg') center / contain no-repeat; mask: url('/icons/chart-no-axes-combined.svg') center / contain no-repeat; }
+.target-icon::before { content: ''; width: 21px; height: 21px; background: var(--brand); -webkit-mask: url('../assets/static-icons/chart-no-axes-combined.svg') center / contain no-repeat; mask: url('../assets/static-icons/chart-no-axes-combined.svg') center / contain no-repeat; }
 .target-management h2 { color: var(--text); font-size: 18px; }
 .target-management p { margin-top: 3px; color: #6c819b; font-size: 12px; }
 .target-actions { gap: 10px; padding-left: 52px; }
 .target-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; padding: 0 12px; border: 1px solid #98c0f4; border-radius: 7px; color: #2769c5; background: #fff; font-size: 13px; font-weight: 800; }
 .target-actions .target-import { border-color: #2874e8; color: #fff; background: #2874e8; }
 .action-icon { display: inline-block; width: 16px; height: 16px; background: currentColor; }
-.download-icon { -webkit-mask: url('/icons/download.svg') center / contain no-repeat; mask: url('/icons/download.svg') center / contain no-repeat; }
-.upload-icon { -webkit-mask: url('/icons/upload.svg') center / contain no-repeat; mask: url('/icons/upload.svg') center / contain no-repeat; }
+.download-icon { -webkit-mask: url('../assets/static-icons/download.svg') center / contain no-repeat; mask: url('../assets/static-icons/download.svg') center / contain no-repeat; }
+.upload-icon { -webkit-mask: url('../assets/static-icons/upload.svg') center / contain no-repeat; mask: url('../assets/static-icons/upload.svg') center / contain no-repeat; }
 
 .drill-heading { margin-top: 5px; padding: 17px 16px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 .drill-heading h2 { margin-top: 4px; font-size: 19px; }
@@ -150,9 +150,9 @@ body, .app-shell { background: var(--bg); color: var(--text); }
 .bottom-nav button { display: grid; justify-items: center; gap: 3px; border: 0; color: #647995; background: transparent; font-size: 11px; }
 .bottom-nav button.active { color: var(--brand); }
 .bottom-icon { width: 20px; height: 20px; background: currentColor; }
-.bottom-home { -webkit-mask: url('/icons/house.svg') center / contain no-repeat; mask: url('/icons/house.svg') center / contain no-repeat; }
-.bottom-overview { -webkit-mask: url('/icons/chart-no-axes-combined.svg') center / contain no-repeat; mask: url('/icons/chart-no-axes-combined.svg') center / contain no-repeat; }
-.bottom-alert { -webkit-mask: url('/icons/triangle-alert.svg') center / contain no-repeat; mask: url('/icons/triangle-alert.svg') center / contain no-repeat; }
+.bottom-home { -webkit-mask: url('../assets/static-icons/house.svg') center / contain no-repeat; mask: url('../assets/static-icons/house.svg') center / contain no-repeat; }
+.bottom-overview { -webkit-mask: url('../assets/static-icons/chart-no-axes-combined.svg') center / contain no-repeat; mask: url('../assets/static-icons/chart-no-axes-combined.svg') center / contain no-repeat; }
+.bottom-alert { -webkit-mask: url('../assets/static-icons/triangle-alert.svg') center / contain no-repeat; mask: url('../assets/static-icons/triangle-alert.svg') center / contain no-repeat; }
 
 @media (max-width: 360px) {
   .brand-panel h1 { font-size: 25px; }
@@ -197,7 +197,7 @@ body, .app-shell { background: var(--bg); color: var(--text); }
 .drill-total-top { display: grid; grid-template-columns: 45px minmax(0,1fr) auto; align-items: center; gap: 11px; }
 .drill-product-icon, .drill-org-icon { display: grid; place-items: center; width: 45px; height: 45px; border-radius: 8px; background: #e8f2ff; }
 .drill-product-icon::before, .drill-org-icon::before { content: ''; width: 24px; height: 24px; background: var(--brand); -webkit-mask: var(--product-icon) center / contain no-repeat; mask: var(--product-icon) center / contain no-repeat; }
-.drill-org-icon::before { -webkit-mask: url('/icons/building-2.svg') center / contain no-repeat; mask: url('/icons/building-2.svg') center / contain no-repeat; }
+.drill-org-icon::before { -webkit-mask: url('../assets/static-icons/building-2.svg') center / contain no-repeat; mask: url('../assets/static-icons/building-2.svg') center / contain no-repeat; }
 .drill-total-top h3 { margin: 0 0 6px; color: var(--text); font-size: 16px; }
 .drill-total-values { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 9px; }
 .drill-total-values strong { color: var(--brand); font-size: 28px; line-height: 1; }
@@ -246,7 +246,7 @@ body, .app-shell { background: var(--bg); color: var(--text); }
 .person-card { grid-template-columns: 45px minmax(0,1fr) auto 9px; align-items: center; gap: 10px; min-height: 72px; }
 .person-card.zero { border-left: 1px solid var(--line); }
 .person-avatar { display: grid; place-items: center; width: 45px; height: 45px; border-radius: 8px; background: #e8f2ff; }
-.person-avatar::before { content: ''; width: 24px; height: 24px; background: var(--brand); -webkit-mask: url('/icons/contact.svg') center / contain no-repeat; mask: url('/icons/contact.svg') center / contain no-repeat; }
+.person-avatar::before { content: ''; width: 24px; height: 24px; background: var(--brand); -webkit-mask: url('../assets/static-icons/contact.svg') center / contain no-repeat; mask: url('../assets/static-icons/contact.svg') center / contain no-repeat; }
 .person-main { min-width: 0; }
 .person-main span { overflow: hidden; color: #617998; text-overflow: ellipsis; white-space: nowrap; }
 .person-score { white-space: nowrap; }
