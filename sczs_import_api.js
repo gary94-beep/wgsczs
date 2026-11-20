@@ -309,30 +309,53 @@ function init() {
     var rows = array(Params.rows);
     var records = [];
     var seen = {};
-    var skipped = 0; // 记录跳过的条数
+    var skipped = 0;
+    var skippedTime = 0; // 记录时间拦截的条数
+
+    // 计算昨天 23 时的数字界限 (如 "2026111923")
+    var nowTime = new Date();
+    var yesterday = new Date(nowTime.getTime() - 24 * 60 * 60 * 1000); 
+    var limitStatDateStr = yesterday.getFullYear() + pad(yesterday.getMonth() + 1) + pad(yesterday.getDate()) + "23";
+    
+    // 获取当前的 snapshot_time，直接在这里生成，避免循环里重复计算
+    var currentSnapshotTime = now();
 
     for (var i = 0; i < rows.length; i++) {
       var r = {};
       var fields = config[1];
       for (var j = 0; j < fields.length; j++) r[fields[j]] = text(rows[i][fields[j]]);
       
-      // ========== 核心修改：产能数据跳过“未知” ==========
+      // 1. 产能数据跳过“未知”
       if (capacity) {
         if (r.branch_company === "未知" || r.grid_name === "未知") {
           skipped++;
           continue; 
         }
       }
-      // =====================================================
 
       if (target === "permission") r.is_super_admin = text(rows[i].is_super_admin === undefined ? rows[i].super_admin : rows[i].is_super_admin);
+      
       if (capacity) {
         r.capacity = num(rows[i].capacity);
-        // 日产能来源的 stat_date 按原始字符串入库；区域、渠道、工号日产能统一处理。
         r.stat_date = isDaily ? text(r.stat_date) : date(r.stat_date);
-        r.snapshot_time = snapshot(r.snapshot_time);
+        
+        // 2. 仅限日产能，判断 stat_date 是否 > 昨天 23 时
+        if (isDaily) {
+          var sdStr = String(r.stat_date).substring(0, 10);
+          if (Number(sdStr) > Number(limitStatDateStr)) {
+            skippedTime++;
+            continue; // 拦截今天的数据
+          }
+          // 强制把 snapshot_time 替换为当下时间
+          r.snapshot_time = currentSnapshotTime;
+        } else {
+          // 非日产能保持原有逻辑
+          r.snapshot_time = snapshot(r.snapshot_time);
+        }
+
         if (!isDaily) r.prod_period_type = period(r.prod_period_type);
         r.product_name = product(r.product_name).productName;
+        
         if (!r.branch_company || !r.grid_name || !r.stat_date || (target !== "region" && (!r.channel_code || !r.channel_name)) || (target === "staff" && !r.staff_no)) throw new Error("第" + (i + 1) + "行缺必填字段");
       } else {
         if (config[2]) {
@@ -424,6 +447,14 @@ function init() {
       }
     } else {
       var tableName = tables[config[0]];
+      
+      // ★ 如果全部被拦截，直接返回，防止清空表
+      if (records.length === 0) {
+        var msg = "导入执行完毕：成功 0 条，跳过 " + skipped + " 条，失败 0 条。";
+        if (skippedTime > 0) msg += "（注：有 " + skippedTime + " 条数据的 stat_date 大于昨日 23 时，已忽略）";
+        return { total: rows.length, success: 0, skipped: skipped, failed: 0, msg: msg, errors: [], mode: "replace" };
+      }
+
       if (!isAppend) {
         try {
           sql("DELETE FROM " + tableName, {}, false);
@@ -456,11 +487,16 @@ function init() {
       }
     }
     
-    // ========== 核心修改：拼接一段可读的提示信息 ==========
-    var finalFailed = rows.length - success - skipped;
-    var msg = "导入执行完毕：成功 " + success + " 条，跳过 " + skipped + " 条，失败 " + finalFailed + " 条。";
-    if (skipped > 0) {
-      msg += "（注：分公司或网格为“未知”的记录已被跳过）";
+    // ========== 拼接提示信息 ==========
+    var finalFailed = rows.length - success - skipped - skippedTime;
+    var msg = "导入执行完毕：成功 " + success + " 条，跳过 " + (skipped + skippedTime) + " 条，失败 " + finalFailed + " 条。";
+    
+    var skipReasons = [];
+    if (skipped > 0) skipReasons.push("分公司或网格为未知");
+    if (skippedTime > 0) skipReasons.push("stat_date 大于昨日 23 时");
+    
+    if (skipReasons.length > 0) {
+      msg += "（注：已被跳过的记录原因包含 - " + skipReasons.join("，") + "）";
     }
 
     return {
