@@ -1,5 +1,5 @@
 import { parseCsv } from './helpers.js'
-import { targetValue, monthlyDailyTarget } from '../targetValues.js'
+import { targetValue } from '../targetValues.js'
 
 export const targetColumns = [
   'id', 
@@ -9,26 +9,11 @@ export const targetColumns = [
   'target_month', 
   'month_min_target',
   'month_base_target', 
-  'month_challenge_target'
+  'month_challenge_target',
+  'day_min_target',
+  'day_base_target',
+  'day_challenge_target'
 ]
-
-function normalizeDate(value) {
-  const s = String(value || '').trim()
-  if (!s) return ''
-  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
-  if (m) return validDate(m)
-  m = s.match(/^(\d{4})[\/](\d{1,2})[\/](\d{1,2})$/)
-  if (m) return validDate(m)
-  m = s.match(/^(\d{4})(\d{2})(\d{2})$/)
-  if (m) return validDate(m)
-  return ''
-}
-
-function validDate(m) {
-  const s = `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`
-  const d = new Date(`${s}T00:00:00Z`)
-  return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === s ? s : ''
-}
 
 export async function parseTargetFile(file, dashboard) {
   if (!file) throw new Error('未选择文件')
@@ -60,7 +45,6 @@ export async function parseTargetFile(file, dashboard) {
 
   const imported = new Map()
   const statMonth = (dashboard.statDate || '').slice(0, 7)
-  const statDateStr = normalizeDate(dashboard.statDate)
 
   for (const [index, row] of data.slice(1).entries()) {
     const record = {}
@@ -109,7 +93,7 @@ export async function parseTargetFile(file, dashboard) {
 
     const key = `${gridId}|${productId}`
     const values = {}
-    for (const period of ['month']) {
+    for (const period of ['month','day']) {
       for (const kind of ['min', 'base', 'challenge']) {
         const raw = record[`${period}_${kind}_target`]
         if (raw !== '' && (!Number.isFinite(Number(raw)) || Number(raw) < 0)) {
@@ -127,11 +111,6 @@ export async function parseTargetFile(file, dashboard) {
     if (imported.has(key)) throw new Error(`第 ${index + 2} 行目标重复`)
     // Empty template rows are not updates and must not erase existing targets.
     if (Object.values(values).every(v => v === null)) continue
-
-    // Legacy daily/date columns may be present, but monthly targets are authoritative.
-    for (const kind of ['Min', 'Base', 'Challenge']) {
-      values[`day${kind}Target`] = monthlyDailyTarget({ ...values, targetMonth: statMonth }, statDateStr, kind.toLowerCase())
-    }
 
     // 6. 写入 pending 记录
     imported.set(key, {
@@ -171,7 +150,7 @@ export function targetTemplateCsv(dashboard) {
 
   allGrids.forEach(grid => {
     dashboard.products.forEach(product => {
-      const item = dashboard.targets.find(t => t.gridId === grid.gridId && t.productId === product.productId && !t.channelType)
+      const item = dashboard.targets.find(t => t.gridId === grid.gridId && t.productId === product.productId && !t.channelType && String(t.targetMonth || t.target_month || month).replace('/', '-') === month)
       const branch = dashboard.organization.branches.find(b => b.branchId === grid.branchId)
       
       const branchName = grid.isSummary ? '全市' : (branch?.branchName || grid.branchId)
@@ -184,7 +163,10 @@ export function targetTemplateCsv(dashboard) {
         month,
         targetValue(item || {}, 'month', 'min'),
         targetValue(item || {}, 'month'), 
-        targetValue(item || {}, 'month', 'challenge')
+        targetValue(item || {}, 'month', 'challenge'),
+        targetValue(item || {}, 'day', 'min'),
+        targetValue(item || {}, 'day'),
+        targetValue(item || {}, 'day', 'challenge')
       ].map(cell).join(','))
     })
   })

@@ -646,10 +646,13 @@ function init() {
       var mb = optionalTarget(r.monthBaseTarget), mc = optionalTarget(r.monthChallengeTarget), mm = optionalTarget(r.monthMinTarget);
       if (mm !== null && ((mb !== null && mm > mb) || (mc !== null && mm > mc))) throw new Error("第" + (i + 1) + "行底线目标不能大于基础或挑战目标");
       if (mb !== null && mc !== null && mc < mb) throw new Error("第" + (i + 1) + "行挑战目标不能小于基础目标");
-      if (mm === null && mb === null && mc === null) throw new Error("第" + (i + 1) + "行至少填写一个目标值");
-      prepared.push({ branch: parts[0], grid: parts[1], product_id: productInfo.productId, target_month: currentMonth, month_min_target: mm, month_base_target: mb, month_challenge_target: mc });
+      var db = optionalTarget(r.dayBaseTarget), dc = optionalTarget(r.dayChallengeTarget), dm = optionalTarget(r.dayMinTarget);
+      if (dm !== null && ((db !== null && dm > db) || (dc !== null && dm > dc))) throw new Error("第" + (i + 1) + "行日底线目标不能大于日基础或日挑战目标");
+      if (db !== null && dc !== null && dc < db) throw new Error("第" + (i + 1) + "行日挑战目标不能小于日基础目标");
+      if (mm === null && mb === null && mc === null && dm === null && db === null && dc === null) throw new Error("第" + (i + 1) + "行至少填写一个目标值");
+      prepared.push({ branch: parts[0], grid: parts[1], product_id: productInfo.productId, target_month: currentMonth, month_min_target: mm, month_base_target: mb, month_challenge_target: mc, day_min_target: dm, day_base_target: db, day_challenge_target: dc });
     }
-    var fields = ["branch", "grid", "product_id", "target_month", "month_min_target", "month_base_target", "month_challenge_target"];
+    var fields = ["branch", "grid", "product_id", "target_month", "month_min_target", "month_base_target", "month_challenge_target", "day_min_target", "day_base_target", "day_challenge_target"];
     var BATCH_SIZE = 500, errors = [], success = 0;
     for (var b = 0; b < prepared.length; b += BATCH_SIZE) {
       var batch = prepared.slice(b, b + BATCH_SIZE), args = {}, valueParts = [];
@@ -658,7 +661,7 @@ function init() {
         for (var fi = 0; fi < fields.length; fi++) { var paramName = "v_" + bi + "_" + fi; args[paramName] = batch[bi][fields[fi]]; placeholders.push("#{" + paramName + "}"); }
         valueParts.push("(" + placeholders.join(",") + ")");
       }
-      var insertSql = "INSERT INTO " + tables.targets + " (" + fields.join(",") + ") VALUES " + valueParts.join(",") + " ON DUPLICATE KEY UPDATE month_min_target=VALUES(month_min_target),month_base_target=VALUES(month_base_target),month_challenge_target=VALUES(month_challenge_target)";
+      var insertSql = "INSERT INTO " + tables.targets + " (" + fields.join(",") + ") VALUES " + valueParts.join(",") + " ON DUPLICATE KEY UPDATE month_min_target=VALUES(month_min_target),month_base_target=VALUES(month_base_target),month_challenge_target=VALUES(month_challenge_target),day_min_target=VALUES(day_min_target),day_base_target=VALUES(day_base_target),day_challenge_target=VALUES(day_challenge_target)";
       try { sql(insertSql, args, false); success += batch.length; } catch (e) { errors.push("第 " + (b + 1) + "~" + (b + batch.length) + " 行写入失败：" + e.message); }
     }
     return { imported: success, success: success, failed: prepared.length - success, errors: errors, mode: "upsert", targetMonth: currentMonth };

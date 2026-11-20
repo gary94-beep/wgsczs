@@ -1,7 +1,7 @@
 import { dailyDate } from './dailyReporting.js'
 import { buildMonthToDatePeriods } from './reportingPeriod.js'
 import { matchesChannelType } from './channelTypes.js'
-import { targetValue, targetProgress, monthlyDailyTarget } from './targetValues.js'
+import { targetValue, targetProgress } from './targetValues.js'
 
 export function dateRange(start, end) {
   const result = []
@@ -49,7 +49,7 @@ function progress(production, targets, gridIds, field, statDate, scope) {
           const month = row.targetMonth ?? row.target_month;
           if (month && month !== statDate.slice(0, 7)) return null;
           
-          const value = period === 'day' ? monthlyDailyTarget(row, statDate, kind) : targetValue(row, period, kind);
+          const value = period === 'day' ? targetValue(row, 'day', kind) : targetValue(row, period, kind);
           if (value !== null) return value;
         }
       }
@@ -63,9 +63,9 @@ function progress(production, targets, gridIds, field, statDate, scope) {
       if (records.length !== 1) return null
       const row = records[0], month = row.targetMonth ?? row.target_month
       if (month && month !== statDate.slice(0, 7)) return null
-      const value = period === 'day' ? monthlyDailyTarget(row, statDate, kind) : targetValue(row, period, kind)
+      const value = period === 'day' ? targetValue(row, 'day', kind) : targetValue(row, period, kind)
       if (value === null) return null
-      const base = period === 'day' ? monthlyDailyTarget(row, statDate) : targetValue(row, period)
+      const base = period === 'day' ? targetValue(row, 'day') : targetValue(row, period)
       if (kind === 'challenge' && base !== null && value < base) return null
       total += value
     }

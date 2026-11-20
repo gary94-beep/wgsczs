@@ -490,16 +490,14 @@ function init() {
     var targetMonth = (cutoff || dailyCutoff).slice(0, 7), dailyMonth = (dailyCutoff || cutoff).slice(0, 7);
     var targetArgs = { month: targetMonth, monthSlash: targetMonth.replace("-", "/"), dailyMonth: dailyMonth, dailyMonthSlash: dailyMonth.replace("-", "/") };
     var goals = pagedSql("SELECT * FROM " + tables.targets + " WHERE target_month IN (#{month},#{monthSlash},#{dailyMonth},#{dailyMonthSlash})" + scope("branch", "grid", targetArgs), targetArgs, "id");
-    var targetMonthDays;
     for (i = 0; i < goals.length; i++) {
       r = goals[i]; var base = optionalTarget(r.month_base_target), challenge = optionalTarget(r.month_challenge_target), minimum = optionalTarget(r.month_min_target);
       var goalMonth = text(r.target_month).replace("/", "-");
-      targetMonthDays = new Date(Date.UTC(Number(goalMonth.slice(0,4)),Number(goalMonth.slice(5,7)),0)).getUTCDate();
-      var daily = base === null ? null : base / targetMonthDays;
+      var daily = optionalTarget(r.day_base_target);
       data.targets.push({ gridId: gridId(text(r.branch), text(r.grid)), productId: product(r.product_id).productId,
         target: base, dailyTarget: daily, monthBaseTarget: base, monthChallengeTarget: challenge,
-        monthMinTarget: minimum, dayMinTarget: minimum === null ? null : minimum / targetMonthDays,
-        dayBaseTarget: daily, dayChallengeTarget: challenge === null ? null : challenge / targetMonthDays,
+        monthMinTarget: minimum, dayMinTarget: optionalTarget(r.day_min_target),
+        dayBaseTarget: daily, dayChallengeTarget: optionalTarget(r.day_challenge_target),
         targetMonth: text(r.target_month).replace("/", "-") });
     }
     var scripts = pagedSql("SELECT product_id,content,updated_at FROM " + tables.scripts, {}, "product_id,id");

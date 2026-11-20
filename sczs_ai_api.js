@@ -214,7 +214,7 @@ function init() {
         var targetRows = [], pageSize = 1000;
         for (var offset = 0; ; offset += pageSize) {
           // 去除了 IN 限制，直接查出全部目标
-          var page = sql("SELECT id,branch,grid,product_id,month_min_target,month_base_target,month_challenge_target FROM " + tables.targets +
+          var page = sql("SELECT id,branch,grid,product_id,month_min_target,month_base_target,month_challenge_target,day_min_target,day_base_target,day_challenge_target FROM " + tables.targets +
             " WHERE target_month IN (#{month},#{monthSlash})" + targetScope + 
             " ORDER BY id LIMIT 1000 OFFSET " + offset, monthArgs, true);
             
@@ -275,9 +275,9 @@ function init() {
         } else if (chosen.length !== 1) return null;
         var total = 0;
         for (var ci = 0; ci < chosen.length; ci++) {
-          var value = validTarget(chosen[ci][daily ? field.replace(/^day_/, "month_") : field]);
+          var value = validTarget(chosen[ci][field]);
           if (value === null) return null;
-          total += daily ? value / new Date(Date.UTC(Number(targetDate.slice(0, 4)), Number(targetDate.slice(5, 7)), 0)).getUTCDate() : value;
+          total += value;
         }
         return total;
       }
